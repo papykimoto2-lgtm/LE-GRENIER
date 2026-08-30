@@ -383,6 +383,12 @@
   .stat-val{font-family:var(--font-titre);font-size:32px;color:var(--vert);font-weight:700;letter-spacing:-0.02em}
   .stat-label{font-size:12px;color:var(--gris-text);margin-top:4px;font-weight:500}
   .table{width:100%;border-collapse:collapse;font-size:14px}
+  .table-wrap-scroll{overflow:hidden}
+  @media(max-width:768px){
+    .table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+    .table thead,.table tbody{display:table;width:100%;min-width:600px}
+    .table-wrap-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  }
   .table th{text-align:left;padding:11px 14px;font-size:11px;font-weight:700;color:var(--gris-text);text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid var(--gris-mid)}
   .table td{padding:13px 14px;border-bottom:1px solid var(--gris-clair)}
   .table tr:hover td{background:var(--vert-pale)}
@@ -392,12 +398,18 @@
   .badge-expiree{background:var(--gris-clair);color:var(--gris-text)}
 
   /* ─── ADMIN ─── */
-  .admin-header{background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(13,92,53,0.3)}
+  .admin-header{background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(13,92,53,0.3);flex-wrap:wrap;gap:10px}
   .admin-header .titre{font-family:var(--font-titre);font-size:22px;font-weight:700;letter-spacing:-0.02em}
-  .admin-nav{display:flex;gap:4px}
-  .admin-nav-btn{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;color:rgba(255,255,255,.7);border:none;background:transparent;cursor:pointer;transition:var(--transition)}
+  .admin-nav{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:100%}
+  .admin-nav::-webkit-scrollbar{display:none}
+  .admin-nav-btn{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;color:rgba(255,255,255,.7);border:none;background:transparent;cursor:pointer;transition:var(--transition);white-space:nowrap;flex-shrink:0}
   .admin-nav-btn:hover,.admin-nav-btn.actif{background:rgba(255,255,255,.2);color:#fff}
   .admin-body{padding:20px clamp(14px,4vw,32px);background:var(--gris-clair);flex:1}
+  @media(max-width:768px){
+    .admin-header{padding:14px 16px}
+    .admin-header .titre{font-size:18px}
+    .admin-nav-btn{padding:6px 12px;font-size:12px}
+  }
   .admin-section{background:#fff;border-radius:var(--radius-lg);padding:22px;margin-bottom:20px;border:1px solid var(--gris-mid);box-shadow:var(--shadow-sm)}
   .admin-section-titre{font-weight:700;font-size:16px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
   .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
@@ -2290,8 +2302,8 @@
   ═══════════════════════════════════════════════════════════════ -->
   <script>
   // ── CONFIG — projet legrenier-ci (eu-west-3) ──────────────
-  const SUPABASE_URL      = 'https://vhacfvyphsusmabmfyyb.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoYWNmdnlwaHN1c21hYm1meXliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDEzODYsImV4cCI6MjEwMTYxNzM4Nn0.2ofOotLG1XCmbOKaUru2_WdsK8sCsK6jI3jXJPMs7m8';
+  const SUPABASE_URL      = 'https://prhskjwdesblqjdtblht.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByaHNrandkZXNibHFqZHRibGh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwODM1MDYsImV4cCI6MjEwMzY1OTUwNn0.NEXmoI6DmIukYdIabHsUlJjVSUaLlix1EZ2wNyac-Vg';
 
   // ── MODE : 'local' = DB en mémoire (démo) | 'remote' = Supabase
   const MODE = 'remote';
@@ -2303,10 +2315,11 @@
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
       x.open(method, url, true);
-      x.setRequestHeader('apikey', SUPABASE_ANON_KEY);
-      x.setRequestHeader('Authorization', 'Bearer ' + SUPABASE_ANON_KEY);
-      x.setRequestHeader('Content-Type', 'application/json');
-      Object.entries(headers || {}).forEach(([k, v]) => x.setRequestHeader(k, v));
+      const finalHeaders = Object.assign(
+        { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + (localStorage.getItem('lg_sb_access_token') || SUPABASE_ANON_KEY), 'Content-Type': 'application/json' },
+        headers || {}
+      );
+      Object.entries(finalHeaders).forEach(([k, v]) => x.setRequestHeader(k, v));
       x.onload = () => {
         let data = null;
         try { data = x.responseText ? JSON.parse(x.responseText) : null; } catch (e) {}
@@ -2390,12 +2403,12 @@
             const bin = atob(b64);
             const bytes = new Uint8Array(bin.length);
             for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            const url = `${SUPABASE_URL}/storage/v1/object/${(opts && opts.upsert) ? '' : ''}${bucket}/${path}`;
+            const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
             const r = await new Promise((resolve) => {
               const x = new XMLHttpRequest();
               x.open((opts && opts.upsert) ? 'PUT' : 'POST', url, true);
               x.setRequestHeader('apikey', SUPABASE_ANON_KEY);
-              x.setRequestHeader('Authorization', 'Bearer ' + SUPABASE_ANON_KEY);
+              x.setRequestHeader('Authorization', 'Bearer ' + (localStorage.getItem('lg_sb_access_token') || SUPABASE_ANON_KEY));
               x.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
               x.onload = () => resolve({ data: x.status < 300 ? { path } : null, error: x.status >= 300 ? { message: x.statusText } : null });
               x.onerror = () => resolve({ data: null, error: { message: 'Erreur réseau upload' } });
@@ -2408,6 +2421,42 @@
           }
         };
       }
+    },
+
+    // ══════════════════════════════════════════════════════════════
+    //  AUTH — GoTrue REST, sans SDK (compatible file://)
+    // ══════════════════════════════════════════════════════════════
+    auth: {
+      async signInWithPassword({ email, password }) {
+        const r = await _xhr('POST', SUPABASE_URL + '/auth/v1/token?grant_type=password', { email, password });
+        if (r.error) return { data: null, error: r.error };
+        if (r.data && r.data.access_token) {
+          localStorage.setItem('lg_sb_access_token', r.data.access_token);
+          localStorage.setItem('lg_sb_refresh_token', r.data.refresh_token || '');
+          localStorage.setItem('lg_sb_user', JSON.stringify(r.data.user || {}));
+        }
+        return { data: r.data, error: null };
+      },
+      async updateUser({ password }) {
+        const token = localStorage.getItem('lg_sb_access_token');
+        if (!token) return { data: null, error: { message: 'Non connecté' } };
+        const r = await _xhr('PUT', SUPABASE_URL + '/auth/v1/user', { password }, { Authorization: 'Bearer ' + token });
+        return { data: r.data, error: r.error };
+      },
+      signOut() {
+        localStorage.removeItem('lg_sb_access_token');
+        localStorage.removeItem('lg_sb_refresh_token');
+        localStorage.removeItem('lg_sb_user');
+        return { error: null };
+      },
+      getSession() {
+        const token = localStorage.getItem('lg_sb_access_token');
+        const user = localStorage.getItem('lg_sb_user');
+        if (!token) return null;
+        try { return { access_token: token, user: JSON.parse(user || '{}') }; }
+        catch (e) { return null; }
+      },
+      getAccessToken() { return localStorage.getItem('lg_sb_access_token'); }
     }
   };
   async function initSupabase() { /* no-op : client XHR déjà prêt, pas de chargement dynamique */ }
@@ -2674,24 +2723,148 @@
   };
 
 
-  // ── Accès synchrones locaux (compatibilité mode local) ────────────
-  // Permet la migration progressive sans tout rendre async d'un coup
-  DAO._local = {
-    get utilisateurs() { return MODE === 'local' ? DB.utilisateurs : []; },
-    get annonces()     { return MODE === 'local' ? DB.annonces     : []; },
-    get paiements()    { return MODE === 'local' ? DB.paiements    : []; },
-    get promos()       { return MODE === 'local' ? DB.promos       : []; },
-    get litiges()      { return MODE === 'local' ? DB.litiges      : []; },
-    get bannieres()    { return MODE === 'local' ? DB.bannieres    : []; },
-    get abonnements()  { return MODE === 'local' ? DB.abonnements  : []; },
-    get plans()        { return MODE === 'local' ? DB.plans        : []; },
-    get revenus_annexes(){ return MODE === 'local' ? DB.revenus_annexes : []; },
-    get messages()     { return MODE === 'local' ? DB.messages     : []; },
-    get conversations(){ return MODE === 'local' ? DB.conversations : []; },
-    get avis()         { return MODE === 'local' ? DB.avis         : []; },
-    get nextId()       { return MODE === 'local' ? DB.nextId       : 0; },
-    set nextId(v)      { if (MODE === 'local') DB.nextId = v; },
+  // ── Accès synchrones locaux (compatibilité mode local ET remote) ──
+  // En mode remote : CACHE est alimenté au démarrage par Supabase (bootstrapCache())
+  // puis maintenu à jour en mémoire (push synchrone) + persisté en écriture (voir DAO_PERSIST)
+  const CACHE = {
+    utilisateurs: [], annonces: [], paiements: [], promos: [], litiges: [],
+    bannieres: [], abonnements: [], plans: [], revenus_annexes: [],
+    messages: [], conversations: [], avis: [], nextId: 1
   };
+
+  DAO._local = {
+    get utilisateurs() { return MODE === 'local' ? DB.utilisateurs : CACHE.utilisateurs; },
+    get annonces()     { return MODE === 'local' ? DB.annonces     : CACHE.annonces; },
+    get paiements()    { return MODE === 'local' ? DB.paiements    : CACHE.paiements; },
+    get promos()       { return MODE === 'local' ? DB.promos       : CACHE.promos; },
+    get litiges()      { return MODE === 'local' ? DB.litiges      : CACHE.litiges; },
+    get bannieres()    { return MODE === 'local' ? DB.bannieres    : CACHE.bannieres; },
+    get abonnements()  { return MODE === 'local' ? DB.abonnements  : CACHE.abonnements; },
+    get plans()        { return MODE === 'local' ? DB.plans        : CACHE.plans; },
+    get revenus_annexes(){ return MODE === 'local' ? DB.revenus_annexes : CACHE.revenus_annexes; },
+    get messages()     { return MODE === 'local' ? DB.messages     : CACHE.messages; },
+    get conversations(){ return MODE === 'local' ? DB.conversations : CACHE.conversations; },
+    get avis()         { return MODE === 'local' ? DB.avis         : CACHE.avis; },
+    get nextId()       { return MODE === 'local' ? DB.nextId       : CACHE.nextId; },
+    set nextId(v)      { if (MODE === 'local') DB.nextId = v; else CACHE.nextId = v; },
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  //  BOOTSTRAP — charge les données réelles Supabase dans CACHE
+  // ══════════════════════════════════════════════════════════════
+  const TABLE_MAP = {
+    utilisateurs: 'utilisateurs', annonces: 'annonces', paiements: 'paiements',
+    promos: 'promos', litiges: 'litiges', bannieres: 'bannieres',
+    abonnements: 'abonnements', plans: 'plans', messages: 'messages',
+    conversations: 'conversations', avis: 'avis'
+  };
+  function _mapRowToFront(table, row) {
+    if (table === 'annonces') return {
+      id: row.id, titre: row.titre, cat: row.cat, valeur: Number(row.valeur), etat: row.etat,
+      desc: row.desc_txt, ville: row.ville, vendeurId: row.vendeur_id, statut: row.statut,
+      vues: row.vues, emoji: row.emoji, typeTab: row.type_tab, lat: row.lat, lng: row.lng,
+      photos: row.photos || [], date: (row.created_at || '').slice(0, 10)
+    };
+    if (table === 'utilisateurs') return {
+      id: row.id, authId: row.auth_id, prenom: row.prenom, nom: row.nom, email: row.email,
+      tel: row.tel, ville: row.ville, role: row.role, note: Number(row.note) || 0,
+      nbAvis: row.nb_avis || 0, verifie: row.verifie, statut: row.statut || 'valide'
+    };
+    if (table === 'paiements') return {
+      id: row.id, vendeurId: row.vendeur_id, annonce: row.annonce_titre, valeur: Number(row.valeur),
+      commission: Number(row.commission), ref: row.ref, passerelle: row.passerelle, moyen: row.moyen,
+      statut: row.statut, planVendeur: row.plan_vendeur, type: row.type,
+      date: (row.created_at || '').slice(0, 10)
+    };
+    if (table === 'litiges') return {
+      id: row.id, annonceId: row.annonce_id, plaignantId: row.plaignant_id, motif: row.motif,
+      statut: row.statut, date: (row.created_at || '').slice(0, 10)
+    };
+    if (table === 'avis') return {
+      id: row.id, cibleId: row.cible_id, auteurId: row.auteur_id, note: row.note,
+      commentaire: row.commentaire, date: (row.created_at || '').slice(0, 10)
+    };
+    if (table === 'messages') return {
+      id: row.id, convId: row.conversation_id, de: row.expediteur_id, texte: row.contenu,
+      lu: row.lu, date: (row.created_at || '').slice(0, 19).replace('T', ' ')
+    };
+    return row;
+  }
+
+  async function bootstrapCache() {
+    if (MODE !== 'remote') return;
+    const entries = Object.entries(TABLE_MAP);
+    await Promise.all(entries.map(async ([key, table]) => {
+      try {
+        const r = await _xhr('GET', SUPABASE_URL + `/rest/v1/${table}?select=*`);
+        if (r.error) { console.warn('[bootstrapCache]', table, r.error); return; }
+        CACHE[key] = (r.data || []).map(row => _mapRowToFront(table, row));
+      } catch (e) { console.warn('[bootstrapCache] échec', table, e); }
+    }));
+    if (CACHE.annonces.length || CACHE.utilisateurs.length) {
+      const maxId = Math.max(0, ...CACHE.annonces.map(a => a.id || 0), ...CACHE.utilisateurs.map(u => u.id || 0));
+      CACHE.nextId = maxId + 1;
+    }
+    console.log('[bootstrapCache] Données Supabase chargées :',
+      Object.fromEntries(entries.map(([k]) => [k, CACHE[k].length])));
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  PERSISTANCE — écrit vers Supabase en parallèle du cache local
+  // ══════════════════════════════════════════════════════════════
+  const DAO_PERSIST = {
+    async annonce(record) {
+      if (MODE !== 'remote') return;
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/annonces', {
+        titre: record.titre, cat: record.cat, valeur: record.valeur, etat: record.etat,
+        desc_txt: record.desc, ville: record.ville, vendeur_id: record.vendeurId,
+        statut: record.statut, emoji: record.emoji, type_tab: record.typeTab,
+        lat: record.lat, lng: record.lng, photos: record.photos || []
+      }, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] annonce', r.error);
+    },
+    async paiement(record) {
+      if (MODE !== 'remote') return;
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/paiements', {
+        vendeur_id: record.vendeurId, annonce_titre: record.annonce, valeur: record.valeur,
+        commission: record.commission, ref: record.ref, passerelle: record.passerelle,
+        moyen: record.moyen, statut: record.statut === 'confirmé' ? 'confirme' : record.statut,
+        plan_vendeur: record.planVendeur, type: record.type
+      }, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] paiement', r.error);
+    },
+    async message(record) {
+      if (MODE !== 'remote') return;
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/messages', {
+        conversation_id: record.convId, expediteur_id: record.de, contenu: record.texte
+      }, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] message', r.error);
+    },
+    async avis(record) {
+      if (MODE !== 'remote') return;
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/avis', {
+        cible_id: record.cibleId, auteur_id: record.auteurId, note: record.note,
+        commentaire: record.commentaire
+      }, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] avis', r.error);
+    },
+    async litige(record) {
+      if (MODE !== 'remote') return;
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/litiges', {
+        annonce_id: record.annonceId, plaignant_id: record.plaignantId, motif: record.motif,
+        statut: record.statut
+      }, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] litige', r.error);
+    },
+    async abonnement(record) {
+      if (MODE !== 'remote') return;
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/abonnements', record, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] abonnement', r.error);
+    },
+  };
+  window.DAO_PERSIST = DAO_PERSIST;
+  window.bootstrapCache = bootstrapCache;
+  window.CACHE = CACHE;
 
   console.log(`[DAO] Mode: ${MODE} — ${MODE === 'local' ? 'données en mémoire' : 'connecté à Supabase'}`);
   </script>
@@ -5824,7 +5997,7 @@
         <input type="password" id="login-pass" placeholder="••••••••">
       </div>
       <button class="btn btn-primary w-full mt-16" onclick="seConnecter()">Se connecter</button>
-      <div style="margin-top:14px;text-align:center;font-size:13px">
+      <div id="login-demo-links" style="margin-top:14px;text-align:center;font-size:13px">
         <a href="#" onclick="seConnecterDemo('admin')" style="color:var(--or);font-weight:500">Demo Admin</a>
         &nbsp;·&nbsp;
         <a href="#" onclick="seConnecterDemo('user')" style="color:var(--vert);font-weight:500">Demo Utilisateur</a>
@@ -6264,7 +6437,7 @@ const CGU_DATE    = '2026-05-16';
           <div class="stat-card"><div class="stat-val" id="stat-actives">0</div><div class="stat-label">En ligne</div></div>
           <div class="stat-card"><div class="stat-val" id="stat-vues">0</div><div class="stat-label">Vues totales</div></div>
         </div>
-        <div style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid);overflow:hidden">
+        <div class="table-wrap-scroll" style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid)">
           <table class="table">
             <thead>
               <tr>
@@ -6298,7 +6471,7 @@ const CGU_DATE    = '2026-05-16';
         </div>
 
         <!-- Table paiements -->
-        <div style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid);overflow:hidden">
+        <div class="table-wrap-scroll" style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid)">
           <table class="table">
             <thead>
               <tr><th>Date</th><th>Description</th><th>Type</th><th>Montant</th><th>Moyen</th><th>Statut</th><th>Réf.</th></tr>
@@ -9123,12 +9296,49 @@ function goScreen(id) {
 }
 
 // ─── AUTH ───
-function seConnecter() {
+async function seConnecter() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   if (!pass) { toast('Mot de passe requis', 'erreur'); return; }
 
-  // Vérifier si en attente de validation admin
+  if (MODE === 'remote') {
+    // ── Vérifier si en attente de validation admin (fiche Supabase) ──
+    const enAttente = DAO._local.utilisateurs.find(u => u.email === email && u.statut === 'attente');
+    if (enAttente) {
+      toast('Compte en cours de validation. Vous recevrez votre MDP par WhatsApp sous 24h.');
+      return;
+    }
+
+    const { data, error } = await _supa.auth.signInWithPassword({ email, password: pass });
+    if (error || !data || !data.access_token) {
+      toast('Email ou mot de passe incorrect', 'erreur');
+      return;
+    }
+
+    const authId = data.user?.id;
+    let user = DAO._local.utilisateurs.find(u => u.authId === authId);
+    if (!user) {
+      const r = await _xhr('GET', SUPABASE_URL + `/rest/v1/utilisateurs?auth_id=eq.${authId}&select=*`);
+      if (r.data && r.data.length) {
+        user = _mapRowToFront('utilisateurs', r.data[0]);
+        DAO._local.utilisateurs.push(user);
+      }
+    }
+    if (!user) { toast('Compte introuvable', 'erreur'); _supa.auth.signOut(); return; }
+
+    SESSION = user;
+    toast('Bienvenue, ' + user.prenom + ' !');
+    majToutesBannieres();
+
+    if (data.user?.user_metadata?.mdp_a_changer) {
+      toast('Pensez à changer votre mot de passe temporaire dans votre profil.');
+    }
+
+    _routerApresConnexion(user);
+    return;
+  }
+
+  // ── MODE LOCAL (démo) — comportement original inchangé ──
   const enAttente = (window.DB_INSCRIPTIONS || []).find(
     u => u.email === email && u.statut === 'attente'
   );
@@ -9156,6 +9366,10 @@ function seConnecter() {
     return;
   }
 
+  _routerApresConnexion(user);
+}
+
+function _routerApresConnexion(user) {
   if (user.role === 'admin') {
     goScreen('screen-admin');
   } else if (user.role === 'livreur') {
@@ -9653,6 +9867,16 @@ function sInscrire() {
 
   if (!window.DB_INSCRIPTIONS) window.DB_INSCRIPTIONS = [];
   window.DB_INSCRIPTIONS.unshift(newUser);
+
+  // Persistance Supabase — fiche en attente de validation admin (pas de compte Auth encore)
+  if (MODE === 'remote') {
+    _xhr('POST', SUPABASE_URL + '/rest/v1/utilisateurs', {
+      prenom, nom, email, tel, ville, role: 'user', statut: 'attente'
+    }, { Prefer: 'return=representation' }).then(r => {
+      if (r.error) console.error('[persist] pré-inscription', r.error);
+      else if (r.data && r.data[0]) newUser._supabaseId = r.data[0].id;
+    });
+  }
 
   // Notifier l'admin via WhatsApp
   const msgAdmin = encodeURIComponent(
@@ -11701,7 +11925,9 @@ function envoyerMsg() {
   if (!txt||!convId) return;
   const now = new Date();
   const heure = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  DAO._local.messages.push({id:Date.now(),convId,de:SESSION.id,a:999,texte:txt,date:'2025-05-14 '+heure});
+  const nouveauMsg = {id:Date.now(),convId,de:SESSION.id,a:999,texte:txt,date:'2025-05-14 '+heure};
+  DAO._local.messages.push(nouveauMsg);
+  if (typeof DAO_PERSIST !== 'undefined') DAO_PERSIST.message(nouveauMsg);
   const bulles = document.getElementById('msg-bulles');
   const bulle = document.createElement('div');
   bulle.className = 'bulle bulle-moi';
@@ -15518,7 +15744,7 @@ window.apercuFacture = function() {
 (function() {
 
 if (!window.DB_INSCRIPTIONS) {
-  window.DB_INSCRIPTIONS = [
+  window.DB_INSCRIPTIONS = (typeof MODE !== 'undefined' && MODE === 'remote') ? [] : [
     { id:101, prenom:'Kouassi', nom:'Brice Yao', email:'brice.yao@gmail.com', tel:'+225 07 45 23 11 88', ville:'Abidjan', role:'utilisateur', statut:'attente', dateInscription:'2026-05-15', mdpTemp:null, entreprise:null },
     { id:102, prenom:'Mariam', nom:'Toure', email:'mariam.toure@yahoo.fr', tel:'+225 05 12 34 56 78', ville:'Abidjan', role:'annonceur', statut:'attente', dateInscription:'2026-05-15', mdpTemp:null, entreprise:'Toure Mode SARL' },
     { id:103, prenom:'Serge', nom:'Drogba Konan', email:'', tel:'+225 01 22 33 44 55', ville:'Bouake', role:'livreur', statut:'attente', dateInscription:'2026-05-16', mdpTemp:null, entreprise:null },
@@ -15526,6 +15752,19 @@ if (!window.DB_INSCRIPTIONS) {
     { id:105, prenom:'Fatou', nom:'Bamba', email:'fatou.b@gmail.com', tel:'+225 07 00 11 22 33', ville:'Abidjan', role:'utilisateur', statut:'refuse', dateInscription:'2026-05-10', mdpTemp:null, entreprise:null, motifRefus:'Informations incompletes' },
   ];
 }
+
+// Synchronise DB_INSCRIPTIONS depuis les données réelles Supabase (appelé après bootstrapCache)
+window._syncInscriptionsDepuisSupabase = function() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote') return;
+  if (typeof CACHE === 'undefined') return;
+  window.DB_INSCRIPTIONS = CACHE.utilisateurs.map(u => ({
+    id: u.id, _supabaseId: u.id, prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel,
+    ville: u.ville, role: u.role, statut: u.statut || 'valide',
+    dateInscription: '', mdpTemp: null, entreprise: null
+  }));
+  if (typeof insMajKPI === 'function') insMajKPI();
+  if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
+};
 
 let _insValiderUser = null;
 let _insRefuserUser = null;
@@ -15618,10 +15857,11 @@ window.renderAdminInscriptions = function() {
 window.insOuvrirValider = function(userId) {
   _insValiderUser = window.DB_INSCRIPTIONS.find(u=>u.id===userId);
   if(!_insValiderUser) return;
-  const mdp=genMDP();
+  const enRemote = (typeof MODE !== 'undefined' && MODE === 'remote');
+  const mdp = enRemote ? null : genMDP();
   _insValiderUser._mdpGen=mdp;
   document.getElementById('ins-val-nom').textContent=_insValiderUser.prenom+' '+_insValiderUser.nom;
-  document.getElementById('ins-val-mdp').textContent=mdp;
+  document.getElementById('ins-val-mdp').textContent = enRemote ? 'Généré automatiquement à la validation' : mdp;
   _insCanalSel='wa';
   document.querySelectorAll('.ins-canal-opt').forEach((el,i)=>{
     el.style.border=i===0?'1.5px solid var(--vert)':'1.5px solid var(--gris-mid)';
@@ -15638,8 +15878,63 @@ window.insSelCanal = function(el, canal) {
   el.style.border='1.5px solid var(--vert)'; el.style.background='var(--vert-pale)'; el.style.color='var(--vert)';
 };
 
-window.insConfirmerValidation = function() {
+window.insConfirmerValidation = async function() {
   if(!_insValiderUser) return;
+
+  if (typeof MODE !== 'undefined' && MODE === 'remote') {
+    if (!_insValiderUser._supabaseId) {
+      toast('Fiche non synchronisée avec Supabase — impossible de valider', 'erreur');
+      return;
+    }
+    const token = (typeof _supa !== 'undefined') ? _supa.auth.getAccessToken() : null;
+    if (!token) { toast('Session admin expirée, reconnectez-vous', 'erreur'); return; }
+
+    try {
+      const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/valider-inscription',
+        { utilisateurId: _insValiderUser._supabaseId }, { Authorization: 'Bearer ' + token });
+      if (r.error || !r.data || !r.data.success) {
+        toast((r.data && r.data.error) || r.error?.message || 'Échec de validation', 'erreur');
+        return;
+      }
+      const mdp = r.data.mdpTemp;
+      _insValiderUser.statut='valide';
+      _insValiderUser.mdpTemp=mdp;
+      _insValiderUser.dateValidation=new Date().toISOString().slice(0,10);
+      _insValiderUser.validePar=(SESSION?((SESSION.prenom||'')+' '+(SESSION.nom||'')).trim():'Admin')||'Admin';
+
+      if(!DAO._local.utilisateurs.find(u=>u.email===_insValiderUser.email)) {
+        DAO._local.utilisateurs.push({
+          id: _insValiderUser._supabaseId, prenom: _insValiderUser.prenom, nom: _insValiderUser.nom,
+          email: _insValiderUser.email, tel: _insValiderUser.tel, ville: _insValiderUser.ville,
+          role: 'user', statut: 'valide', note: 0, nbAvis: 0
+        });
+      }
+
+      const tel=_insValiderUser.tel.replace(/[\s+]/g,'');
+      const msg=encodeURIComponent(
+        'Bienvenue sur Le Grenier CI !\n\n'+
+        'Bonjour '+_insValiderUser.prenom+',\n\n'+
+        'Votre compte a ete valide.\n\n'+
+        'Mot de passe temporaire : '+mdp+'\n\n'+
+        'Changez-le a la 1ere connexion.\n\n'+
+        'Connectez-vous sur : https://ci-legrenier.com\n\n'+
+        '- L equipe Le Grenier CI'
+      );
+      if(_insCanalSel==='wa'||_insCanalSel==='tous') window.open('https://wa.me/'+tel+'?text='+msg,'_blank');
+      if(_insCanalSel==='email'||_insCanalSel==='tous') toast('Email : simulation envoi a '+(_insValiderUser.email||'non renseigne'));
+      if(_insCanalSel==='sms') toast('SMS : simulation envoi au '+_insValiderUser.tel);
+
+      document.getElementById('modal-ins-valider').classList.remove('open');
+      renderAdminInscriptions();
+      toast(_insValiderUser.prenom+' valide - MDP envoye');
+      _insValiderUser=null;
+    } catch (e) {
+      toast('Erreur réseau lors de la validation', 'erreur');
+    }
+    return;
+  }
+
+  // ── MODE LOCAL (démo) — comportement original inchangé ──
   const mdp=_insValiderUser._mdpGen;
   _insValiderUser.statut='valide';
   _insValiderUser.mdpTemp=mdp;
@@ -17708,7 +18003,17 @@ const _ouvrirResaTable_orig = ouvrirResaTable;
 ouvrirResaTable = function(id) { _ouvrirResaTable_orig(id); setTimeout(majBannièresInvites, 50); };
 
 // ─── INIT ───
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // ── Chargement des données réelles Supabase (mode remote) avant tout rendu ──
+  if (typeof bootstrapCache === 'function') {
+    try { await bootstrapCache(); }
+    catch (e) { console.error('[INIT] bootstrapCache a échoué, poursuite avec cache vide', e); }
+  }
+  if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
+  if (typeof MODE !== 'undefined' && MODE === 'remote') {
+    const demoLinks = document.getElementById('login-demo-links');
+    if (demoLinks) demoLinks.style.display = 'none';
+  }
   // ── Init renders ──
   appliquerFiltres();
   renderHeroTop();
