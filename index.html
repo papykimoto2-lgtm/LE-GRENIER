@@ -6,6 +6,19 @@
 <meta name="author" content="SANIX AFRICA — Division Technologies, Cyrille KESSIE">
 <meta name="contact" content="+225 07 79 18 10 75 | sanixafrica699@gmail.com">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ══════════════════════════════════════════════════════════════
+     PWA — Installation sur mobile et tablettes
+     ═══════════════════════════════════════════════════════════════ -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0D5C35">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Le Grenier">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Le Grenier CI — Marketplace C2C | SANIX AFRICA Technologies</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -3214,6 +3227,124 @@
         <div class="hero-card" style="background:linear-gradient(135deg,var(--or-pale),#FFE4A0)"><div class="hero-card-emoji">👟</div></div>
         <div class="hero-card" style="background:linear-gradient(135deg,#EDF2FF,#C5D5FF)"><div class="hero-card-emoji">🛋️</div></div>
       </div>
+    </div>
+  </div>
+
+  <style>
+    .hub-wrap{max-width:1240px;margin:0 auto;padding:8px 24px 36px}
+    .hub-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:28px 0 18px;flex-wrap:wrap}
+    .hub-head h2{font-family:var(--font-titre);font-weight:700;font-size:32px;color:var(--noir);margin:0}
+    .hub-head span{display:block;font-family:var(--font-corps);font-weight:500;font-size:14px;color:var(--gris-text);margin-top:4px}
+    .hub-live{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--vert-vif);font-weight:600;background:var(--vert-pale);padding:8px 14px;border-radius:999px;white-space:nowrap}
+    .hub-dot{width:8px;height:8px;border-radius:50%;background:var(--vert-clair);animation:hubPulse 1.6s infinite}
+    @keyframes hubPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.5)}}
+    .hub-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    @media(max-width:980px){.hub-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:640px){.hub-grid{grid-template-columns:repeat(2,1fr)}}
+    .hub-card{position:relative;overflow:hidden;border-radius:18px;padding:20px 18px;min-height:132px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;border:1px solid rgba(0,0,0,0.05);box-shadow:var(--shadow-card);transition:transform .25s cubic-bezier(.4,0,.2,1),box-shadow .25s;animation:hubFadeUp .5s cubic-bezier(.4,0,.2,1) both}
+    .hub-card:nth-child(1){animation-delay:.02s}.hub-card:nth-child(2){animation-delay:.06s}.hub-card:nth-child(3){animation-delay:.10s}.hub-card:nth-child(4){animation-delay:.14s}
+    .hub-card:nth-child(5){animation-delay:.18s}.hub-card:nth-child(6){animation-delay:.22s}.hub-card:nth-child(7){animation-delay:.26s}.hub-card:nth-child(8){animation-delay:.30s}
+    .hub-card:nth-child(9){animation-delay:.34s}.hub-card:nth-child(10){animation-delay:.38s}.hub-card:nth-child(11){animation-delay:.42s}.hub-card:nth-child(12){animation-delay:.46s}
+    @keyframes hubFadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    .hub-card:hover{transform:translateY(-6px) scale(1.015);box-shadow:var(--shadow-lg)}
+    .hub-card:active{transform:translateY(-2px) scale(.99)}
+    .hub-card-icon{font-size:30px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.12))}
+    .hub-card-blob{position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;opacity:.16;transition:transform .35s}
+    .hub-card:hover .hub-card-blob{transform:scale(1.3)}
+    .hub-card-title{font-weight:700;font-size:15.5px;color:var(--noir);margin-top:14px}
+    .hub-card-sub{font-size:12.5px;color:var(--gris-text);margin-top:2px;font-weight:500}
+    .hub-card-arrow{position:absolute;bottom:16px;right:16px;font-size:15px;opacity:0;transform:translateX(-6px);transition:all .25s;color:inherit}
+    .hub-card:hover .hub-card-arrow{opacity:1;transform:translateX(0)}
+    .hub-strip{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 14px;margin-top:26px;scrollbar-width:none}
+    .hub-strip::-webkit-scrollbar{display:none}
+    .hub-strip-item{flex:0 0 auto;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--gris-mid);border-radius:14px;padding:12px 18px;font-weight:600;font-size:13.5px;color:var(--noir);cursor:pointer;transition:var(--transition);white-space:nowrap}
+    .hub-strip-item:hover{border-color:var(--vert-clair);background:var(--vert-pale);transform:translateY(-2px)}
+  </style>
+  <div class="hub-wrap">
+    <div class="hub-head">
+      <div><h2>Explorez Le Grenier</h2><span>Un seul endroit pour tout acheter, vendre et faire faire à Abidjan</span></div>
+      <div class="hub-live"><span class="hub-dot"></span>Plateforme active maintenant</div>
+    </div>
+    <div class="hub-grid">
+      <div class="hub-card" style="background:var(--vert-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-marche')">
+        <div class="hub-card-blob" style="background:var(--vert-clair)"></div>
+        <div class="hub-card-icon">🛍️</div>
+        <div><div class="hub-card-title">Marché</div><div class="hub-card-sub">Achetez & vendez entre particuliers</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--or-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-boulots')">
+        <div class="hub-card-blob" style="background:var(--or-vif)"></div>
+        <div class="hub-card-icon">🛠️</div>
+        <div><div class="hub-card-title">Petits Boulots</div><div class="hub-card-sub">Artisans & prestataires près de vous</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--bleu-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-colis')">
+        <div class="hub-card-blob" style="background:var(--bleu-vif)"></div>
+        <div class="hub-card-icon">📦</div>
+        <div><div class="hub-card-title">Colis & Envois</div><div class="hub-card-sub">Abidjan ↔ Paris, New York…</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--rouge-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-auto')">
+        <div class="hub-card-blob" style="background:var(--rouge-vif)"></div>
+        <div class="hub-card-icon">🚗</div>
+        <div><div class="hub-card-title">Auto & Location</div><div class="hub-card-sub">Véhicules d'occasion, location</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--sm-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-supermarche')">
+        <div class="hub-card-blob" style="background:var(--sm-vif)"></div>
+        <div class="hub-card-icon">🏪</div>
+        <div><div class="hub-card-title">Mon Super Marché</div><div class="hub-card-sub">Courses livrées chez vous</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--rose-b-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-beaute')">
+        <div class="hub-card-blob" style="background:var(--rose-b-vif)"></div>
+        <div class="hub-card-icon">💅</div>
+        <div><div class="hub-card-title">Beauté & RDV</div><div class="hub-card-sub">Coiffure, maquillage, spa</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--bleu-log-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-logement')">
+        <div class="hub-card-blob" style="background:var(--bleu-log-vif)"></div>
+        <div class="hub-card-icon">🏠</div>
+        <div><div class="hub-card-title">Résidences</div><div class="hub-card-sub">Location meublée & courte durée</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--resto-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-resto')">
+        <div class="hub-card-blob" style="background:var(--resto-vif)"></div>
+        <div class="hub-card-icon">🍲</div>
+        <div><div class="hub-card-title">Maquis & Restos</div><div class="hub-card-sub">Réservez, commandez sur place</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--livr-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-livraison')">
+        <div class="hub-card-blob" style="background:var(--livr-vif)"></div>
+        <div class="hub-card-icon">🏍️</div>
+        <div><div class="hub-card-title">Livraison</div><div class="hub-card-sub">Moto, cargo, express</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--violet-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-dons')">
+        <div class="hub-card-blob" style="background:var(--violet-vif)"></div>
+        <div class="hub-card-icon">🎁</div>
+        <div><div class="hub-card-title">Dons & Gratuit</div><div class="hub-card-sub">Offrez, récupérez gratuitement</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--gris-clair)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-nounou')">
+        <div class="hub-card-blob" style="background:var(--or)"></div>
+        <div class="hub-card-icon">👶</div>
+        <div><div class="hub-card-title">Nounou & Servants</div><div class="hub-card-sub">Personnel de maison de confiance</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+      <div class="hub-card" style="background:var(--gris-clair)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-info')">
+        <div class="hub-card-blob" style="background:var(--vert)"></div>
+        <div class="hub-card-icon">📚</div>
+        <div><div class="hub-card-title">Info & Formation</div><div class="hub-card-sub">Guides et conseils pratiques</div></div>
+        <div class="hub-card-arrow">➜</div>
+      </div>
+    </div>
+    <div class="hub-strip">
+      <div class="hub-strip-item" onclick="goScreen('screen-depot')">➕ Publier une annonce</div>
+      <div class="hub-strip-item" onclick="goScreen('screen-depot-boulot')">🧰 Proposer un service</div>
+      <div class="hub-strip-item" onclick="goScreen('screen-register')">🆕 Créer mon compte</div>
+      <div class="hub-strip-item" onclick="goScreen('screen-login')">🔑 Me connecter</div>
+      <div class="hub-strip-item" onclick="document.getElementById('search-input').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('search-input').focus()">🔍 Rechercher</div>
     </div>
   </div>
 
@@ -22629,6 +22760,68 @@ window.addEventListener('load', () => {
     </div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     PWA — Bannière d'installation + enregistrement Service Worker
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="pwa-install-banner" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:14px 16px;align-items:center;gap:12px;max-width:420px;margin:0 auto">
+  <div style="width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--vert),var(--vert-vif));flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">🏺</div>
+  <div style="flex:1;min-width:0">
+    <div style="font-weight:700;font-size:14px;color:#111827">Installer Le Grenier CI</div>
+    <div style="font-size:12.5px;color:#6b7280">Accès rapide depuis votre écran d'accueil</div>
+  </div>
+  <button id="pwa-install-btn" style="padding:9px 14px;border:none;border-radius:9px;background:var(--vert);color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Installer</button>
+  <button id="pwa-install-close" style="border:none;background:none;font-size:18px;color:#9ca3af;cursor:pointer;padding:0 2px" aria-label="Fermer">✕</button>
+</div>
+
+<script>
+(function(){
+  // Enregistrement du Service Worker (condition d'installabilité)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('/sw.js').catch(function(err){
+        console.warn('SW non enregistré :', err);
+      });
+    });
+  }
+
+  // Prompt d'installation personnalisé (Android/Chrome/Edge)
+  var deferredPrompt = null;
+  var banner = document.getElementById('pwa-install-banner');
+  var btnInstall = document.getElementById('pwa-install-btn');
+  var btnClose = document.getElementById('pwa-install-close');
+  var DISMISS_KEY = 'lg_pwa_dismissed';
+
+  function dejaInstallee(){
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+  }
+
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredPrompt = e;
+    if (!dejaInstallee() && !localStorage.getItem(DISMISS_KEY)) {
+      banner.style.display = 'flex';
+    }
+  });
+
+  if (btnInstall) btnInstall.addEventListener('click', function(){
+    banner.style.display = 'none';
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.finally(function(){ deferredPrompt = null; });
+  });
+
+  if (btnClose) btnClose.addEventListener('click', function(){
+    banner.style.display = 'none';
+    localStorage.setItem(DISMISS_KEY, '1');
+  });
+
+  window.addEventListener('appinstalled', function(){
+    banner.style.display = 'none';
+  });
+})();
+</script>
 
 </body>
 </html>
