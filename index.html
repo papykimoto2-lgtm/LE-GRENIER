@@ -401,17 +401,14 @@
   .admin-header{background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;box-shadow:0 2px 12px rgba(13,92,53,0.3)}
   .admin-header-top{padding:16px 28px 12px;display:flex;align-items:center;justify-content:space-between;gap:14px}
   .admin-header .titre{font-family:var(--font-titre);font-size:22px;font-weight:700;letter-spacing:-0.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .admin-nav-wrap{position:relative;padding:0 28px 12px}
-  .admin-nav-wrap::after{content:'';position:absolute;top:0;right:28px;bottom:12px;width:28px;background:linear-gradient(90deg,transparent,var(--vert-vif) 80%);pointer-events:none}
-  .admin-nav{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:100%}
-  .admin-nav::-webkit-scrollbar{display:none}
+  .admin-nav-wrap{padding:0 28px 12px;display:flex;flex-direction:column;gap:6px}
+  .admin-nav{display:flex;gap:4px;flex-wrap:wrap}
   .admin-nav-btn{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;color:rgba(255,255,255,.7);border:none;background:transparent;cursor:pointer;transition:var(--transition);white-space:nowrap;flex-shrink:0}
   .admin-nav-btn:hover,.admin-nav-btn.actif{background:rgba(255,255,255,.2);color:#fff}
   .admin-body{padding:20px clamp(14px,4vw,32px);background:var(--gris-clair);flex:1}
   @media(max-width:768px){
     .admin-header-top{padding:14px 16px 10px}
     .admin-nav-wrap{padding:0 16px 10px}
-    .admin-nav-wrap::after{right:16px}
     .admin-header .titre{font-size:17px}
     .admin-nav-btn{padding:6px 12px;font-size:12px}
   }
@@ -7385,6 +7382,8 @@ const CGU_DATE    = '2026-05-16';
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-promos')">Codes Promo</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-pub')">Publicités</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-abonnements')">Abonnements</button>
+      </div>
+      <div class="admin-nav">
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');renderAdminLivraisons()">Livraisons</button>
         <button class="admin-nav-btn" id="admin-nav-inscriptions" onclick="adminTab(this,'admin-inscriptions');renderAdminInscriptions()">Inscriptions <span id="admin-nav-badge-inscriptions" style="display:none;background:var(--or);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
