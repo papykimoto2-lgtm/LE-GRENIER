@@ -2896,6 +2896,156 @@
     });
   };
 
+  // ══════════════════════════════════════════════════════════════
+  //  LIVRAISONS — chargement + persistance réels (hors CACHE générique,
+  //  car DB_LIVREURS / DISPATCH_COMMANDES ont leur propre convention de champs)
+  // ══════════════════════════════════════════════════════════════
+  window.chargerLivraisonsDepuisSupabase = async function() {
+    if (MODE !== 'remote') return;
+    try {
+      const [rLivreurs, rCmd] = await Promise.all([
+        _xhr('GET', SUPABASE_URL + '/rest/v1/livreurs?select=*'),
+        _xhr('GET', SUPABASE_URL + '/rest/v1/livraisons?select=*&order=created_at.desc')
+      ]);
+      if (!rLivreurs.error && Array.isArray(rLivreurs.data) && typeof DB_LIVREURS !== 'undefined') {
+        const mapped = rLivreurs.data.map(l => ({
+          id: l.id, userId: l.utilisateur_id, nom: l.nom,
+          initiales: (l.nom || '??').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+          type: l.type, ico: {moto:'🛵',tricycle:'🛺',cargo:'🚚',camionnette:'🚐'}[l.type] || '📦',
+          zone: l.zone, dispo: l.dispo, note: Number(l.note) || 5, nbLivr: l.nb_livraisons || 0,
+          tel: l.tel, tarif: Number(l.tarif) || 0, delai: l.delai
+        }));
+        DB_LIVREURS.splice(0, DB_LIVREURS.length, ...mapped);
+      }
+      if (!rCmd.error && Array.isArray(rCmd.data) && typeof DISPATCH_COMMANDES !== 'undefined') {
+        const mapped = rCmd.data.map(c => ({
+          id: c.id, ref: c.ref, client: c.client_nom, tel: c.client_tel,
+          dep: c.depart, arr: c.arrivee, type: c.type, montant: Number(c.montant) || 0,
+          statut: c.statut, livreurId: c.livreur_id, date: (c.created_at || '').slice(0, 10),
+          _supabaseId: c.id
+        }));
+        DISPATCH_COMMANDES.splice(0, DISPATCH_COMMANDES.length, ...mapped);
+      }
+    } catch (e) { console.error('[livraisons] chargement échoué', e); }
+  };
+
+  window.persisterLivraison = async function(cmd) {
+    if (MODE !== 'remote') return null;
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/livraisons', {
+      ref: cmd.ref, client_nom: cmd.client, client_tel: cmd.tel,
+      depart: cmd.dep, arrivee: cmd.arr, type: cmd.type, montant: cmd.montant,
+      statut: cmd.statut, livreur_id: cmd.livreurId || null
+    }, { Prefer: 'return=representation' });
+    if (r.error) { console.error('[persist] livraison', r.error); return null; }
+    if (r.data && r.data[0]) cmd._supabaseId = r.data[0].id;
+    return r.data ? r.data[0] : null;
+  };
+
+  window.majStatutLivraison = async function(cmd) {
+    if (MODE !== 'remote' || !cmd._supabaseId) return;
+    const r = await _xhr('PATCH', SUPABASE_URL + `/rest/v1/livraisons?id=eq.${cmd._supabaseId}`, {
+      statut: cmd.statut, livreur_id: cmd.livreurId || null
+    }, { Prefer: 'return=minimal' });
+    if (r.error) console.error('[persist] maj livraison', r.error);
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  //  MODULES VERTICAUX — boulots, nounou, trajets, voitures, locations,
+  //  dons, besoins, salons, artistes, logements, restos
+  //  Stratégie : colonnes indexables (moteur de recherche/filtre) +
+  //  data jsonb = copie fidèle de l'objet JS d'origine (id/userId/statut exclus,
+  //  restaurés depuis les vraies colonnes à la lecture)
+  // ══════════════════════════════════════════════════════════════
+  const MODULES_VERTICAUX = [
+    { table: 'boulots', varName: 'DB_BOULOTS' },
+    { table: 'nounous', varName: 'DB_NOUNOU' },
+    { table: 'trajets', varName: 'DB_TRAJETS' },
+    { table: 'voitures', varName: 'DB_VOITURES' },
+    { table: 'locations_vehicules', varName: 'DB_LOCATIONS' },
+    { table: 'dons', varName: 'DB_DONS' },
+    { table: 'besoins', varName: 'DB_BESOINS' },
+    { table: 'salons', varName: 'DB_SALONS' },
+    { table: 'artistes', varName: 'DB_ARTISTES' },
+    { table: 'logements', varName: 'DB_LOGEMENTS' },
+    { table: 'restos', varName: 'DB_RESTOS' },
+  ];
+
+  window.chargerModulesVerticauxDepuisSupabase = async function() {
+    if (MODE !== 'remote') return;
+    await Promise.all(MODULES_VERTICAUX.map(async (m) => {
+      try {
+        const r = await _xhr('GET', SUPABASE_URL + `/rest/v1/${m.table}?select=*&statut=eq.en-ligne&order=created_at.desc`);
+        if (r.error) { console.warn('[modules]', m.table, r.error); return; }
+        const arr = window[m.varName];
+        if (!Array.isArray(arr)) return;
+        const mapped = (r.data || []).map(row => Object.assign(
+          {}, row.data, { id: row.id, userId: row.vendeur_id, statut: row.statut, _supabaseId: row.id }
+        ));
+        arr.splice(0, arr.length, ...mapped);
+      } catch (e) { console.warn('[modules] échec', m.table, e); }
+    }));
+  };
+
+  // Persiste une nouvelle fiche (annonce boulot, don, salon, etc.)
+  // objJS : l'objet JS complet tel que poussé dans le tableau DB_*
+  // colonnesIndex : { colonne_sql: valeur } pour les colonnes filtrables (nom, prix, zone...)
+  window.persisterModuleVertical = async function(table, objJS, colonnesIndex) {
+    if (MODE !== 'remote') return null;
+    const payload = Object.assign(
+      { vendeur_id: SESSION ? SESSION.id : null, statut: 'en-ligne', data: objJS },
+      colonnesIndex || {}
+    );
+    const r = await _xhr('POST', SUPABASE_URL + `/rest/v1/${table}`, payload, { Prefer: 'return=representation' });
+    if (r.error) { console.error('[persist]', table, r.error); return null; }
+    if (r.data && r.data[0]) { objJS._supabaseId = r.data[0].id; objJS.id = r.data[0].id; }
+    return r.data ? r.data[0] : null;
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  //  SUPERMARCHÉS + PRODUITS — duo parent/enfant (comme livreurs/livraisons)
+  // ══════════════════════════════════════════════════════════════
+  window.chargerSupermarchesDepuisSupabase = async function() {
+    if (MODE !== 'remote') return;
+    try {
+      const [rMag, rProd] = await Promise.all([
+        _xhr('GET', SUPABASE_URL + '/rest/v1/magasins?select=*&statut=eq.en-ligne'),
+        _xhr('GET', SUPABASE_URL + '/rest/v1/produits_magasin?select=*')
+      ]);
+      if (!rMag.error && Array.isArray(rMag.data) && typeof DB_SUPERMARCHES !== 'undefined') {
+        const mapped = rMag.data.map(row => Object.assign({}, row.data, { id: row.id, _supabaseId: row.id, statut: row.statut }));
+        DB_SUPERMARCHES.splice(0, DB_SUPERMARCHES.length, ...mapped);
+      }
+      if (!rProd.error && Array.isArray(rProd.data) && typeof DB_SM_PRODUITS !== 'undefined') {
+        const mapped = rProd.data.map(row => Object.assign({}, row.data, { id: row.id, magId: row.magasin_id, _supabaseId: row.id }));
+        DB_SM_PRODUITS.splice(0, DB_SM_PRODUITS.length, ...mapped);
+      }
+    } catch (e) { console.error('[supermarches] chargement échoué', e); }
+  };
+
+  window.persisterMagasin = async function(objJS, colonnesIndex) {
+    if (MODE !== 'remote') return null;
+    const payload = Object.assign(
+      { vendeur_id: SESSION ? SESSION.id : null, statut: 'en-ligne', data: objJS },
+      colonnesIndex || {}
+    );
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/magasins', payload, { Prefer: 'return=representation' });
+    if (r.error) { console.error('[persist] magasin', r.error); return null; }
+    if (r.data && r.data[0]) { objJS._supabaseId = r.data[0].id; objJS.id = r.data[0].id; }
+    return r.data ? r.data[0] : null;
+  };
+
+  window.persisterProduitMagasin = async function(objJS, magasinSupabaseId, colonnesIndex) {
+    if (MODE !== 'remote') return null;
+    const payload = Object.assign(
+      { magasin_id: magasinSupabaseId, data: objJS },
+      colonnesIndex || {}
+    );
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/produits_magasin', payload, { Prefer: 'return=representation' });
+    if (r.error) { console.error('[persist] produit magasin', r.error); return null; }
+    if (r.data && r.data[0]) { objJS._supabaseId = r.data[0].id; objJS.id = r.data[0].id; }
+    return r.data ? r.data[0] : null;
+  };
+
   console.log(`[DAO] Mode: ${MODE} — ${MODE === 'local' ? 'données en mémoire' : 'connecté à Supabase'}`);
   </script>
 </head>
@@ -4693,6 +4843,18 @@
       <div style="font-family:var(--font-titre);font-size:24px;font-weight:700;color:var(--noir);margin-bottom:4px">Artistes & Maquilleurs</div>
       <div style="font-size:14px;color:var(--gris-text);margin-bottom:20px">Maquilleurs événements, mariages, shooting photo et occasions spéciales</div>
       <div id="artistes-grid" style="display:flex;flex-direction:column;gap:14px"></div>
+
+      <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:24px;box-shadow:var(--shadow-sm);margin-top:24px">
+        <div style="font-family:var(--font-titre);font-size:20px;font-weight:700;color:#9C1360;margin-bottom:4px">Devenir artiste référencé</div>
+        <div style="font-size:13px;color:var(--gris-text);margin-bottom:18px">Visible par les clientes en recherche de maquilleurs/nail artists — 100% gratuit</div>
+        <div class="form-group"><label>Nom / Nom d'artiste *</label><input type="text" id="artiste-nom" placeholder="Ex: Mariama Bah"></div>
+        <div class="form-group"><label>Spécialité *</label><input type="text" id="artiste-specialite" placeholder="Ex: Maquillage mariage & événements"></div>
+        <div class="form-group"><label>Zone d'intervention *</label><input type="text" id="artiste-zone" placeholder="Ex: Cocody, Marcory ou Tout Abidjan"></div>
+        <div class="form-group"><label>Téléphone / WhatsApp *</label><input type="tel" id="artiste-tel" placeholder="+225 07 XX XX XX XX"></div>
+        <div class="form-group"><label>Bio courte</label><textarea id="artiste-bio" rows="3" placeholder="Expérience, spécialités, références..."></textarea></div>
+        <div class="form-group"><label>Tarifs (séparés par une virgule)</label><input type="text" id="artiste-tarifs" placeholder="Ex: Mariage : 60 000 F, Soirée : 25 000 F"></div>
+        <button class="btn w-full" onclick="inscrireArtiste()" style="background:linear-gradient(135deg,#9C1360,#E91E8C);color:#fff;padding:13px;font-size:15px;font-weight:700;border-radius:var(--radius)">Référencer gratuitement</button>
+      </div>
     </div>
 
     <!-- ── SECTION MES RDV ── -->
@@ -10759,7 +10921,7 @@ function validerCommandeInvite() {
   const depFinal = _inviteArticle ? dep || 'Adresse vendeur' : dep;
 
   // Enregistrer dans dispatcher
-  DISPATCH_COMMANDES.unshift({
+  const nouvelleLivraison1 = {
     id: DISPATCH_COMMANDES.length + 1, ref, client: nom, tel,
     dep: depFinal, arr: adresse,
     type: 'moto', montant: frais,
@@ -10767,7 +10929,9 @@ function validerCommandeInvite() {
     livreurId: livreur?.id || null,
     date: new Date().toISOString().slice(0,10),
     article: _inviteArticle?.titre || null
-  });
+  };
+  DISPATCH_COMMANDES.unshift(nouvelleLivraison1);
+  if (typeof persisterLivraison === 'function') persisterLivraison(nouvelleLivraison1);
 
   // WA livreur
   if (livreur) {
@@ -13661,6 +13825,9 @@ function publierBoulot() {
     lng: SESSION.geo ? SESSION.geo.lng : null
   };
   DB_BOULOTS.push(newB);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('boulots', newB, {
+    nom: newB.nom, metier: newB.metier, zone: newB.zone, tel: newB.tel, tarif_jour: newB.tarifJour
+  });
   // Raffiner la position GPS en arrière-plan
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
     newB.lat = pos.coords.latitude; newB.lng = pos.coords.longitude;
@@ -13915,7 +14082,11 @@ function soumettreNounou() {
   const icoMap = {'Nounou':'👶','Gouvernante':'🏡','Cuisinière':'🍲','Servants / Aide ménagère':'✨','Chauffeur + Services':'🚗','Servants / Gardien':'🔐'};
   const tarif = parseInt(document.getElementById('fn-tarif').value)||6000;
   const desc = document.getElementById('fn-desc').value.trim()||'Profil en attente de validation.';
-  DB_NOUNOU.push({id:DB_NOUNOU.length+1,nom,role,ico:icoMap[role]||'🏠',photo:null,zone,tarifJour:tarif,tarifMois:tarif*18,note:0,nbAvis:0,exp:'Nouveau',dispo:true,age:null,gratuit:false,desc,competences:[role],tel,langues:'Français'});
+  const newNounou = {id:DB_NOUNOU.length+1,nom,role,ico:icoMap[role]||'🏠',photo:null,zone,tarifJour:tarif,tarifMois:tarif*18,note:0,nbAvis:0,exp:'Nouveau',dispo:true,age:null,gratuit:false,desc,competences:[role],tel,langues:'Français'};
+  DB_NOUNOU.push(newNounou);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('nounous', newNounou, {
+    nom: newNounou.nom, zone: newNounou.zone, tel: newNounou.tel, tarif_jour: newNounou.tarifJour
+  });
   fermerModal();
   renderNounou();
   toast(`Profil "${nom}" ajouté ! Il sera visible après validation.`);
@@ -14168,6 +14339,9 @@ function publierTrajet() {
     ico: '✈️', prix: 'Sur devis'
   };
   DB_TRAJETS.push(newT);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('trajets', newT, {
+    porteur: newT.porteur, dep: newT.dep, arr: newT.arr, tel: newT.tel
+  });
   toast(`✈️ Trajet publié ! Visible par les expéditeurs dès maintenant.`);
   ['porteur-dep','porteur-arr','porteur-date','porteur-kg','porteur-tel'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
 }
@@ -14374,6 +14548,9 @@ function publierVoiture() {
     lat: null, lng: null
   };
   DB_VOITURES.push(newV);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('voitures', newV, {
+    marque: newV.marque, modele: newV.modele, quartier: newV.quartier, tel: newV.tel, prix: newV.prix, annee: newV.annee
+  });
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
     newV.lat = pos.coords.latitude; newV.lng = pos.coords.longitude;
   }, ()=>{}, {timeout:8000,maximumAge:60000});
@@ -14400,6 +14577,9 @@ function publierLocation() {
     lat: null, lng: null
   };
   DB_LOCATIONS.push(newL);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('locations_vehicules', newL, {
+    marque: newL.marque, modele: newL.modele, quartier: newL.quartier, tel: newL.tel, prix_jour: newL.prixJour
+  });
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
     newL.lat = pos.coords.latitude; newL.lng = pos.coords.longitude;
   }, ()=>{}, {timeout:8000,maximumAge:60000});
@@ -14819,6 +14999,9 @@ function publierDon() {
     lat: null, lng: null
   };
   DB_DONS.push(newD);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('dons', newD, {
+    titre: newD.titre, cat: newD.cat, quartier: newD.quartier, tel: newD.tel
+  });
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
     newD.lat = pos.coords.latitude; newD.lng = pos.coords.longitude;
   }, ()=>{}, {timeout:8000,maximumAge:60000});
@@ -14841,6 +15024,9 @@ function publierBesoin() {
     tel, ico: '🆘', lat: null, lng: null
   };
   DB_BESOINS.push(newB);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('besoins', newB, {
+    titre: newB.titre, quartier: newB.quartier, tel: newB.tel
+  });
   if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
     newB.lat = pos.coords.latitude; newB.lng = pos.coords.longitude;
   }, ()=>{}, {timeout:8000,maximumAge:60000});
@@ -16662,20 +16848,20 @@ function renderArtistes() {
     <div class="artiste-card">
       <div class="artiste-avatar" style="overflow:hidden;padding:0">
         ${a.photo
-          ? `<img src="${a.photo}" alt="${a.nom}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.style.display='none';this.parentNode.style.fontSize='22px';this.parentNode.style.display='flex';this.parentNode.textContent='${a.initiales}'">`
-          : a.initiales}
+          ? `<img src="${a.photo}" alt="${escapeHtml(a.nom)}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.style.display='none';this.parentNode.style.fontSize='22px';this.parentNode.style.display='flex';this.parentNode.textContent='${escapeHtml(a.initiales)}'">`
+          : escapeHtml(a.initiales)}
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
-          <div class="artiste-nom">${a.nom}</div>
+          <div class="artiste-nom">${escapeHtml(a.nom)}</div>
           <span style="color:#F59E0B;font-size:11px">⭐ ${a.note}</span>
           <span style="font-size:11px;color:var(--gris-text)">(${a.nbAvis} avis)</span>
           ${!a.dispo ? '<span style="background:var(--gris-clair);color:var(--gris-text);font-size:10px;padding:2px 8px;border-radius:6px;font-weight:700">Indisponible</span>' : ''}
         </div>
-        <div class="artiste-specialite">${a.ico} ${a.specialite}</div>
-        <div class="artiste-bio">${a.bio}</div>
-        <div class="artiste-tarifs">${a.tarifs.map(t => `<span class="artiste-tarif-tag">${t}</span>`).join('')}</div>
-        <div style="font-size:12px;color:var(--gris-text);margin-bottom:10px">📍 ${a.zone}</div>
+        <div class="artiste-specialite">${a.ico} ${escapeHtml(a.specialite)}</div>
+        <div class="artiste-bio">${escapeHtml(a.bio)}</div>
+        <div class="artiste-tarifs">${(a.tarifs||[]).map(t => `<span class="artiste-tarif-tag">${escapeHtml(t)}</span>`).join('')}</div>
+        <div style="font-size:12px;color:var(--gris-text);margin-bottom:10px">📍 ${escapeHtml(a.zone)}</div>
         <div style="display:flex;gap:8px">
           <button class="btn-rdv" style="font-size:12px;padding:8px 14px" onclick="contacterArtiste(${a.id})" ${!a.dispo ? 'disabled style="opacity:.5;cursor:not-allowed"' : ''}>Contacter</button>
           <button class="btn-salon-wa" style="font-size:12px;padding:8px 14px" onclick="contacterArtiste(${a.id})">WhatsApp</button>
@@ -16877,9 +17063,41 @@ function inscrireSalon() {
     services: cats.slice(0,3).map(c=>({id:'s'+Date.now(),nom:c,duree:'1h',prix:prixMin}))
   };
   DB_SALONS.push(newS);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('salons', newS, {
+    nom: newS.nom, quartier: newS.quartier, tel: newS.tel, prix_min: newS.prixMin
+  });
   toast(`💅 Salon "${nom}" référencé ! Visible dès maintenant. ✅`);
   ['salon-nom','salon-tel','salon-horaires','salon-desc','salon-prix-min','salon-prix-max'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   beauteTab('beaute-salons');
+}
+
+function inscrireArtiste() {
+  if (!SESSION) { goScreen('screen-login'); return; }
+  const nom = document.getElementById('artiste-nom').value.trim();
+  const specialite = document.getElementById('artiste-specialite').value.trim();
+  const zone = document.getElementById('artiste-zone').value.trim();
+  const tel = document.getElementById('artiste-tel').value.trim() || SESSION.tel;
+  const bio = document.getElementById('artiste-bio').value.trim();
+  const tarifsRaw = document.getElementById('artiste-tarifs').value.trim();
+  if (!nom || !specialite || !zone || !tel) { toast('Nom, spécialité, zone et téléphone obligatoires', 'erreur'); return; }
+  const icoMap = {maquillage:'💄',ongles:'💅',coiffure:'💇',cils:'👁️'};
+  const specLower = specialite.toLowerCase();
+  const ico = Object.keys(icoMap).find(k => specLower.includes(k));
+  const initiales = nom.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+  const tarifs = tarifsRaw ? tarifsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const newArtiste = {
+    id: DB_ARTISTES.length+1, userId: SESSION.id,
+    nom, ico: ico ? icoMap[ico] : '💄', photo: null,
+    specialite, initiales, bio: bio || 'Nouveau profil sur Le Grenier CI.',
+    tel, tarifs, note: 0, nbAvis: 0, zone, dispo: true
+  };
+  DB_ARTISTES.push(newArtiste);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('artistes', newArtiste, {
+    nom: newArtiste.nom, specialite: newArtiste.specialite, zone: newArtiste.zone, tel: newArtiste.tel
+  });
+  toast(`💄 "${nom}" référencé(e) ! Visible dès maintenant. ✅`);
+  ['artiste-nom','artiste-specialite','artiste-zone','artiste-tel','artiste-bio','artiste-tarifs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderArtistes();
 }
 
 // ══════════════════════════════════════════
@@ -17221,6 +17439,9 @@ function proposerLogement() {
     desc, tel, photos: [], indisponibles: []
   };
   DB_LOGEMENTS.push(newL);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('logements', newL, {
+    nom: newL.nom, quartier: newL.quartier, tel: newL.tel, prix_nuit: newL.prixNuit, prix_mois: newL.prixMois
+  });
   toast(`🏠 "${nom}" publié avec succès ! Visible dès maintenant. ✅`);
   ['log-prop-nom','log-prop-tel','log-prop-desc','log-prop-nuit','log-prop-mois'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   logTab('log-liste');
@@ -17584,6 +17805,9 @@ function inscrireResto() {
     menu: [{cat:'🍽️ Nos spécialités', items:[]}]
   };
   DB_RESTOS.push(newR);
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('restos', newR, {
+    nom: newR.nom, type: newR.type, quartier: newR.quartier, tel: newR.tel, prix_moyen: newR.prixMoyen
+  });
   toast(`🍽️ "${nom}" référencé ! Visible par vos clients dès maintenant. ✅`);
   ['resto-prop-nom','resto-prop-tel','resto-prop-horaires','resto-prop-desc','resto-prop-prix','resto-prop-couverts'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   restoTab('resto-liste');
@@ -17692,6 +17916,7 @@ function adminAssignerLivreur(ref) {
   const livreur = [...DB_LIVREURS].filter(l => l.dispo).sort((a,b) => scoreLivreur(b)-scoreLivreur(a))[0];
   if (!livreur) { toast('Aucun livreur disponible', 'erreur'); return; }
   cmd.statut = 'en livraison'; cmd.livreurId = livreur.id;
+  if (typeof majStatutLivraison === 'function') majStatutLivraison(cmd);
   renderAdminLivraisons();
   toast(`✅ ${ref} assignée à ${livreur.nom}`);
   window.open(`https://wa.me/${livreur.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent('🛵 *Commande assignée !*\n🔖 '+ref+'\n🚀 '+cmd.dep+' → '+cmd.arr+'\n💰 '+fmtFCFA(cmd.montant||0))}`, '_blank');
@@ -17794,6 +18019,7 @@ function dispPrendreEnCharge(id) {
   if (!moi) { toast('Connectez-vous en tant que livreur pour prendre une commande', 'info'); return; }
   cmd.statut    = 'en livraison';
   cmd.livreurId = moi.id;
+  if (typeof majStatutLivraison === 'function') majStatutLivraison(cmd);
   renderDispatcher();
   toast(`✅ Commande ${cmd.ref} prise en charge`);
   // Notifier le client via WhatsApp avec lien de suivi
@@ -17833,6 +18059,7 @@ function dispMarquerLivre(id) {
   const cmd = DISPATCH_COMMANDES.find(c => c.id === id);
   if (!cmd) return;
   cmd.statut = 'livré';
+  if (typeof majStatutLivraison === 'function') majStatutLivraison(cmd);
   renderDispatcher();
   toast(`📦 Commande ${cmd.ref} marquée comme livrée`);
   // Notifier automatiquement le client
@@ -17958,11 +18185,13 @@ function commanderLivraison() {
     : [...DB_LIVREURS].filter(l => l.dispo).sort((a,b) => scoreLivreur(b)-scoreLivreur(a))[0];
   ouvrirModalPaiement(tarif, `Livraison ${dep} → ${arr}`, () => {
     const ref = 'LVR-' + Date.now().toString().slice(-5);
-    DISPATCH_COMMANDES.unshift({ id: DISPATCH_COMMANDES.length+1, ref,
+    const nouvelleLivraison2 = { id: DISPATCH_COMMANDES.length+1, ref,
       client: SESSION ? `${SESSION.prenom} ${SESSION.nom}` : 'Client',
       tel: telExp, dep, arr, type: LIVR_TYPE, montant: tarif,
       statut: livreurChoisi ? 'en livraison' : 'en attente',
-      livreurId: livreurChoisi?.id || null, date: new Date().toISOString().slice(0,10) });
+      livreurId: livreurChoisi?.id || null, date: new Date().toISOString().slice(0,10) };
+    DISPATCH_COMMANDES.unshift(nouvelleLivraison2);
+    if (typeof persisterLivraison === 'function') persisterLivraison(nouvelleLivraison2);
     LIVR_HISTORIQUE.unshift({ id: LIVR_HISTORIQUE.length+1, ref, livreur: livreurChoisi?.nom||'Assignation en cours…', dep, arr, type: LIVR_TYPE, statut: livreurChoisi?'en livraison':'en cours', montant: tarif, date: new Date().toISOString().slice(0,10) });
     enregistrerRevenuAnnexe && enregistrerRevenuAnnexe('livraison', `Livraison ${dep}→${arr}`, Math.round(tarif*0.3));
     const desc = document.getElementById('livr-colis-desc').value.trim();
@@ -18175,6 +18404,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   }
   if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
   if (typeof window.enregistrerVisite === 'function') window.enregistrerVisite('accueil');
+  if (typeof window.chargerLivraisonsDepuisSupabase === 'function') await window.chargerLivraisonsDepuisSupabase();
+  if (typeof window.chargerModulesVerticauxDepuisSupabase === 'function') await window.chargerModulesVerticauxDepuisSupabase();
+  if (typeof window.chargerSupermarchesDepuisSupabase === 'function') await window.chargerSupermarchesDepuisSupabase();
   if (typeof MODE !== 'undefined' && MODE === 'remote') {
     const demoLinks = document.getElementById('login-demo-links');
     if (demoLinks) demoLinks.style.display = 'none';
@@ -20295,6 +20527,9 @@ function smeAjouterProduit() {
   };
   SME_PRODUITS.unshift(produit);
   DB_SM_PRODUITS.unshift(produit);
+  if (typeof persisterProduitMagasin === 'function') persisterProduitMagasin(produit, SME_MAG_ID, {
+    nom: produit.nom, cat: produit.cat, prix: produit.prix, ancien_prix: produit.ancienPrix, unite: produit.unite, promo: produit.promo
+  });
   // Reset
   document.getElementById('sme-prod-nom').value = '';
   document.getElementById('sme-prod-prix').value = '';
@@ -20500,6 +20735,17 @@ function smSoumettreCandidature() {
     + photoLine + '\n'
     + '📅 ' + new Date().toLocaleDateString('fr-FR');
   window.open('https://wa.me/' + waAdmin + '?text=' + encodeURIComponent(msg), '_blank');
+
+  // Persistance Supabase — statut attente, à valider manuellement (pas de doublon WhatsApp perdu)
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof _xhr === 'function') {
+    _xhr('POST', SUPABASE_URL + '/rest/v1/magasins', {
+      vendeur_id: (typeof SESSION !== 'undefined' && SESSION) ? SESSION.id : null,
+      nom, zone, quartier: adresse, tel, plan: SM_PLAN_SEL, statut: 'attente',
+      data: { responsable: resp, email, type, desc, hasBanner }
+    }, { Prefer: 'return=minimal' }).then(r => {
+      if (r.error) console.error('[persist] candidature magasin', r.error);
+    });
+  }
   // Enregistrer le PIN
   const pin1 = document.getElementById('sm-reg-pin')?.value;
   const pin2 = document.getElementById('sm-reg-pin2')?.value;
