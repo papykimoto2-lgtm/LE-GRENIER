@@ -2289,30 +2289,139 @@
        Dashboard → Project Settings → API
   ═══════════════════════════════════════════════════════════════ -->
   <script>
-  // ── CONFIG — à remplacer avant mise en production ──────────────
-  const SUPABASE_URL      = 'https://VOTRE_PROJECT_ID.supabase.co';
-  const SUPABASE_ANON_KEY = 'VOTRE_ANON_KEY';
+  // ── CONFIG — projet legrenier-ci (eu-west-3) ──────────────
+  const SUPABASE_URL      = 'https://vhacfvyphsusmabmfyyb.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoYWNmdnlwaHN1c21hYm1meXliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDEzODYsImV4cCI6MjEwMTYxNzM4Nn0.2ofOotLG1XCmbOKaUru2_WdsK8sCsK6jI3jXJPMs7m8';
 
   // ── MODE : 'local' = DB en mémoire (démo) | 'remote' = Supabase
-  const MODE = 'local'; // ← changer en 'remote' quand Supabase est configuré
+  const MODE = 'remote';
 
-  // _supa initialisé uniquement en mode remote (lib chargée dynamiquement)
-  let _supa = null;
-  async function initSupabase() {
-    if (_supa || MODE === 'local') return;
-    if (typeof supabase === 'undefined') {
-      // Chargement dynamique du SDK Supabase
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-        s.onload = resolve;
-        s.onerror = () => reject(new Error('SDK Supabase introuvable. Vérifiez votre connexion.'));
-        document.head.appendChild(s);
-      });
-    }
-    _supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('[DAO] Supabase client initialisé →', SUPABASE_URL);
+  // ══════════════════════════════════════════════════════════════
+  //  CLIENT SUPABASE XHR — sans SDK, compatible file:// (standard SANIX)
+  // ══════════════════════════════════════════════════════════════
+  function _xhr(method, url, body, headers) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open(method, url, true);
+      x.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+      x.setRequestHeader('Authorization', 'Bearer ' + SUPABASE_ANON_KEY);
+      x.setRequestHeader('Content-Type', 'application/json');
+      Object.entries(headers || {}).forEach(([k, v]) => x.setRequestHeader(k, v));
+      x.onload = () => {
+        let data = null;
+        try { data = x.responseText ? JSON.parse(x.responseText) : null; } catch (e) {}
+        if (x.status >= 200 && x.status < 300) resolve({ data, error: null, status: x.status });
+        else resolve({ data: null, error: { message: (data && (data.message || data.msg)) || x.statusText, status: x.status }, status: x.status });
+      };
+      x.onerror = () => resolve({ data: null, error: { message: 'Erreur réseau XHR' }, status: 0 });
+      x.send(body != null ? JSON.stringify(body) : null);
+    });
   }
+
+  const _supa = {
+    from(table) {
+      let filters = [], selectCols = '*', orderClause = '', limitN = null, single = false;
+      const base = () => SUPABASE_URL + '/rest/v1/' + table;
+      const qs = () => {
+        const p = ['select=' + encodeURIComponent(selectCols), ...filters];
+        if (orderClause) p.push('order=' + encodeURIComponent(orderClause));
+        if (limitN != null) p.push('limit=' + limitN);
+        return '?' + p.join('&');
+      };
+      const api = {
+        select(cols) { selectCols = cols || '*'; return api; },
+        eq(col, val) { filters.push(`${col}=eq.${encodeURIComponent(val)}`); return api; },
+        order(col, opts) { orderClause = col + (opts && opts.ascending === false ? '.desc' : '.asc'); return api; },
+        limit(n) { limitN = n; return api; },
+        single() { single = true; return api; },
+        async then(resolve) {
+          const r = await _xhr('GET', base() + qs());
+          if (single && r.data) r.data = r.data[0] || null;
+          resolve(r);
+        },
+        insert(payload) {
+          const doPost = () => _xhr('POST', base(), payload, { Prefer: 'return=representation' });
+          return {
+            select() {
+              return {
+                async single() {
+                  const r = await doPost();
+                  return { data: Array.isArray(r.data) ? r.data[0] : r.data, error: r.error };
+                }
+              };
+            },
+            async then(resolve) { resolve(await doPost()); }
+          };
+        },
+        update(payload) {
+          return {
+            eq(col, val) {
+              const doPatch = () => _xhr('PATCH', base() + `?${col}=eq.${encodeURIComponent(val)}`, payload, { Prefer: 'return=representation' });
+              return {
+                select() {
+                  return {
+                    async single() {
+                      const r = await doPatch();
+                      return { data: Array.isArray(r.data) ? r.data[0] : r.data, error: r.error };
+                    }
+                  };
+                },
+                async then(resolve) { resolve(await doPatch()); }
+              };
+            }
+          };
+        }
+      };
+      return api;
+    },
+    async rpc(fn, params) {
+      return await _xhr('POST', SUPABASE_URL + '/rest/v1/rpc/' + fn, params || {});
+    },
+    storage: {
+      from(bucket) {
+        return {
+          async upload(path, file, opts) {
+            const b64 = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = e => resolve(e.target.result.split(',')[1]);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const url = `${SUPABASE_URL}/storage/v1/object/${(opts && opts.upsert) ? '' : ''}${bucket}/${path}`;
+            const r = await new Promise((resolve) => {
+              const x = new XMLHttpRequest();
+              x.open((opts && opts.upsert) ? 'PUT' : 'POST', url, true);
+              x.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+              x.setRequestHeader('Authorization', 'Bearer ' + SUPABASE_ANON_KEY);
+              x.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+              x.onload = () => resolve({ data: x.status < 300 ? { path } : null, error: x.status >= 300 ? { message: x.statusText } : null });
+              x.onerror = () => resolve({ data: null, error: { message: 'Erreur réseau upload' } });
+              x.send(bytes);
+            });
+            return r;
+          },
+          getPublicUrl(path) {
+            return { data: { publicUrl: `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}` } };
+          }
+        };
+      }
+    }
+  };
+  async function initSupabase() { /* no-op : client XHR déjà prêt, pas de chargement dynamique */ }
+
+  // ══════════════════════════════════════════════════════════════
+  //  ANTI-XSS — échappement obligatoire pour tout contenu utilisateur
+  //  injecté via innerHTML (titre annonce, avis, messages, etc.)
+  // ══════════════════════════════════════════════════════════════
+  window.escapeHtml = function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  };
 
   // ══════════════════════════════════════════════════════════════
   //  COUCHE D'ACCÈS AUX DONNÉES
@@ -10058,14 +10167,14 @@ function renderGrille(annonces) {
     return `<div class="card-annonce" onclick="ouvrirAnnonce(${a.id})">
       <div class="card-img">
         ${photo
-          ? `<img class="card-img-photo" src="${photo}" alt="${a.titre}" loading="lazy" data-fb="${fallbackEmoji}" onerror="this.parentNode.innerHTML='<div class=card-img-no-photo>'+this.dataset.fb+'</div>'">`
+          ? `<img class="card-img-photo" src="${photo}" alt="${escapeHtml(a.titre)}" loading="lazy" data-fb="${fallbackEmoji}" onerror="this.parentNode.innerHTML='<div class=card-img-no-photo>'+this.dataset.fb+'</div>'">`
           : `<div class="card-img-no-photo">${fallbackEmoji}</div>`}
         ${proche ? `<div class="card-proche-indicator">📡 ${distLabel}</div>` : ''}
         ${nbPhotos > 1 ? `<div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;backdrop-filter:blur(4px)">📷 ${nbPhotos}</div>` : ''}
       </div>
       <div class="card-body">
         <div class="badge-etat ${badgeEtat(a.etat)}">${a.etat}</div>
-        <div class="card-titre">${a.titre}</div>
+        <div class="card-titre">${escapeHtml(a.titre)}</div>
         <div class="card-prix">${fmtFCFA(a.valeur)}</div>
         <div class="card-lieu">📍 ${a.ville} · ${a.cat}${dist!==null?' · <span style="color:var(--vert);font-weight:500">'+distLabel+'</span>':''}</div>
       </div>
@@ -10110,7 +10219,7 @@ function ouvrirAnnonce(id) {
   if (photos.length) {
     const fallback = a.emoji || '📦';
     // Photo principale
-    imgEl.innerHTML = `<img src="${photos[0]}" alt="${a.titre}" style="width:100%;height:100%;object-fit:cover" data-fb="${fallback}" onerror="this.parentNode.innerHTML='<div style=font-size:72px;text-align:center>'+this.dataset.fb+'</div>">
+    imgEl.innerHTML = `<img src="${photos[0]}" alt="${escapeHtml(a.titre)}" style="width:100%;height:100%;object-fit:cover" data-fb="${fallback}" onerror="this.parentNode.innerHTML='<div style=font-size:72px;text-align:center>'+this.dataset.fb+'</div>">
       <div style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,.5);color:#fff;font-size:11px;padding:4px 10px;border-radius:12px;backdrop-filter:blur(4px)">Agrandir</div>`;
     imgEl.style.padding = '0';
     // Miniatures si plusieurs photos
@@ -10804,14 +10913,17 @@ async function lancerPaiementReel() {
   };
 
   try {
-    const reponse = await fetch(PAYMENT_CONFIG.BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const data = await new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('POST', PAYMENT_CONFIG.BACKEND_URL, true);
+      x.setRequestHeader('Content-Type', 'application/json');
+      x.onload = () => {
+        if (x.status < 200 || x.status >= 300) return reject(new Error('Backend HTTP ' + x.status));
+        try { resolve(JSON.parse(x.responseText)); } catch (e) { reject(e); }
+      };
+      x.onerror = () => reject(new Error('Erreur réseau backend paiement'));
+      x.send(JSON.stringify(payload));
     });
-
-    if (!reponse.ok) throw new Error('Backend HTTP ' + reponse.status);
-    const data = await reponse.json();
 
     // Le backend renvoie une URL de paiement unifiee, quel que soit le prestataire
     if (data && data.payment_url) {
@@ -10834,9 +10946,16 @@ async function lancerPaiementReel() {
 async function verifierStatutPaiement(reference) {
   if (!paiementEstEnProduction()) return null;
   try {
-    const r = await fetch(PAYMENT_CONFIG.BACKEND_URL + '/statut?ref=' + encodeURIComponent(reference));
-    if (!r.ok) return null;
-    return await r.json();   // { statut: 'paye' | 'echec' | 'en_attente', ... }
+    return await new Promise((resolve) => {
+      const x = new XMLHttpRequest();
+      x.open('GET', PAYMENT_CONFIG.BACKEND_URL + '/statut?ref=' + encodeURIComponent(reference), true);
+      x.onload = () => {
+        if (x.status < 200 || x.status >= 300) return resolve(null);
+        try { resolve(JSON.parse(x.responseText)); } catch (e) { resolve(null); }
+      };
+      x.onerror = () => resolve(null);
+      x.send();
+    });   // { statut: 'paye' | 'echec' | 'en_attente', ... }
   } catch (e) {
     console.error('[PAIEMENT] Verif statut echouee :', e);
     return null;
@@ -11188,7 +11307,7 @@ function renderDashboard() {
         <span style="font-weight:500">${v.auteur}</span>
         <span>${'⭐'.repeat(v.note)} <span style="font-size:12px;color:var(--gris-text)">${v.date}</span></span>
       </div>
-      <div style="font-size:14px;color:var(--gris-text)">"${v.commentaire}"</div>
+      <div style="font-size:14px;color:var(--gris-text)">"${escapeHtml(v.commentaire)}"</div>
     </div>
   `).join('') || '<div style="color:var(--gris-text);font-size:14px">Aucun avis pour l\'instant.</div>';
 }
@@ -11543,13 +11662,20 @@ function renderMessagerie() {
   if (!SESSION) { goScreen('screen-login'); return; }
   const list = document.getElementById('msg-list');
   const convItems = DAO._local.conversations.map(c=>`
-    <div class="msg-conv-item" onclick="ouvrirConversation('${c.id}','${c.nom}',this)">
-      <div class="msg-conv-nom">${c.nom}</div>
-      <div style="font-size:11px;color:var(--gris-text);margin-bottom:2px">${c.annonce}</div>
-      <div class="msg-conv-apercu">${c.dernierMsg}</div>
+    <div class="msg-conv-item" data-conv-id="${escapeHtml(String(c.id))}" data-conv-nom="${escapeHtml(c.nom)}">
+      <div class="msg-conv-nom">${escapeHtml(c.nom)}</div>
+      <div style="font-size:11px;color:var(--gris-text);margin-bottom:2px">${escapeHtml(c.annonce)}</div>
+      <div class="msg-conv-apercu">${escapeHtml(c.dernierMsg)}</div>
     </div>
   `).join('');
   list.innerHTML = `<div style="padding:16px;font-weight:600;border-bottom:1px solid var(--gris-mid);font-size:14px">Conversations</div>${convItems}`;
+
+  // Délégation d'événement — pas d'attribut onclick avec données utilisateur (anti-XSS)
+  list.querySelectorAll('.msg-conv-item').forEach(item => {
+    item.addEventListener('click', function () {
+      ouvrirConversation(this.dataset.convId, this.dataset.convNom, this);
+    });
+  });
 }
 
 function ouvrirConversation(convId, nom, el) {
@@ -11560,7 +11686,7 @@ function ouvrirConversation(convId, nom, el) {
   const msgs = DAO._local.messages.filter(m=>m.convId===convId);
   bulles.innerHTML = msgs.map(m=>`
     <div class="bulle ${m.de===SESSION.id?'bulle-moi':'bulle-eux'}">
-      <div>${m.texte}</div>
+      <div>${escapeHtml(m.texte)}</div>
       <div style="font-size:10px;opacity:.6;margin-top:4px;text-align:right">${m.date.split(' ')[1]}</div>
     </div>
   `).join('');
@@ -11577,7 +11703,16 @@ function envoyerMsg() {
   const heure = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   DAO._local.messages.push({id:Date.now(),convId,de:SESSION.id,a:999,texte:txt,date:'2025-05-14 '+heure});
   const bulles = document.getElementById('msg-bulles');
-  bulles.innerHTML += `<div class="bulle bulle-moi"><div>${txt}</div><div style="font-size:10px;opacity:.6;margin-top:4px;text-align:right">${heure}</div></div>`;
+  const bulle = document.createElement('div');
+  bulle.className = 'bulle bulle-moi';
+  const txtDiv = document.createElement('div');
+  txtDiv.textContent = txt; // texte utilisateur inséré via textContent — jamais de parsing HTML
+  const heureDiv = document.createElement('div');
+  heureDiv.style.cssText = 'font-size:10px;opacity:.6;margin-top:4px;text-align:right';
+  heureDiv.textContent = heure;
+  bulle.appendChild(txtDiv);
+  bulle.appendChild(heureDiv);
+  bulles.appendChild(bulle);
   bulles.scrollTop = bulles.scrollHeight;
   input.value = '';
 }
@@ -11791,7 +11926,7 @@ function renderHeroTop() {
       <div class="hero-card-vues">👁 ${a.vues}</div>
       <div class="hero-card-body">
         <div class="hero-card-badge">Top ${i+1}</div>
-        <div class="hero-card-titre">${a.titre}</div>
+        <div class="hero-card-titre">${escapeHtml(a.titre)}</div>
         <div class="hero-card-prix">${a.valeur ? a.valeur.toLocaleString('fr-FR')+' FCFA' : ''}</div>
       </div>
     </div>`
@@ -12516,7 +12651,7 @@ function peuplerSelectsPromo() {
   const optBan = DAO._local.bannieres.map(b => `<option value="${b.id}">${b.annonceur} — ${b.position}</option>`).join('');
   selBan.innerHTML  = '<option value="">— Aucune —</option>' + optBan;
   selAnn.innerHTML  = '<option value="">— Tous —</option>' + optBan;
-  const optAnc = DAO._local.annonces.map(a => `<option value="${a.id}">${a.titre} (${a.ville})</option>`).join('');
+  const optAnc = DAO._local.annonces.map(a => `<option value="${a.id}">${escapeHtml(a.titre)} (${escapeHtml(a.ville)})</option>`).join('');
   selAnc.innerHTML  = '<option value="">— Toutes —</option>' + optAnc;
   // Info dynamique
   [selBan, selAnn, selAnc].forEach(sel => sel.addEventListener('change', majLiaisonInfo));
@@ -14033,7 +14168,7 @@ function renderMapMarkers() {
       // Légère variation pour éviter superposition
       const jitter = {lat: c.lat + (Math.random()-.5)*0.008, lng: c.lng + (Math.random()-.5)*0.008};
       const popup = `<div class="lf-popup">
-        <div class="lf-popup-titre">${a.emoji||'📦'} ${a.titre}</div>
+        <div class="lf-popup-titre">${a.emoji||'📦'} ${escapeHtml(a.titre)}</div>
         <div class="lf-popup-sub">📍 ${a.ville} · ${a.cat}</div>
         <div class="lf-popup-prix">${fmtFCFA(a.valeur)}</div>
         <button class="lf-popup-btn" onclick="fermerCarte();ouvrirAnnonce(${a.id})">Voir l'annonce →</button>
@@ -14253,11 +14388,16 @@ function renderBesoins() {
     <div class="besoin-card">
       <div class="besoin-ico">🆘</div>
       <div style="flex:1;min-width:0">
-        <div class="besoin-titre">${b.titre}</div>
-        <div class="besoin-desc">📍 ${b.quartier} · ${b.date} · ${b.desc.substring(0,80)}…</div>
+        <div class="besoin-titre">${escapeHtml(b.titre)}</div>
+        <div class="besoin-desc">📍 ${escapeHtml(b.quartier)} · ${escapeHtml(b.date)} · ${escapeHtml((b.desc||'').substring(0,80))}…</div>
       </div>
-      <button class="besoin-btn" onclick="aiderBesoin('${b.tel}','${b.titre}')">Aider</button>
+      <button class="besoin-btn" data-tel="${escapeHtml(b.tel)}" data-titre="${escapeHtml(b.titre)}">Aider</button>
     </div>`).join('');
+  grid.querySelectorAll('.besoin-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      aiderBesoin(this.dataset.tel, this.dataset.titre);
+    });
+  });
 }
 
 function reserverDon(id) {
@@ -14916,7 +15056,7 @@ function renderAdminAbonnements() {
   if (!DAO._local.abonnements.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gris-text);padding:20px">Aucun abonné</td></tr>'; return; }
   tbody.innerHTML = DAO._local.abonnements.map(a => {
     const u = DAO._local.utilisateurs.find(x => x.id === a.userId);
-    const nom = u ? u.prenom + ' ' + u.nom : 'Inconnu';
+    const nom = u ? escapeHtml(u.prenom + ' ' + u.nom) : 'Inconnu';
     const couleurStatut = {actif:'#16A34A',essai:'#D97706',résilié:'#DC2626'}[a.statut] || '#6B7280';
     return `<tr>
       <td><strong>${nom}</strong><br><span style="font-size:11px;color:var(--gris-text)">${u?.email||''}</span></td>
@@ -15053,7 +15193,7 @@ window.ADMIN_PROFIL = {
   tva: 18,
   mentions: '',
   // Mobile Money
-  wave: '+2250779181075', waveActif: true,
+  wave: '', waveActif: false,
   orange: '', orangeActif: false,
   mtn: '', mtnActif: false,
   moov: '', moovActif: false,
@@ -15393,7 +15533,9 @@ let _insCanalSel = 'wa';
 
 function genMDP() {
   const c = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  return Array.from({length:8}, ()=>c[Math.floor(Math.random()*c.length)]).join('');
+  const buf = new Uint32Array(8);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, n => c[n % c.length]).join('');
 }
 
 function fmtD(d) {
@@ -15443,7 +15585,7 @@ window.renderAdminInscriptions = function() {
       <div style="width:46px;height:46px;border-radius:12px;background:var(--vert-pale);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${u.role==='annonceur'?'&#127970;':u.role==='livreur'?'&#128757;':'&#128100;'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          ${u.prenom} ${u.nom}
+          ${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}
           <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;${bSt[u.statut]}">${lSt[u.statut]}</span>
           <span style="padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;background:var(--vert-pale);color:var(--vert)">${u.role}</span>
         </div>
@@ -15896,20 +16038,20 @@ function renderAdmin() {
   if (mod) mod.innerHTML = annonces.filter(a=>a.statut==='attente').map(a=>{
     const v=users.find(u=>u.id===a.vendeurId);
     const p=paiements.find(p=>p.annonce===a.titre&&p.statut==='confirmé');
-    return `<tr><td>${a.emoji||'📦'} ${a.titre}</td><td>${v?v.prenom+' '+v.nom:'—'}</td><td>${fmtFCFA(a.valeur)}</td><td>${fmtFCFA(a.valeur*0.1)}</td><td>${p?'✅ Payé':'⏳ En attente'}</td><td><button class="btn btn-sm" style="background:var(--vert);color:#fff;border:none;padding:4px 10px;border-radius:6px;margin-right:4px" onclick="validerAnnonce(${a.id})">Valider</button><button class="btn btn-sm btn-outline" style="color:var(--rouge);border-color:var(--rouge);padding:4px 10px;border-radius:6px" onclick="refuserAnnonce(${a.id})">Refuser</button></td></tr>`
+    return `<tr><td>${a.emoji||'📦'} ${escapeHtml(a.titre)}</td><td>${v?escapeHtml(v.prenom+' '+v.nom):'—'}</td><td>${fmtFCFA(a.valeur)}</td><td>${fmtFCFA(a.valeur*0.1)}</td><td>${p?'✅ Payé':'⏳ En attente'}</td><td><button class="btn btn-sm" style="background:var(--vert);color:#fff;border:none;padding:4px 10px;border-radius:6px;margin-right:4px" onclick="validerAnnonce(${a.id})">Valider</button><button class="btn btn-sm btn-outline" style="color:var(--rouge);border-color:var(--rouge);padding:4px 10px;border-radius:6px" onclick="refuserAnnonce(${a.id})">Refuser</button></td></tr>`
   }).join('') || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gris-text)">Aucune annonce en attente ✅</td></tr>';
   // All annonces
   const tbody = document.getElementById('admin-annonces-tbody');
   if (tbody) tbody.innerHTML = annonces.map(a=>{
     const v=users.find(u=>u.id===a.vendeurId);
-    return `<tr><td>${a.emoji||'📦'} ${a.titre}</td><td>${v?v.prenom+' '+v.nom:'—'}</td><td>${a.cat}</td><td>${fmtFCFA(a.valeur)}</td><td><span class="badge-statut ${a.statut==='en-ligne'?'badge-en-ligne':a.statut==='attente'?'badge-attente':'badge-expiree'}">${a.statut}</span></td><td><button class="btn btn-sm btn-outline" onclick="adminSupprimerAnnonce(${a.id})" style="font-size:11px;padding:3px 8px;color:var(--rouge);border-color:var(--rouge)">🗑</button></td></tr>`
+    return `<tr><td>${a.emoji||'📦'} ${escapeHtml(a.titre)}</td><td>${v?escapeHtml(v.prenom+' '+v.nom):'—'}</td><td>${a.cat}</td><td>${fmtFCFA(a.valeur)}</td><td><span class="badge-statut ${a.statut==='en-ligne'?'badge-en-ligne':a.statut==='attente'?'badge-attente':'badge-expiree'}">${a.statut}</span></td><td><button class="btn btn-sm btn-outline" onclick="adminSupprimerAnnonce(${a.id})" style="font-size:11px;padding:3px 8px;color:var(--rouge);border-color:var(--rouge)">🗑</button></td></tr>`
   }).join('');
   // Users
   const utbody = document.getElementById('admin-users-tbody');
   if (utbody) utbody.innerHTML = users.filter(u=>u.role!=='admin').map(u=>{
     const nb=annonces.filter(a=>a.vendeurId===u.id).length;
     const plan=getPlanUser(u.id);
-    return `<tr><td><strong>${u.prenom} ${u.nom}</strong>${u.verifie?'<span style="color:var(--vert);font-size:11px;margin-left:4px">✅</span>':''}<br><span style="font-size:11px;color:var(--gris-text)">${plan.ico} ${plan.nom}</span></td><td style="font-size:13px">${u.email}</td><td>${u.ville||'—'}</td><td style="font-size:13px">${u.tel||'—'}</td><td>${nb}</td><td><button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="adminSupprimerUser(${u.id})">🗑</button></td></tr>`
+    return `<tr><td><strong>${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}</strong>${u.verifie?'<span style="color:var(--vert);font-size:11px;margin-left:4px">✅</span>':''}<br><span style="font-size:11px;color:var(--gris-text)">${plan.ico} ${plan.nom}</span></td><td style="font-size:13px">${u.email}</td><td>${u.ville||'—'}</td><td style="font-size:13px">${u.tel||'—'}</td><td>${nb}</td><td><button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="adminSupprimerUser(${u.id})">🗑</button></td></tr>`
   }).join('');
   // Paiements
   const ptbody = document.getElementById('admin-paiements-tbody');
@@ -15920,7 +16062,7 @@ function renderAdmin() {
     const montant = type === 'commission' ? p.commission : (p.valeur || p.commission || 0);
     return `<tr>
       <td style="font-size:12px;white-space:nowrap">${p.date}</td>
-      <td><strong>${v?v.prenom+' '+v.nom:'—'}</strong><br><span style="font-size:11px;color:var(--gris-text)">${v?.email||''}</span></td>
+      <td><strong>${v?escapeHtml(v.prenom+' '+v.nom):'—'}</strong><br><span style="font-size:11px;color:var(--gris-text)">${v?.email||''}</span></td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">${p.annonce}</td>
       <td><span style="background:var(--gris-clair);padding:2px 7px;border-radius:5px;font-size:11px">${typeIcos[type]||'💰'} ${type}</span></td>
       <td><strong style="color:var(--vert)">${fmtFCFA(montant)}</strong></td>
@@ -17050,21 +17192,28 @@ function renderAdminLivraisons() {
     const st      = ST[c.statut] || { bg:'#F3F4F6', color:'#374151', label: c.statut||'—' };
     const livreur = c.livreurId ? (DB_LIVREURS.find(l => l.id === c.livreurId)?.nom || '—') : '—';
     const bg      = i%2===0 ? '#fff' : '#F9FAFB';
-    const btnWA   = c.tel && c.tel!=='—' ? `<button onclick="adminLivrWA('${c.ref}','${c.client}','${c.tel}')" title="Contacter" style="padding:4px 8px;font-size:11px;background:#25D366;color:#fff;border:none;border-radius:5px;cursor:pointer">💬</button>` : '';
+    const btnWA   = c.tel && c.tel!=='—' ? `<button class="btn-livr-wa" data-ref="${escapeHtml(c.ref)}" data-client="${escapeHtml(c.client||'')}" data-tel="${escapeHtml(c.tel)}" title="Contacter" style="padding:4px 8px;font-size:11px;background:#25D366;color:#fff;border:none;border-radius:5px;cursor:pointer">💬</button>` : '';
     const btnSuivi = `<button onclick="adminLivrSuivi('${c.ref}')" title="Suivi" style="padding:4px 8px;font-size:11px;background:#6366F1;color:#fff;border:none;border-radius:5px;cursor:pointer">📡</button>`;
     const btnAssign = c.statut==='en attente' ? `<button onclick="adminAssignerLivreur('${c.ref}')" title="Assigner" style="padding:4px 8px;font-size:11px;background:var(--vert);color:#fff;border:none;border-radius:5px;cursor:pointer">✋</button>` : '';
     return `<tr style="background:${bg};border-bottom:1px solid #F3F4F6">
       <td style="padding:10px 14px;font-weight:600;color:var(--vert);font-family:monospace;font-size:11px">${c.ref}</td>
-      <td style="padding:10px 14px"><div style="font-weight:600">${c.client||'—'}</div><div style="font-size:11px;color:var(--gris-text)">${c.tel||''}</div></td>
-      <td style="padding:10px 14px;font-size:12px"><div>${c.dep||'—'}</div><div style="color:var(--gris-text)">→ ${c.arr||'—'}</div></td>
-      <td style="padding:10px 14px">${typeIco[c.type]||'📦'} ${c.type||'—'}</td>
-      <td style="padding:10px 14px;font-size:12px;color:var(--gris-text)">${livreur}</td>
+      <td style="padding:10px 14px"><div style="font-weight:600">${escapeHtml(c.client||'—')}</div><div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div></td>
+      <td style="padding:10px 14px;font-size:12px"><div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div></td>
+      <td style="padding:10px 14px">${typeIco[c.type]||'📦'} ${escapeHtml(c.type||'—')}</td>
+      <td style="padding:10px 14px;font-size:12px;color:var(--gris-text)">${escapeHtml(livreur)}</td>
       <td style="padding:10px 14px;font-weight:700;color:var(--vert);white-space:nowrap">${fmtFCFA(c.montant||0)}</td>
       <td style="padding:10px 14px"><span style="background:${st.bg};color:${st.color};padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700">${st.label}</span></td>
       <td style="padding:10px 14px;font-size:12px;color:var(--gris-text)">${c.date||'—'}</td>
       <td style="padding:10px 14px;text-align:center"><div style="display:flex;gap:4px;justify-content:center">${btnAssign}${btnSuivi}${btnWA}</div></td>
     </tr>`
   }).join('');
+
+  // Délégation d'événement — évite l'injection JS via attribut onclick (client/tel libres)
+  tbody.querySelectorAll('.btn-livr-wa').forEach(btn => {
+    btn.addEventListener('click', function () {
+      adminLivrWA(this.dataset.ref, this.dataset.client, this.dataset.tel);
+    });
+  });
 }
 function adminLivrWA(ref, client, tel) {
   const msg = `Bonjour ${client}, c'est l'équipe Le Grenier CI. Votre livraison *${ref}* est en cours. Avez-vous des questions ?`;
@@ -18946,7 +19095,7 @@ function renderAdminLitiges() {
 function renderLitigesTable() {
   const tbody = document.getElementById('lit-tbody');
   if (!tbody) return;
-  const userMap = Object.fromEntries(DAO._local.utilisateurs.map(u=>[u.id, u.prenom+' '+u.nom]));
+  const userMap = Object.fromEntries(DAO._local.utilisateurs.map(u=>[u.id, escapeHtml(u.prenom+' '+u.nom)]));
   if (!DAO._local.litiges.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--gris-text);padding:20px">Aucun dossier</td></tr>'; return; }
   tbody.innerHTML = DAO._local.litiges.slice().reverse().map(l=>{
     const couleurS = {['en cours']:'#D97706',['résolu']:'#16A34A',['refusé']:'#DC2626'}[l.statut]||'#6B7280';
@@ -20479,7 +20628,7 @@ if (document.readyState === 'loading') {
   };
 
   // ──────────────────────────────────────────────────────────────────
-  // COUCHE HTTP — Client fetch() unifié
+  // COUCHE HTTP — Client XHR unifié
   // ──────────────────────────────────────────────────────────────────
   const Api = {
     async request(method, endpoint, body = null, options = {}) {
@@ -20492,22 +20641,24 @@ if (document.readyState === 'loading') {
         if (token) headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
-
       try {
-        const response = await fetch(url, {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : null,
-          signal: controller.signal,
-          credentials: 'include', // pour les cookies RefreshToken
+        const { status, ok, text, timedOut } = await new Promise((resolve) => {
+          const x = new XMLHttpRequest();
+          x.open(method, url, true);
+          x.timeout = API_CONFIG.TIMEOUT;
+          x.withCredentials = true; // pour les cookies RefreshToken
+          Object.entries(headers).forEach(([k, v]) => x.setRequestHeader(k, v));
+          x.onload = () => resolve({ status: x.status, ok: x.status >= 200 && x.status < 300, text: x.responseText, timedOut: false });
+          x.ontimeout = () => resolve({ status: 0, ok: false, text: '', timedOut: true });
+          x.onerror = () => resolve({ status: 0, ok: false, text: '', timedOut: false });
+          x.send(body ? JSON.stringify(body) : null);
         });
 
-        clearTimeout(timeout);
+        if (timedOut) throw Object.assign(new Error('Délai dépassé'), { name: 'AbortError' });
+        if (status === 0) throw Object.assign(new Error('Erreur réseau'), { name: 'TypeError' });
 
         // Token expiré → tenter le refresh
-        if (response.status === 401 && !options.skipAuth && !options._retried) {
+        if (status === 401 && !options.skipAuth && !options._retried) {
           const refreshed = await Auth.refreshIfNeeded();
           if (refreshed) {
             return this.request(method, endpoint, body, { ...options, _retried: true });
@@ -20518,12 +20669,13 @@ if (document.readyState === 'loading') {
           }
         }
 
-        const data = await response.json();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (e) {}
 
-        if (!response.ok) {
+        if (!ok) {
           throw new ApiError(
-            data.error?.message || `Erreur ${response.status}`,
-            response.status,
+            data.error?.message || `Erreur ${status}`,
+            status,
             data.error?.code || 'API_ERROR',
             data.error?.details
           );
@@ -20532,8 +20684,6 @@ if (document.readyState === 'loading') {
         return data;
 
       } catch (err) {
-        clearTimeout(timeout);
-
         // Erreur réseau (offline)
         if (err.name === 'AbortError' || err.name === 'TypeError' || !navigator.onLine) {
           if (!options.skipOffline && ['POST', 'PUT', 'DELETE'].includes(method)) {
