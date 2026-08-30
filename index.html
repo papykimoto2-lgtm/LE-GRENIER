@@ -398,16 +398,21 @@
   .badge-expiree{background:var(--gris-clair);color:var(--gris-text)}
 
   /* ─── ADMIN ─── */
-  .admin-header{background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(13,92,53,0.3);flex-wrap:wrap;gap:10px}
-  .admin-header .titre{font-family:var(--font-titre);font-size:22px;font-weight:700;letter-spacing:-0.02em}
+  .admin-header{background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;box-shadow:0 2px 12px rgba(13,92,53,0.3)}
+  .admin-header-top{padding:16px 28px 12px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+  .admin-header .titre{font-family:var(--font-titre);font-size:22px;font-weight:700;letter-spacing:-0.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .admin-nav-wrap{position:relative;padding:0 28px 12px}
+  .admin-nav-wrap::after{content:'';position:absolute;top:0;right:28px;bottom:12px;width:28px;background:linear-gradient(90deg,transparent,var(--vert-vif) 80%);pointer-events:none}
   .admin-nav{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:100%}
   .admin-nav::-webkit-scrollbar{display:none}
   .admin-nav-btn{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;color:rgba(255,255,255,.7);border:none;background:transparent;cursor:pointer;transition:var(--transition);white-space:nowrap;flex-shrink:0}
   .admin-nav-btn:hover,.admin-nav-btn.actif{background:rgba(255,255,255,.2);color:#fff}
   .admin-body{padding:20px clamp(14px,4vw,32px);background:var(--gris-clair);flex:1}
   @media(max-width:768px){
-    .admin-header{padding:14px 16px}
-    .admin-header .titre{font-size:18px}
+    .admin-header-top{padding:14px 16px 10px}
+    .admin-nav-wrap{padding:0 16px 10px}
+    .admin-nav-wrap::after{right:16px}
+    .admin-header .titre{font-size:17px}
     .admin-nav-btn{padding:6px 12px;font-size:12px}
   }
   .admin-section{background:#fff;border-radius:var(--radius-lg);padding:22px;margin-bottom:20px;border:1px solid var(--gris-mid);box-shadow:var(--shadow-sm)}
@@ -2865,6 +2870,34 @@
   window.DAO_PERSIST = DAO_PERSIST;
   window.bootstrapCache = bootstrapCache;
   window.CACHE = CACHE;
+
+  // ══════════════════════════════════════════════════════════════
+  //  STATISTIQUES DE VISIBILITÉ — tracking anonyme, une entrée/session/page
+  // ══════════════════════════════════════════════════════════════
+  function _getSessionVisiteId() {
+    let sid = localStorage.getItem('lg_visit_session');
+    if (!sid) {
+      sid = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem('lg_visit_session', sid);
+    }
+    return sid;
+  }
+  window.enregistrerVisite = function(page) {
+    if (MODE !== 'remote') return;
+    const sid = _getSessionVisiteId();
+    const key = 'lg_visit_' + page;
+    const last = sessionStorage.getItem(key);
+    const now = Date.now();
+    if (last && now - Number(last) < 30 * 60 * 1000) return; // 1 entrée / page / 30min / session
+    sessionStorage.setItem(key, String(now));
+    _xhr('POST', SUPABASE_URL + '/rest/v1/visites', {
+      session_id: sid, page: page || 'accueil',
+      referrer: document.referrer || null,
+      user_agent: navigator.userAgent.slice(0, 200)
+    }, { Prefer: 'return=minimal' }).then(r => {
+      if (r.error) console.error('[visites] échec tracking', r.error);
+    });
+  };
 
   console.log(`[DAO] Mode: ${MODE} — ${MODE === 'local' ? 'données en mémoire' : 'connecté à Supabase'}`);
   </script>
@@ -7339,22 +7372,27 @@ const CGU_DATE    = '2026-05-16';
 ════════════════════════════════════════════ -->
 <div id="screen-admin" class="screen">
   <div class="admin-header">
-    <div class="titre">Le Grenier — Administration</div>
-    <div class="admin-nav">
-      <button class="admin-nav-btn actif" onclick="adminTab(this,'admin-dash')">Tableau de bord</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-annonces')">Annonces</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-users')">Utilisateurs</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-paiements')">Paiements</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-promos')">Codes Promo</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-pub')">Publicités</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-abonnements')">Abonnements</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');renderAdminLivraisons()">Livraisons</button>
-      <button class="admin-nav-btn" id="admin-nav-inscriptions" onclick="adminTab(this,'admin-inscriptions');renderAdminInscriptions()">Inscriptions <span id="admin-nav-badge-inscriptions" style="display:none;background:var(--or);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-profil');renderAdminProfil()">Profil & Paiements</button>
-      <button class="admin-nav-btn" onclick="adminTab(this,'admin-tarifs');renderAdminTarifs()">Tarifs & Plans</button>
+    <div class="admin-header-top">
+      <div class="titre">Le Grenier — Administration</div>
+      <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.4)" onclick="goScreen('screen-accueil')">← Site</button>
     </div>
-    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.4)" onclick="goScreen('screen-accueil')">← Site</button>
+    <div class="admin-nav-wrap">
+      <div class="admin-nav">
+        <button class="admin-nav-btn actif" onclick="adminTab(this,'admin-dash')">Tableau de bord</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-annonces')">Annonces</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-users')">Utilisateurs</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-paiements')">Paiements</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-promos')">Codes Promo</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-pub')">Publicités</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-abonnements')">Abonnements</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');renderAdminLivraisons()">Livraisons</button>
+        <button class="admin-nav-btn" id="admin-nav-inscriptions" onclick="adminTab(this,'admin-inscriptions');renderAdminInscriptions()">Inscriptions <span id="admin-nav-badge-inscriptions" style="display:none;background:var(--or);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-profil');renderAdminProfil()">Profil & Paiements</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-tarifs');renderAdminTarifs()">Tarifs & Plans</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-visibilite');renderAdminVisibilite()">Visibilité</button>
+      </div>
+    </div>
   </div>
 
   <div class="admin-body">
@@ -8051,6 +8089,11 @@ const CGU_DATE    = '2026-05-16';
     <!-- ONGLET TARIFS -->
     <div id="admin-tarifs" class="hidden">
       <!-- Rendu dynamique par renderAdminTarifs() -->
+    </div>
+
+    <!-- ONGLET VISIBILITÉ -->
+    <div id="admin-visibilite" class="hidden">
+      <!-- Rendu dynamique par renderAdminVisibilite() -->
     </div>
 
     <!-- ONGLET INSCRIPTIONS -->
@@ -8874,6 +8917,127 @@ function renderAdminTarifs() {
     <div style="background:var(--or-pale);border:1.5px solid rgba(212,146,30,.25);border-radius:var(--radius);padding:12px 16px;font-size:13px;color:#7A5200;margin-top:16px">
       ⚠️ <strong>Important :</strong> Les modifications s'appliquent immédiatement à toute l'application. Les paiements déjà enregistrés en base ne sont pas rétroactivement modifiés. Les numéros Mobile Money ne sont jamais exposés aux utilisateurs non-admin.
     </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  VISIBILITÉ DU SITE — statistiques de fréquentation + historique
+// ══════════════════════════════════════════════════════════════
+async function renderAdminVisibilite() {
+  const zone = document.getElementById('admin-visibilite');
+  if (!zone) return;
+
+  if (typeof MODE === 'undefined' || MODE !== 'remote') {
+    zone.innerHTML = `<div class="admin-section" style="text-align:center;padding:40px;color:var(--gris-text)">
+      Statistiques de visibilité disponibles uniquement en mode connecté (Supabase).
+    </div>`;
+    return;
+  }
+
+  zone.innerHTML = `<div class="admin-section" style="text-align:center;padding:40px;color:var(--gris-text)">Chargement…</div>`;
+
+  const token = (typeof _supa !== 'undefined') ? _supa.auth.getAccessToken() : null;
+  const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/visites?select=session_id,page,referrer,created_at&order=created_at.desc&limit=500',
+    null, token ? { Authorization: 'Bearer ' + token } : {});
+
+  if (r.error) {
+    zone.innerHTML = `<div class="admin-section" style="text-align:center;padding:40px;color:var(--rouge)">Erreur de chargement des statistiques : ${escapeHtml(r.error.message || 'inconnue')}</div>`;
+    return;
+  }
+
+  const visites = r.data || [];
+  const auj = new Date().toISOString().slice(0, 10);
+  const il7j = new Date(Date.now() - 7 * 86400000);
+  const il30j = new Date(Date.now() - 30 * 86400000);
+
+  const visitesAuj = visites.filter(v => v.created_at.slice(0, 10) === auj);
+  const visites7j = visites.filter(v => new Date(v.created_at) >= il7j);
+  const visites30j = visites.filter(v => new Date(v.created_at) >= il30j);
+  const visiteursUniques = new Set(visites.map(v => v.session_id)).size;
+  const visiteursUniques7j = new Set(visites7j.map(v => v.session_id)).size;
+
+  // Répartition par jour (14 derniers jours) pour le graphique en barres
+  const jours = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    const key = d.toISOString().slice(0, 10);
+    const count = visites.filter(v => v.created_at.slice(0, 10) === key).length;
+    jours.push({ label: d.toLocaleDateString('fr-CI', { day: '2-digit', month: '2-digit' }), count });
+  }
+  const maxJour = Math.max(1, ...jours.map(j => j.count));
+
+  // Pages les plus visitées
+  const parPage = {};
+  visites30j.forEach(v => { const p = v.page || 'accueil'; parPage[p] = (parPage[p] || 0) + 1; });
+  const topPages = Object.entries(parPage).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxPage = Math.max(1, ...topPages.map(p => p[1]));
+
+  zone.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+      <div class="admin-section" style="text-align:center;padding:16px">
+        <div style="font-size:24px;margin-bottom:4px">👁️</div>
+        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre)">${visites.length}</div>
+        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Visites (500 dern.)</div>
+      </div>
+      <div class="admin-section" style="text-align:center;padding:16px">
+        <div style="font-size:24px;margin-bottom:4px">👤</div>
+        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre);color:var(--vert)">${visiteursUniques}</div>
+        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Visiteurs uniques</div>
+      </div>
+      <div class="admin-section" style="text-align:center;padding:16px">
+        <div style="font-size:24px;margin-bottom:4px">📅</div>
+        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre);color:var(--bleu)">${visitesAuj.length}</div>
+        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Aujourd'hui</div>
+      </div>
+      <div class="admin-section" style="text-align:center;padding:16px">
+        <div style="font-size:24px;margin-bottom:4px">📈</div>
+        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre);color:var(--or)">${visiteursUniques7j}</div>
+        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Uniques (7j)</div>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-section-titre">Fréquentation — 14 derniers jours</div>
+      <div style="display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:10px">
+        ${jours.map(j => `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px" title="${j.label} : ${j.count} visite(s)">
+            <div style="width:100%;background:linear-gradient(180deg,var(--vert-vif),var(--vert));border-radius:4px 4px 0 0;height:${Math.max(3, (j.count / maxJour) * 100)}px;transition:height .3s"></div>
+            <div style="font-size:9px;color:var(--gris-text);white-space:nowrap">${j.label}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+      <div class="admin-section">
+        <div class="admin-section-titre">Pages les plus visitées (30j)</div>
+        ${topPages.length ? topPages.map(([page, count]) => `
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+              <span>${escapeHtml(page)}</span><span style="font-weight:700">${count}</span>
+            </div>
+            <div style="background:var(--gris-clair);border-radius:6px;height:8px;overflow:hidden">
+              <div style="width:${(count / maxPage) * 100}%;background:var(--vert);height:100%"></div>
+            </div>
+          </div>`).join('') : '<div style="color:var(--gris-text);font-size:13px">Aucune donnée</div>'}
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">Historique récent</div>
+        <div class="table-wrap-scroll" style="max-height:340px;overflow-y:auto">
+          <table class="table">
+            <thead><tr><th>Date</th><th>Page</th><th>Provenance</th></tr></thead>
+            <tbody>
+              ${visites.slice(0, 60).map(v => `
+                <tr>
+                  <td style="font-size:12px;white-space:nowrap">${new Date(v.created_at).toLocaleString('fr-CI', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+                  <td style="font-size:12px">${escapeHtml(v.page || 'accueil')}</td>
+                  <td style="font-size:12px;color:var(--gris-text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.referrer ? escapeHtml(v.referrer) : 'Direct'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function sauvegarderAdminTarifs() {
@@ -15390,7 +15554,7 @@ const _adminTabOrig = adminTab;
 function adminTab(el, tabId) {
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
   el.classList.add('actif');
-  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs').forEach(t=>t.classList.add('hidden'));
+  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
   if (tabId==='admin-pub') renderAdminPub();
   if (tabId==='admin-abonnements') renderAdminAbonnements();
@@ -15399,6 +15563,7 @@ function adminTab(el, tabId) {
   if (tabId==='admin-litiges') renderAdminLitiges();
   if (tabId==='admin-inscriptions') renderAdminInscriptions();
   if (tabId==='admin-profil') renderAdminProfil();
+  if (tabId==='admin-visibilite') renderAdminVisibilite();
 }
 
 // ==============================================
@@ -18010,6 +18175,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     catch (e) { console.error('[INIT] bootstrapCache a échoué, poursuite avec cache vide', e); }
   }
   if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
+  if (typeof window.enregistrerVisite === 'function') window.enregistrerVisite('accueil');
   if (typeof MODE !== 'undefined' && MODE === 'remote') {
     const demoLinks = document.getElementById('login-demo-links');
     if (demoLinks) demoLinks.style.display = 'none';
