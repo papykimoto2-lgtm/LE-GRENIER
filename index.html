@@ -854,10 +854,21 @@
     .carrousel-piste .card-annonce{flex:0 0 200px;min-width:200px}
     .carrousel-titre-row{padding:0 14px}
 
-    /* ── Modal annonce ── */
-    .modal{border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-height:92vh;margin-top:auto}
+    /* ── Modales — feuille-bas unifiée (toutes, pas seulement .modal) ── */
     .modal-overlay{padding:0;align-items:flex-end;overflow-y:hidden}
-    .modal{max-height:92vh;border-radius:var(--radius-lg) var(--radius-lg) 0 0;margin:0;width:100%}
+    .modal,
+    .modal-pay,
+    .modal-rdv,
+    .modal-log-res,
+    .modal-menu,
+    .modal-panier,
+    .modal-resa-table,
+    .modal-sm-magasin,
+    .modal-sm-panier{
+      width:100%;max-width:100%;margin:0;
+      border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+      max-height:92vh;
+    }
     .modal-body{padding:16px 18px 24px}
     .modal-img{height:200px;font-size:56px}
     .modal-prix{font-size:26px}
@@ -936,6 +947,11 @@
     /* ── Footer ── */
     footer{padding:28px 14px;font-size:12px}
     .footer-logo{font-size:20px}
+
+    /* ── Modale CGU ── */
+    #modal-cgu{padding:0}
+    #modal-cgu > div{border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-width:100%}
+    #cgu-body{padding:18px 16px}
   }
 
   /* ── Touch improvements (tous mobiles) ── */
@@ -1006,7 +1022,7 @@
   .qr-scan-overlay{position:fixed;inset:0;background:rgba(15,15,12,.85);backdrop-filter:blur(12px);z-index:400;display:none;align-items:center;justify-content:center}
   .qr-scan-overlay.open{display:flex;animation:overlayIn .2s ease}
   .qr-phone{
-    width:300px;background:#111;border-radius:36px;padding:16px;
+    width:min(300px,86vw);background:#111;border-radius:36px;padding:16px;
     box-shadow:0 0 0 6px #222,0 24px 80px rgba(0,0,0,.6);
     animation:modalIn .4s cubic-bezier(0.34,1.56,0.64,1)
   }
@@ -2308,6 +2324,79 @@
     .livr-type-grid{grid-template-columns:repeat(2,1fr)}
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     LA COUR DU GRENIER — constellation des rayons (page de garde)
+     ═══════════════════════════════════════════════════════════════ */
+  .cour{padding:8px clamp(14px,4vw,28px) 56px;max-width:1240px;margin:0 auto}
+  .cour-tete{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:26px;flex-wrap:wrap}
+  .cour-tete h2{font-family:var(--font-titre);font-size:clamp(26px,3.4vw,38px);font-weight:700;letter-spacing:-0.02em;color:var(--noir);max-width:520px;line-height:1.15}
+  .cour-tete p{font-size:14px;color:var(--gris-text);max-width:360px;line-height:1.6;margin-top:6px}
+  .cour-compteur{display:flex;align-items:baseline;gap:8px;flex-shrink:0;padding-bottom:4px}
+  .cour-compteur strong{font-family:var(--font-titre);font-size:40px;font-weight:700;color:var(--vert);letter-spacing:-0.02em}
+  .cour-compteur span{font-size:12px;color:var(--gris-text);max-width:88px;line-height:1.35}
+
+  .cour-grille{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:126px;gap:12px}
+  .cour-stand{
+    position:relative;grid-column:span 2;grid-row:span 1;
+    border-radius:6px 18px 6px 18px;
+    background:#fff;border:1px solid rgba(0,0,0,.06);
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+    overflow:hidden;cursor:pointer;text-align:left;
+    display:flex;flex-direction:column;justify-content:flex-end;
+    padding:14px 16px 13px;
+    transition:transform .18s cubic-bezier(0.4,0,0.2,1),box-shadow .18s cubic-bezier(0.4,0,0.2,1);
+    opacity:0;transform:translateY(14px);
+  }
+  .cour-stand.a-vu{animation:standEntre .5s cubic-bezier(0.16,1,0.3,1) forwards}
+  @keyframes standEntre{to{opacity:1;transform:translateY(0)}}
+  .cour-stand::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:repeating-linear-gradient(115deg,var(--sc1) 0 14px,var(--sc2) 14px 28px)}
+  .cour-stand:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.1)}
+  .cour-stand:active{transform:translateY(-1px) scale(.99)}
+  .cour-stand-emoji{font-size:26px;line-height:1;margin-bottom:10px;transition:transform .18s}
+  .cour-stand:hover .cour-stand-emoji{transform:translateY(-2px) rotate(-4deg)}
+  .cour-stand-nom{font-family:var(--font-titre);font-weight:700;font-size:18px;color:var(--noir);line-height:1.15;letter-spacing:-0.01em}
+  .cour-stand-tag{font-size:12px;color:var(--gris-text);line-height:1.4;margin-top:4px;max-width:92%}
+  .cour-stand-fleche{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:50%;background:var(--gris-clair);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--gris-text);transition:var(--transition)}
+  .cour-stand:hover .cour-stand-fleche{background:var(--sc1);color:#fff;transform:rotate(45deg)}
+
+  /* Stand phare — Marché */
+  .cour-stand-phare{grid-column:span 4;grid-row:span 2;padding:24px 26px 22px;justify-content:flex-end}
+  .cour-stand-phare::after{content:'';position:absolute;inset:0;background:linear-gradient(160deg,var(--sc1) 0%,var(--sc2) 100%);z-index:-1}
+  .cour-stand-phare .cour-stand-emoji{font-size:44px;margin-bottom:14px}
+  .cour-stand-phare .cour-stand-nom{color:#fff;font-size:clamp(24px,3vw,32px)}
+  .cour-stand-phare .cour-stand-tag{color:rgba(255,255,255,.85);font-size:13.5px;max-width:70%}
+  .cour-stand-phare .cour-stand-fleche{background:rgba(255,255,255,.2);color:#fff}
+  .cour-stand-phare:hover .cour-stand-fleche{background:#fff;color:var(--vert)}
+  .cour-stand-phare .cour-stand-badge{position:absolute;top:20px;left:26px;font-size:11px;font-weight:700;letter-spacing:.02em;color:rgba(255,255,255,.75)}
+  .cour-stand:nth-child(1){animation-delay:.02s}
+  .cour-stand:nth-child(2){animation-delay:.07s}
+  .cour-stand:nth-child(3){animation-delay:.12s}
+  .cour-stand:nth-child(4){animation-delay:.17s}
+  .cour-stand:nth-child(5){animation-delay:.22s}
+  .cour-stand:nth-child(6){animation-delay:.27s}
+  .cour-stand:nth-child(7){animation-delay:.32s}
+  .cour-stand:nth-child(8){animation-delay:.37s}
+  .cour-stand:nth-child(9){animation-delay:.42s}
+  .cour-stand:nth-child(10){animation-delay:.47s}
+  .cour-stand:nth-child(11){animation-delay:.52s}
+  .cour-stand:nth-child(12){animation-delay:.57s}
+  @media(prefers-reduced-motion:reduce){
+    .cour-stand{opacity:1;transform:none;animation:none}
+  }
+
+  @media(max-width:900px){
+    .cour-grille{grid-template-columns:repeat(4,1fr)}
+    .cour-stand{grid-column:span 2}
+    .cour-stand-phare{grid-column:span 4;grid-row:span 2}
+  }
+  @media(max-width:640px){
+    .cour-tete{margin-bottom:18px}
+    .cour-compteur{display:none}
+    .cour-grille{grid-template-columns:repeat(2,1fr);grid-auto-rows:118px;gap:10px}
+    .cour-stand{grid-column:span 1}
+    .cour-stand-phare{grid-column:span 2;grid-row:span 2;padding:20px 18px}
+  }
+
 </style>
 
   <!-- ══════════════════════════════════════════════════════════════
@@ -3230,126 +3319,105 @@
     </div>
   </div>
 
-  <style>
-    .hub-wrap{max-width:1240px;margin:0 auto;padding:8px 24px 36px}
-    .hub-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:28px 0 18px;flex-wrap:wrap}
-    .hub-head h2{font-family:var(--font-titre);font-weight:700;font-size:32px;color:var(--noir);margin:0}
-    .hub-head span{display:block;font-family:var(--font-corps);font-weight:500;font-size:14px;color:var(--gris-text);margin-top:4px}
-    .hub-live{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--vert-vif);font-weight:600;background:var(--vert-pale);padding:8px 14px;border-radius:999px;white-space:nowrap}
-    .hub-dot{width:8px;height:8px;border-radius:50%;background:var(--vert-clair);animation:hubPulse 1.6s infinite}
-    @keyframes hubPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.5)}}
-    .hub-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-    @media(max-width:980px){.hub-grid{grid-template-columns:repeat(3,1fr)}}
-    @media(max-width:640px){.hub-grid{grid-template-columns:repeat(2,1fr)}}
-    .hub-card{position:relative;overflow:hidden;border-radius:18px;padding:20px 18px;min-height:132px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;border:1px solid rgba(0,0,0,0.05);box-shadow:var(--shadow-card);transition:transform .25s cubic-bezier(.4,0,.2,1),box-shadow .25s;animation:hubFadeUp .5s cubic-bezier(.4,0,.2,1) both}
-    .hub-card:nth-child(1){animation-delay:.02s}.hub-card:nth-child(2){animation-delay:.06s}.hub-card:nth-child(3){animation-delay:.10s}.hub-card:nth-child(4){animation-delay:.14s}
-    .hub-card:nth-child(5){animation-delay:.18s}.hub-card:nth-child(6){animation-delay:.22s}.hub-card:nth-child(7){animation-delay:.26s}.hub-card:nth-child(8){animation-delay:.30s}
-    .hub-card:nth-child(9){animation-delay:.34s}.hub-card:nth-child(10){animation-delay:.38s}.hub-card:nth-child(11){animation-delay:.42s}.hub-card:nth-child(12){animation-delay:.46s}
-    @keyframes hubFadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-    .hub-card:hover{transform:translateY(-6px) scale(1.015);box-shadow:var(--shadow-lg)}
-    .hub-card:active{transform:translateY(-2px) scale(.99)}
-    .hub-card-icon{font-size:30px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.12))}
-    .hub-card-blob{position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;opacity:.16;transition:transform .35s}
-    .hub-card:hover .hub-card-blob{transform:scale(1.3)}
-    .hub-card-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.26;transition:transform .35s,opacity .25s}
-    .hub-card:hover .hub-card-photo{transform:scale(1.08);opacity:.34}
-    .hub-card-badge{position:absolute;z-index:2;top:14px;left:18px;width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.88);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 6px rgba(0,0,0,.12)}
-    .hub-card-title{position:relative;z-index:2;font-weight:700;font-size:15.5px;color:var(--noir);margin-top:14px}
-    .hub-card-sub{position:relative;z-index:2;font-size:12.5px;color:var(--gris-text);margin-top:2px;font-weight:500}
-    .hub-card-arrow{position:absolute;z-index:2;bottom:16px;right:16px;font-size:15px;opacity:0;transform:translateX(-6px);transition:all .25s;color:inherit}
-    .hub-card:hover .hub-card-arrow{opacity:1;transform:translateX(0)}
-    .hub-strip{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 14px;margin-top:26px;scrollbar-width:none}
-    .hub-strip::-webkit-scrollbar{display:none}
-    .hub-strip-item{flex:0 0 auto;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--gris-mid);border-radius:14px;padding:12px 18px;font-weight:600;font-size:13.5px;color:var(--noir);cursor:pointer;transition:var(--transition);white-space:nowrap}
-    .hub-strip-item:hover{border-color:var(--vert-clair);background:var(--vert-pale);transform:translateY(-2px)}
-  </style>
-  <div class="hub-wrap">
-    <div class="hub-head">
-      <div><h2>Explorez Le Grenier</h2><span>Un seul endroit pour tout acheter, vendre et faire faire à Abidjan</span></div>
-      <div class="hub-live"><span class="hub-dot"></span>Plateforme active maintenant</div>
+  <!-- ══════════════════════════════════════════════════════════════
+       LA COUR DU GRENIER — tous les rayons, un seul toit
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="cour" id="cour-modules">
+    <div class="cour-tete">
+      <div>
+        <h2>Un grenier, tous les rayons</h2>
+        <p>Chaque besoin a son coin ici. Entrez dans celui qu'il vous faut aujourd'hui.</p>
+      </div>
+      <div class="cour-compteur"><strong>12</strong><span>rayons à explorer</span></div>
     </div>
-    <div class="hub-grid">
-      <div class="hub-card" style="background:var(--vert-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-marche')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-marche/300/200" alt="">
-        <div class="hub-card-badge">🛍️</div>
-        <div><div class="hub-card-title">Marché</div><div class="hub-card-sub">Achetez & vendez entre particuliers</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--or-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-boulots')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-boulots/300/200" alt="">
-        <div class="hub-card-badge">🛠️</div>
-        <div><div class="hub-card-title">Petits Boulots</div><div class="hub-card-sub">Artisans & prestataires près de vous</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--bleu-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-colis')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-colis/300/200" alt="">
-        <div class="hub-card-badge">📦</div>
-        <div><div class="hub-card-title">Colis & Envois</div><div class="hub-card-sub">Abidjan ↔ Paris, New York…</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--rouge-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-auto')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-auto/300/200" alt="">
-        <div class="hub-card-badge">🚗</div>
-        <div><div class="hub-card-title">Auto & Location</div><div class="hub-card-sub">Véhicules d'occasion, location</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--sm-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-supermarche')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-supermarche/300/200" alt="">
-        <div class="hub-card-badge">🏪</div>
-        <div><div class="hub-card-title">Mon Super Marché</div><div class="hub-card-sub">Courses livrées chez vous</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--rose-b-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-beaute')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-beaute/300/200" alt="">
-        <div class="hub-card-badge">💅</div>
-        <div><div class="hub-card-title">Beauté & RDV</div><div class="hub-card-sub">Coiffure, maquillage, spa</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--bleu-log-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-logement')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-residences/300/200" alt="">
-        <div class="hub-card-badge">🏠</div>
-        <div><div class="hub-card-title">Résidences</div><div class="hub-card-sub">Location meublée & courte durée</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--resto-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-resto')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-resto/300/200" alt="">
-        <div class="hub-card-badge">🍲</div>
-        <div><div class="hub-card-title">Maquis & Restos</div><div class="hub-card-sub">Réservez, commandez sur place</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--livr-pale)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-livraison')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-livraison/300/200" alt="">
-        <div class="hub-card-badge">🏍️</div>
-        <div><div class="hub-card-title">Livraison</div><div class="hub-card-sub">Moto, cargo, express</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--violet-pale)" onclick="switchLevel1('produits');switchMainTab(document.querySelector('[data-level=produits]'),'tab-dons')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-dons/300/200" alt="">
-        <div class="hub-card-badge">🎁</div>
-        <div><div class="hub-card-title">Dons & Gratuit</div><div class="hub-card-sub">Offrez, récupérez gratuitement</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--gris-clair)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-nounou')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-nounou/300/200" alt="">
-        <div class="hub-card-badge">👶</div>
-        <div><div class="hub-card-title">Nounou & Servants</div><div class="hub-card-sub">Personnel de maison de confiance</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
-      <div class="hub-card" style="background:var(--gris-clair)" onclick="switchLevel1('services');switchMainTab(document.querySelector('[data-level=services]'),'tab-info')">
-        <img class="hub-card-photo" src="https://picsum.photos/seed/grenier-info/300/200" alt="">
-        <div class="hub-card-badge">📚</div>
-        <div><div class="hub-card-title">Info & Formation</div><div class="hub-card-sub">Guides et conseils pratiques</div></div>
-        <div class="hub-card-arrow">➜</div>
-      </div>
+
+    <div class="cour-grille" id="cour-grille">
+      <button class="cour-stand cour-stand-phare" style="--sc1:#0D5C35;--sc2:#1A7A48" onclick="allerVersModule('tab-marche')">
+        <span class="cour-stand-badge">LE CŒUR DU GRENIER</span>
+        <span class="cour-stand-emoji">🛍️</span>
+        <span class="cour-stand-nom">Le Marché</span>
+        <span class="cour-stand-tag">Achetez et vendez entre voisins&nbsp;: téléphones, meubles, vêtements, et tout ce qui traîne encore utile.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#B5790E;--sc2:#D4921E" onclick="allerVersModule('tab-boulots')">
+        <span class="cour-stand-emoji">🔧</span>
+        <span class="cour-stand-nom">Petits Boulots</span>
+        <span class="cour-stand-tag">Un plombier, un maçon, un job du jour.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#6B2C91;--sc2:#9B4FC0" onclick="allerVersModule('tab-nounou')">
+        <span class="cour-stand-emoji">🧹</span>
+        <span class="cour-stand-nom">Nounou & Servants</span>
+        <span class="cour-stand-tag">Du personnel de maison de confiance.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#0F3D8A;--sc2:#2478E0" onclick="allerVersModule('tab-colis')">
+        <span class="cour-stand-emoji">✈️</span>
+        <span class="cour-stand-nom">Colis & Envois</span>
+        <span class="cour-stand-tag">Un trajet part bientôt&nbsp;? Envoyez avec.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#1C2833;--sc2:#3D5166" onclick="allerVersModule('tab-auto')">
+        <span class="cour-stand-emoji">🚗</span>
+        <span class="cour-stand-nom">Auto & Location</span>
+        <span class="cour-stand-tag">Voitures d'occasion, sans intermédiaire.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#C2410C;--sc2:#EA580C" onclick="allerVersModule('tab-dons')">
+        <span class="cour-stand-emoji">🎁</span>
+        <span class="cour-stand-nom">Dons & Gratuit</span>
+        <span class="cour-stand-tag">Ce qui ne sert plus fera un heureux.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#9C1360;--sc2:#E91E8C" onclick="allerVersModule('tab-beaute')">
+        <span class="cour-stand-emoji">💅</span>
+        <span class="cour-stand-nom">Beauté & RDV</span>
+        <span class="cour-stand-tag">Coiffure, soins, institut du quartier.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#0E6B5C;--sc2:#14A085" onclick="allerVersModule('tab-logement')">
+        <span class="cour-stand-emoji">🏠</span>
+        <span class="cour-stand-nom">Résidences</span>
+        <span class="cour-stand-tag">Studios et appartements à louer.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#78350F;--sc2:#D97706" onclick="allerVersModule('tab-resto')">
+        <span class="cour-stand-emoji">🍲</span>
+        <span class="cour-stand-nom">Maquis & Restos</span>
+        <span class="cour-stand-tag">Réservez une table, ou à emporter.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#B91C1C;--sc2:#DC2626" onclick="allerVersModule('tab-livraison')">
+        <span class="cour-stand-emoji">🛵</span>
+        <span class="cour-stand-nom">Livraison</span>
+        <span class="cour-stand-tag">Un coursier moto pour vos courses.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#312E81;--sc2:#4F46E5" onclick="allerVersModule('tab-info')">
+        <span class="cour-stand-emoji">📚</span>
+        <span class="cour-stand-nom">Info & Formation</span>
+        <span class="cour-stand-tag">Bien vendre, en sécurité, sans arnaque.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
+
+      <button class="cour-stand" style="--sc1:#003F72;--sc2:#0096C7" onclick="allerVersModule('tab-supermarche')">
+        <span class="cour-stand-emoji">🏪</span>
+        <span class="cour-stand-nom">Mon Super Marché</span>
+        <span class="cour-stand-tag">Les courses du quotidien, livrées.</span>
+        <span class="cour-stand-fleche">↗</span>
+      </button>
     </div>
-    <div class="hub-strip">
-      <div class="hub-strip-item" onclick="goScreen('screen-depot')">➕ Publier une annonce</div>
-      <div class="hub-strip-item" onclick="goScreen('screen-depot-boulot')">🧰 Proposer un service</div>
-      <div class="hub-strip-item" onclick="goScreen('screen-register')">🆕 Créer mon compte</div>
-      <div class="hub-strip-item" onclick="goScreen('screen-login')">🔑 Me connecter</div>
-      <div class="hub-strip-item" onclick="document.getElementById('search-input').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('search-input').focus()">🔍 Rechercher</div>
-    </div>
-  </div>
+  </section>
 
   <div class="filtres">
     <span class="filtre-label">Catégorie :</span>
@@ -22737,7 +22805,7 @@ window.addEventListener('load', () => {
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #e5e7eb;flex-shrink:0">
       <h3 id="modal-edit-titre" style="margin:0;font-size:17px;font-weight:700;color:#111"></h3>
-      <button onclick="fermerModalEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1">×</button>
+      <button onclick="fermerModalEdit()" style="background:var(--gris-clair,#f3f4f6);border:none;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;color:#6b7280;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
     </div>
     <!-- Corps scrollable -->
     <div style="overflow-y:auto;padding:20px;flex:1">
@@ -22779,6 +22847,31 @@ window.addEventListener('load', () => {
 
 <script>
 (function(){
+  // La Cour du Grenier — navigation vers un module depuis la page de garde
+  window.allerVersModule = function(tabId){
+    var btn = document.querySelector('.nav-tab[onclick*="\'' + tabId + '\'"]');
+    if (btn && typeof switchMainTab === 'function') {
+      switchMainTab(btn, tabId);
+    } else {
+      var idx = document.getElementById(tabId);
+      if (idx) idx.scrollIntoView({behavior:'smooth'});
+    }
+  };
+
+  // Entrée en cascade des stands au premier affichage
+  var grille = document.getElementById('cour-grille');
+  if (grille && 'IntersectionObserver' in window) {
+    var stands = grille.querySelectorAll('.cour-stand');
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add('a-vu'); obs.unobserve(e.target); }
+      });
+    }, { threshold: 0.15 });
+    stands.forEach(function(s){ obs.observe(s); });
+  } else if (grille) {
+    grille.querySelectorAll('.cour-stand').forEach(function(s){ s.classList.add('a-vu'); });
+  }
+
   // Enregistrement du Service Worker (condition d'installabilité)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function(){
