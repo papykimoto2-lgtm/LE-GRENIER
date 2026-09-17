@@ -2951,24 +2951,32 @@
   // ══════════════════════════════════════════════════════════════
   const DAO_PERSIST = {
     async annonce(record) {
-      if (MODE !== 'remote') return;
+      if (MODE !== 'remote') return { data: null, error: null };
       const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/annonces', {
         titre: record.titre, cat: record.cat, valeur: record.valeur, etat: record.etat,
         desc_txt: record.desc, ville: record.ville, vendeur_id: record.vendeurId,
         statut: record.statut, emoji: record.emoji, type_tab: record.typeTab,
         lat: record.lat, lng: record.lng, photos: record.photos || []
-      }, { Prefer: 'return=minimal' });
+      }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] annonce', r.error);
+      return r;
     },
     async paiement(record) {
-      if (MODE !== 'remote') return;
+      if (MODE !== 'remote') return { data: null, error: null };
       const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/paiements', {
         vendeur_id: record.vendeurId, annonce_titre: record.annonce, valeur: record.valeur,
         commission: record.commission, ref: record.ref, passerelle: record.passerelle,
         moyen: record.moyen, statut: record.statut === 'confirmé' ? 'confirme' : record.statut,
         plan_vendeur: record.planVendeur, type: record.type
-      }, { Prefer: 'return=minimal' });
+      }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] paiement', r.error);
+      return r;
+    },
+    async paiementMaj(id, patch) {
+      if (MODE !== 'remote') return { data: null, error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/paiements?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] paiement maj', r.error);
+      return r;
     },
     async message(record) {
       if (MODE !== 'remote') return;
@@ -11659,7 +11667,7 @@ function payTraiter() {
   }
 
   // ── MODE DEMO — simulation (aucun argent reel) ──
-  setTimeout(() => {
+  setTimeout(async () => {
     // Créer l'annonce et l'enregistrement paiement
     if (depotEnCours) {
       const ref = 'TXN' + Date.now().toString().slice(-8).toUpperCase();
@@ -11678,7 +11686,9 @@ function payTraiter() {
         date: new Date().toISOString().slice(0,10)
       };
       DAO._local.annonces.push(nouvelleAnnonce);
-      DAO._local.paiements.push({
+      const rAnnonce = await DAO_PERSIST.annonce(nouvelleAnnonce);
+      if (rAnnonce && !rAnnonce.error && rAnnonce.data && rAnnonce.data[0]) nouvelleAnnonce.id = rAnnonce.data[0].id;
+      const nouveauPaiement = {
         id:         DAO._local.paiements.length + 1,
         date:       new Date().toISOString().slice(0,10),
         vendeurId:  SESSION?.id || 1,
@@ -11691,7 +11701,11 @@ function payTraiter() {
         statut:     'confirmé',
         planVendeur: getPlanUser(SESSION?.id)?.nom || 'Gratuit',
         type:       'commission'
-      });
+      };
+      DAO._local.paiements.push(nouveauPaiement);
+      const rPaiement = await DAO_PERSIST.paiement(nouveauPaiement);
+      if (rPaiement && !rPaiement.error && rPaiement.data && rPaiement.data[0]) nouveauPaiement.id = rPaiement.data[0].id;
+      if (depotEnCours.promoCode) await _consommerPromoActif(depotEnCours.promoCode);
       document.getElementById('pay-success-ref').textContent = 'REF: ' + ref;
       depotEnCours = null;
       DEPOT_GEO = null;
@@ -13140,6 +13154,22 @@ function verifierQRUrl() {
 
 let promoActif = null;        // {code, type, valeur, reduction}
 let newPromoType = 'pct';     // type sélectionné dans le form admin
+
+// Consomme (usages++) le code promo appliqué à une publication qui vient réellement
+// d'aboutir (gratuite ou payée) — jamais au moment où l'utilisateur clique "publier",
+// sinon annuler le paiement épuise quand même le compteur d'un code à usage unique.
+async function _consommerPromoActif(promoInfoOuCode) {
+  const code = promoInfoOuCode && typeof promoInfoOuCode === 'object' ? promoInfoOuCode.code : promoInfoOuCode;
+  if (code) {
+    const promo = DAO._local.promos.find(p => p.code === code);
+    if (promo) {
+      promo.usages = (promo.usages || 0) + 1;
+      const r = await DAO_PERSIST.promoMaj(promo.id, { usages: promo.usages });
+      if (r && r.error) promo.usages--;
+    }
+  }
+  promoActif = null;
+}
 
 /* ---------- Validation & application ---------- */
 function appliquerPromo() {
@@ -17045,13 +17075,15 @@ publierAnnonce = function() {
   const tauxLabel = `${plan.limites.commission}% (plan ${plan.nom})`;
 
   // 4. Gérer codes promo
+  // La consommation du code promo (usages++) n'a lieu qu'à la publication effective
+  // (ci-dessous / dans payTraiter), pas ici : sinon annuler le paiement laissait le
+  // compteur d'usages incrémenté pour rien, et un code à usage unique se retrouvait
+  // épuisé sans qu'aucune commande n'ait réellement abouti.
   let commFinale = commission;
   let promoInfo = null;
   if (typeof promoActif !== 'undefined' && promoActif) {
     commFinale = promoActif.commFinale;
     promoInfo = promoActif;
-    const promo = DAO._local.promos.find(p => p.code === promoActif.code);
-    if (promo) promo.usages++;
   }
 
   depotEnCours = {
@@ -17060,12 +17092,13 @@ publierAnnonce = function() {
     commBase: commission,
     tauxLabel,
     planNom: plan.nom,
-    photos: DEPOT_PHOTOS.map(p=>p.src)
+    photos: DEPOT_PHOTOS.map(p=>p.src),
+    promoCode: promoInfo ? promoInfo.code : null
   };
 
   if (commFinale === 0) {
     toast('🎁 Publication gratuite !');
-    setTimeout(() => {
+    setTimeout(async () => {
       const nouvelleAnnonce = {
         id: DAO._local.nextId++, titre, cat, valeur, etat, desc, ville,
         vendeurId: SESSION.id, statut: 'attente', vues: 0,
@@ -17073,6 +17106,9 @@ publierAnnonce = function() {
         date: new Date().toISOString().slice(0,10), planVendeur: plan.nom
       };
       DAO._local.annonces.push(nouvelleAnnonce);
+      const r = await DAO_PERSIST.annonce(nouvelleAnnonce);
+      if (r && !r.error && r.data && r.data[0]) nouvelleAnnonce.id = r.data[0].id;
+      await _consommerPromoActif(promoInfo);
       DEPOT_PHOTOS = []; majPhotosGrid && majPhotosGrid();
       depotEnCours = null;
       goScreen('screen-dashboard');
@@ -20276,9 +20312,44 @@ async function ouvrirDossierLitige() {
   document.getElementById('lit-feedback').innerHTML = '<span style="color:#16A34A;font-weight:600">Dossier ouvert avec succès</span>';
 }
 
-function remboursementDirectAdmin() {
+async function remboursementDirectAdmin() {
   const montant = parseInt(document.getElementById('lit-montant').value)||0;
-  document.getElementById('lit-feedback').innerHTML = `<span style="color:var(--or);font-weight:600">Remboursement de ${fmtFCFA(montant)} déclenché — virement Mobile Money sous 48h</span>`;
+  const feedback = document.getElementById('lit-feedback');
+  const selP = document.getElementById('lit-paiement');
+  const paiementId = parseInt(selP?.value) || null;
+  const paiement = paiementId ? DAO._local.paiements.find(p => p.id === paiementId) : null;
+
+  if (!paiement) { feedback.innerHTML = '<span style="color:var(--rouge);font-weight:600">Sélectionnez la transaction concernée</span>'; return; }
+  if (montant <= 0) { feedback.innerHTML = '<span style="color:var(--rouge);font-weight:600">Montant invalide</span>'; return; }
+  if (paiement.statut === 'rembourse') { feedback.innerHTML = '<span style="color:var(--rouge);font-weight:600">Cette transaction est déjà remboursée</span>'; return; }
+  if (montant > (paiement.commission||0)) {
+    feedback.innerHTML = '<span style="color:var(--rouge);font-weight:600">Le montant dépasse la commission de cette transaction (' + fmtFCFA(paiement.commission||0) + ')</span>';
+    return;
+  }
+
+  const avantStatut = paiement.statut;
+  paiement.statut = 'rembourse';
+  const r = await DAO_PERSIST.paiementMaj(paiement.id, { statut: 'rembourse' });
+  if (r && r.error) {
+    paiement.statut = avantStatut;
+    feedback.innerHTML = '<span style="color:var(--rouge);font-weight:600">Erreur : remboursement non enregistré</span>';
+    return;
+  }
+
+  // Journalise le remboursement comme un dossier litige déjà résolu, pour traçabilité.
+  const motif = document.getElementById('lit-motif').value.trim() || 'Remboursement direct admin';
+  const record = {
+    id: DAO._local.litiges.length + 1,
+    date: new Date().toISOString().slice(0,10),
+    type: 'Remboursement commission', vendeurId: paiement.vendeurId, annonce: paiement.annonce,
+    montant, motif, statut: 'résolu', decision: 'Remboursement direct admin — ' + fmtFCFA(montant)
+  };
+  DAO._local.litiges.push(record);
+  renderLitigesTable();
+  renderAdminLitiges();
+  DAO_PERSIST.litige(record).then(r2 => { if (r2 && r2.data && r2.data[0]) record.id = r2.data[0].id; });
+
+  feedback.innerHTML = `<span style="color:var(--or);font-weight:600">Remboursement de ${fmtFCFA(montant)} déclenché — virement Mobile Money sous 48h</span>`;
 }
 
 function resetFormLitAdmin() {
