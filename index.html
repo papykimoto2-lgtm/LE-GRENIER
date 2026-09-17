@@ -814,6 +814,10 @@
 
     /* ── Navigation ── */
     nav{padding:0 14px;height:56px}
+    /* Le <img> du logo garde un height:176px inline (voir HTML) hérité du
+       gabarit desktop — sans ce plafond il déborde du bandeau nav réduit à
+       56px sur mobile et recouvre le contenu affiché juste en dessous. */
+    .nav-logo img{max-height:40px}
     .nav-logo{font-size:21px}
     .nav-logo::before{width:24px;height:24px}
     .nav-actions .btn{padding:8px 13px;font-size:13px}
@@ -2289,6 +2293,11 @@
 
   /* Simulateur livraison */
   .livr-sim-card{background:#fff;border-radius:var(--radius-lg);border:1px solid rgba(220,38,38,.15);padding:22px;box-shadow:0 2px 12px rgba(220,38,38,.06)}
+  /* Mise en page "formulaire + panneau aperçu" partagée par tous les écrans
+     de publication (auto, boulots, dons, logements, livraison...) — sans
+     l'écroulement en 1 colonne ci-dessous, le 2e panneau déborde sur mobile. */
+  .pub-2col-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+  .livr-commander-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
   .livr-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(140px,100%),1fr));gap:10px;margin-bottom:18px}
   .livr-type-btn{border:2px solid var(--gris-mid);border-radius:var(--radius-lg);padding:14px 10px;text-align:center;cursor:pointer;transition:var(--transition);background:#fff}
   .livr-type-btn.sel{border-color:#DC2626;background:var(--livr-pale)}
@@ -2328,6 +2337,8 @@
     .resto-hero-btn,.livr-hero-btn{width:100%}
     .restos-grid,.livreurs-grid{grid-template-columns:1fr}
     .livr-type-grid{grid-template-columns:repeat(2,1fr)}
+    .livr-commander-grid{grid-template-columns:1fr}
+    .pub-2col-grid{grid-template-columns:1fr}
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -3146,7 +3157,7 @@
       }
       if (!rCmd.error && Array.isArray(rCmd.data) && typeof DISPATCH_COMMANDES !== 'undefined') {
         const mapped = rCmd.data.map(c => ({
-          id: c.id, ref: c.ref, client: c.client_nom, tel: c.client_tel,
+          id: c.id, ref: c.ref, client: c.client_nom, tel: c.client_tel, destTel: c.destinataire_tel,
           dep: c.depart, arr: c.arrivee, type: c.type, montant: Number(c.montant) || 0,
           commission: Number(c.commission) || 0, commissionTaux: Number(c.commission_taux) || 0,
           statut: c.statut, livreurId: c.livreur_id, date: (c.created_at || '').slice(0, 10),
@@ -3162,7 +3173,8 @@
     const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/livraisons', {
       ref: cmd.ref, client_nom: cmd.client, client_tel: cmd.tel,
       depart: cmd.dep, arrivee: cmd.arr, type: cmd.type, montant: cmd.montant,
-      statut: cmd.statut, livreur_id: cmd.livreurId || null
+      statut: cmd.statut, livreur_id: cmd.livreurId || null,
+      destinataire_tel: cmd.destTel || null
     }, { Prefer: 'return=representation' });
     if (r.error) { console.error('[persist] livraison', r.error); return null; }
     if (r.data && r.data[0]) {
@@ -4482,7 +4494,7 @@
 
     <!-- ── SECTION : JE SUIS VOYAGEUR ── -->
     <div id="colis-porteur" class="colis-section">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+      <div class="pub-2col-grid">
         <div>
           <div style="font-family:var(--font-titre);font-size:24px;font-weight:700;color:var(--noir);margin-bottom:4px">Vous voyagez ? Rentabilisez votre vol</div>
           <div style="font-size:14px;color:var(--gris-text);margin-bottom:24px">Publiez votre trajet, transportez des colis et gagnez de l'argent sur votre bagage excédentaire</div>
@@ -5002,7 +5014,7 @@
 
     <!-- ── SECTION : JE DONNE ── -->
     <div id="dons-donner" class="dons-section">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+      <div class="pub-2col-grid">
 
         <div class="don-form-card">
           <div class="don-form-titre">Publier un don</div>
@@ -5249,7 +5261,7 @@
 
     <!-- ── SECTION INSCRIRE ── -->
     <div id="beaute-inscrire" class="beaute-section">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+      <div class="pub-2col-grid">
         <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:24px;box-shadow:var(--shadow-sm)">
           <div style="font-family:var(--font-titre);font-size:22px;font-weight:700;color:#9C1360;margin-bottom:4px">Référencer mon salon</div>
           <div style="font-size:13px;color:var(--gris-text);margin-bottom:20px">Visible par milliers de clientes dès aujourd'hui — 100% gratuit</div>
@@ -5431,7 +5443,7 @@
 
     <!-- ── SECTION PROPOSER ── -->
     <div id="log-proposer" class="log-section">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+      <div class="pub-2col-grid">
         <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:26px;box-shadow:var(--shadow-sm)">
           <div style="font-family:var(--font-titre);font-size:22px;font-weight:700;color:#0F2340;margin-bottom:4px">Référencer mon bien</div>
           <div style="font-size:13px;color:var(--gris-text);margin-bottom:20px">Votre logement visible par des milliers de locataires — gratuit</div>
@@ -5579,7 +5591,7 @@
 
     <!-- Inscrire son établissement -->
     <div id="resto-inscrire" class="resto-section">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+      <div class="pub-2col-grid">
         <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:24px;box-shadow:var(--shadow-sm)">
           <div style="font-family:var(--font-titre);font-size:22px;font-weight:700;color:#78350F;margin-bottom:4px">Référencer mon établissement</div>
           <div style="font-size:13px;color:var(--gris-text);margin-bottom:20px">Visible par milliers de clients — 0% commission</div>
@@ -5667,7 +5679,7 @@
       <button class="livr-tab actif" onclick="livrTab('livr-commander')">Commander</button>
       <button class="livr-tab" onclick="livrTab('livr-livreurs')">Livreurs disponibles</button>
       <button class="livr-tab" onclick="livrTab('livr-suivi')">Suivi en cours</button>
-      <button class="livr-tab" onclick="livrTab('livr-historique')">Historique</button>
+      <button class="livr-tab" onclick="livrTab('livr-historique');livrRafraichirHistorique()">Historique</button>
       <button class="livr-tab" id="btn-livr-dispatcher" onclick="livrTab('livr-dispatcher');livrRafraichir(renderDispatcher)">Commandes à livrer</button>
       <button class="livr-tab" onclick="livrTab('livr-devenir')">Devenir livreur</button>
     </div>
@@ -5677,7 +5689,7 @@
       <div style="font-family:var(--font-titre);font-size:24px;font-weight:700;margin-bottom:4px">Nouvelle livraison</div>
       <div style="font-size:14px;color:var(--gris-text);margin-bottom:20px">Remplissez le formulaire — un livreur vous est assigné sous 5 minutes</div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+      <div class="livr-commander-grid">
         <div class="livr-sim-card">
           <div style="font-weight:700;font-size:15px;margin-bottom:14px;color:var(--noir)">Type de livraison</div>
           <div class="livr-type-grid">
@@ -5867,7 +5879,7 @@
 
     <!-- Devenir livreur -->
     <div id="livr-devenir" class="livr-section">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+      <div class="pub-2col-grid">
         <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:24px;box-shadow:var(--shadow-sm)">
           <div style="font-family:var(--font-titre);font-size:22px;font-weight:700;color:#7F1D1D;margin-bottom:4px">Devenir livreur partenaire</div>
           <div style="font-size:13px;color:var(--gris-text);margin-bottom:20px">Gagnez de l'argent avec votre moto, tricycle ou camion</div>
@@ -18510,6 +18522,35 @@ async function livrRafraichir(render) {
   render();
 }
 
+// "Mes livraisons envoyées" — sert aussi bien un particulier qu'un vendeur en
+// ligne (Instagram/WhatsApp/Facebook) qui commande des livraisons pour ses
+// propres clients : chaque livraison est rattachée en base au compte qui l'a
+// commandée (commanditaire_id, fixé côté serveur), donc cet historique est
+// réel et partagé entre tous ses appareils — contrairement à l'ancien
+// LIVR_HISTORIQUE, qui n'était qu'un tableau de démo en mémoire.
+async function chargerMesLivraisonsDepuisSupabase() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote' || !SESSION || !SESSION.id) return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + `/rest/v1/livraisons?commanditaire_id=eq.${SESSION.id}&select=*&order=created_at.desc`);
+    if (r.error || !Array.isArray(r.data)) { console.error('[mes-livraisons] chargement échoué', r.error); return; }
+    const mapped = r.data.map(row => {
+      const livreur = (typeof DB_LIVREURS !== 'undefined') ? DB_LIVREURS.find(l => l.id === row.livreur_id) : null;
+      return {
+        id: row.id, ref: row.ref,
+        livreur: livreur ? livreur.nom : (row.livreur_id ? 'Livreur assigné' : "Assignation en cours…"),
+        dep: row.depart, arr: row.arrivee, type: row.type, statut: row.statut,
+        montant: Number(row.montant) || 0, date: (row.created_at || '').slice(0, 10),
+        _supabaseId: row.id
+      };
+    });
+    LIVR_HISTORIQUE.splice(0, LIVR_HISTORIQUE.length, ...mapped);
+  } catch (e) { console.error('[mes-livraisons] chargement échoué', e); }
+}
+async function livrRafraichirHistorique() {
+  await chargerMesLivraisonsDepuisSupabase();
+  renderLivrHistorique();
+}
+
 // ══════════════════════════════════════════
 //  ADMIN — SUIVI LIVRAISONS
 // ══════════════════════════════════════════
@@ -18546,7 +18587,7 @@ function renderAdminLivraisons() {
     return `<tr style="background:${bg};border-bottom:1px solid #F3F4F6">
       <td style="padding:10px 14px;font-weight:600;color:var(--vert);font-family:monospace;font-size:11px">${c.ref}</td>
       <td style="padding:10px 14px"><div style="font-weight:600">${escapeHtml(c.client||'—')}</div><div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div></td>
-      <td style="padding:10px 14px;font-size:12px"><div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div></td>
+      <td style="padding:10px 14px;font-size:12px"><div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div>${c.destTel ? `<div style="color:var(--gris-text);margin-top:2px">📞 ${escapeHtml(c.destTel)}</div>` : ''}</td>
       <td style="padding:10px 14px">${typeIco[c.type]||'📦'} ${escapeHtml(c.type||'—')}</td>
       <td style="padding:10px 14px;font-size:12px;color:var(--gris-text)">${escapeHtml(livreur)}</td>
       <td style="padding:10px 14px;font-weight:700;color:var(--vert);white-space:nowrap">${fmtFCFA(c.montant||0)}</td>
@@ -18658,16 +18699,17 @@ function renderDispatcher() {
     const btnLivre    = c.statut === 'en livraison'   ? `<button onclick="dispMarquerLivre(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#F59E0B;color:#fff;cursor:pointer;white-space:nowrap">Livré</button>` : '';
     const btnSuivi    = c.statut !== 'en attente'     ? `<button onclick="dispOuvrirSuivi('${c.ref}')" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#6366F1;color:#fff;cursor:pointer;white-space:nowrap">Suivi</button>` : '';
     return `<tr style="background:${rowBg};border-bottom:1px solid #F3F4F6">
-      <td style="padding:11px 14px;font-weight:600;color:var(--vert);font-family:var(--font-mono);font-size:11px">${c.ref}</td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--vert);font-family:var(--font-mono);font-size:11px">${escapeHtml(c.ref||'')}</td>
       <td style="padding:11px 14px">
-        <div style="font-weight:600">${c.client}</div>
-        <div style="font-size:11px;color:var(--gris-text)">${c.tel}</div>
+        <div style="font-weight:600">${escapeHtml(c.client||'')}</div>
+        <div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div>
       </td>
       <td style="padding:11px 14px">
-        <div style="font-size:12px"><span style="color:var(--gris-text)">De :</span> ${c.dep}</div>
-        <div style="font-size:12px"><span style="color:var(--gris-text)">À :</span> ${c.arr}</div>
+        <div style="font-size:12px"><span style="color:var(--gris-text)">De :</span> ${escapeHtml(c.dep||'')}</div>
+        <div style="font-size:12px"><span style="color:var(--gris-text)">À :</span> ${escapeHtml(c.arr||'')}</div>
+        ${c.destTel ? `<div style="font-size:11px;color:var(--gris-text);margin-top:2px">📞 Destinataire : ${escapeHtml(c.destTel)}</div>` : ''}
       </td>
-      <td style="padding:11px 14px">${typeIco} ${c.type}</td>
+      <td style="padding:11px 14px">${typeIco} ${escapeHtml(c.type||'')}</td>
       <td style="padding:11px 14px;font-weight:700;color:var(--vert);white-space:nowrap">${c.montant.toLocaleString()} F</td>
       <td style="padding:11px 14px">
         <span style="background:${st.bg};color:${st.color};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">${st.label}</span>
@@ -18865,7 +18907,10 @@ function selectionnerLivreur(id) {
 function commanderLivraison() {
   const dep     = document.getElementById('livr-depart').value.trim();
   const arr     = document.getElementById('livr-arrivee').value.trim();
+  const telExp  = document.getElementById('livr-tel-exp').value.trim();
+  const telDest = document.getElementById('livr-tel-dest').value.trim();
   if (!dep || !arr) { toast('Remplissez les adresses de départ et d\'arrivée', 'erreur'); return; }
+  if (!telExp) { toast('Renseignez votre numéro (expéditeur)', 'erreur'); return; }
 
   // Mode invité si non connecté
   if (!SESSION) {
@@ -18878,17 +18923,21 @@ function commanderLivraison() {
   const livreurChoisi = LIVR_SELECTIONNE_ID
     ? DB_LIVREURS.find(l => l.id === LIVR_SELECTIONNE_ID)
     : [...DB_LIVREURS].filter(l => l.dispo).sort((a,b) => scoreLivreur(b)-scoreLivreur(a))[0];
-  ouvrirModalPaiement(tarif, `Livraison ${dep} → ${arr}`, () => {
+  ouvrirModalPaiement(tarif, `Livraison ${dep} → ${arr}`, async () => {
     const ref = 'LVR-' + Date.now().toString().slice(-5);
     const nouvelleLivraison2 = { id: DISPATCH_COMMANDES.length+1, ref,
-      client: SESSION ? `${SESSION.prenom} ${SESSION.nom}` : 'Client',
-      tel: telExp, dep, arr, type: LIVR_TYPE, montant: tarif,
+      client: `${SESSION.prenom} ${SESSION.nom}`,
+      tel: telExp, destTel: telDest, dep, arr, type: LIVR_TYPE, montant: tarif,
       statut: livreurChoisi ? 'en livraison' : 'en attente',
       livreurId: livreurChoisi?.id || null, date: new Date().toISOString().slice(0,10) };
     DISPATCH_COMMANDES.unshift(nouvelleLivraison2);
-    if (typeof persisterLivraison === 'function') persisterLivraison(nouvelleLivraison2);
+    if (typeof persisterLivraison === 'function') {
+      const enregistre = await persisterLivraison(nouvelleLivraison2);
+      if (!enregistre && typeof MODE !== 'undefined' && MODE === 'remote') {
+        toast('⚠️ Livraison non enregistrée côté serveur — contactez l\'admin', 'erreur');
+      }
+    }
     LIVR_HISTORIQUE.unshift({ id: LIVR_HISTORIQUE.length+1, ref, livreur: livreurChoisi?.nom||'Assignation en cours…', dep, arr, type: LIVR_TYPE, statut: livreurChoisi?'en livraison':'en cours', montant: tarif, date: new Date().toISOString().slice(0,10) });
-    enregistrerRevenuAnnexe && enregistrerRevenuAnnexe('livraison', `Livraison ${dep}→${arr}`, Math.round(tarif*0.3));
     const desc = document.getElementById('livr-colis-desc').value.trim();
     if (livreurChoisi) {
       const msgL = `🛵 *Nouvelle commande Le Grenier !*\n📦 ${desc||'Colis'}\n🚀 ${dep} → ${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 ${fmtFCFA(tarif)} · Réf: ${ref}`;
