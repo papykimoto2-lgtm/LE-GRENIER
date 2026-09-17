@@ -3164,6 +3164,7 @@
           dep: c.depart, arr: c.arrivee, type: c.type, montant: Number(c.montant) || 0,
           commission: Number(c.commission) || 0, commissionTaux: Number(c.commission_taux) || 0,
           mode: c.mode || 'transport', articleDesc: c.article_desc || '', montantArticle: Number(c.montant_article) || 0,
+          contreOffre: c.contre_offre != null ? Number(c.contre_offre) : null, contreOffreLivreurId: c.contre_offre_livreur_id,
           statut: c.statut, livreurId: c.livreur_id, date: (c.created_at || '').slice(0, 10),
           _supabaseId: c.id
         }));
@@ -3180,7 +3181,7 @@
       statut: cmd.statut, livreur_id: cmd.livreurId || null,
       destinataire_tel: cmd.destTel || null,
       mode: cmd.mode || 'transport', article_desc: cmd.articleDesc || null,
-      montant_article: cmd.montantArticle || 0
+      montant_article: cmd.montantArticle || 0, prix_propose: cmd.prixPropose || cmd.montant
     }, { Prefer: 'return=representation' });
     if (r.error) { console.error('[persist] livraison', r.error); return null; }
     if (r.data && r.data[0]) {
@@ -3189,6 +3190,29 @@
       cmd.commissionTaux = Number(r.data[0].commission_taux) || 0;
     }
     return r.data ? r.data[0] : null;
+  };
+
+  // Prix négociable (façon InDrive) — deux RPC dédiées plutôt que des PATCH
+  // directs : elles s'exécutent avec les privilèges du serveur et vérifient
+  // elles-mêmes qui a le droit de faire quoi (le livreur ne peut proposer un
+  // prix que sur une commande encore libre, le client ne peut accepter que
+  // sa propre contre-offre) — impossible de contourner ces règles depuis le
+  // navigateur, contrairement à une simple mise à jour de colonnes via RLS.
+  window.proposerContrOffre = async function(livraisonId, montant) {
+    if (MODE !== 'remote') return { ok: false, error: 'mode_local' };
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/rpc/proposer_contre_offre', {
+      p_livraison_id: livraisonId, p_montant: montant
+    });
+    if (r.error) { console.error('[contre-offre] proposition échouée', r.error); return { ok: false, error: r.error }; }
+    return { ok: true, data: r.data };
+  };
+  window.accepterContrOffre = async function(livraisonId) {
+    if (MODE !== 'remote') return { ok: false, error: 'mode_local' };
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/rpc/accepter_contre_offre', {
+      p_livraison_id: livraisonId
+    });
+    if (r.error) { console.error('[contre-offre] acceptation échouée', r.error); return { ok: false, error: r.error }; }
+    return { ok: true, data: r.data };
   };
 
   // Retourne { ok:true } si la mise à jour a bien touché la ligne, { ok:false, conflit:true }
@@ -5758,6 +5782,11 @@
               <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Tél destinataire *</label>
               <input type="tel" id="livr-tel-dest" placeholder="+225 07 XX XX XX" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
             </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Votre offre pour les frais de service (FCFA) *</label>
+            <input type="number" id="livr-prix-propose" min="0" value="2000" oninput="this.dataset.touched='1'" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            <div style="font-size:11px;color:var(--gris-text);margin-top:5px">Prix suggéré pré-rempli — libre à vous de l'ajuster. Si aucun livreur n'accepte, ils peuvent vous faire une contre-offre.</div>
           </div>
           <div style="margin-bottom:12px">
             <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:8px">Choisir un livreur <span style="font-weight:400;text-transform:none;letter-spacing:0">(optionnel — trié par score)</span></label>
@@ -18563,6 +18592,7 @@ async function chargerMesLivraisonsDepuisSupabase() {
         dep: row.depart, arr: row.arrivee, type: row.type, statut: row.statut,
         mode: row.mode || 'transport', articleDesc: row.article_desc || '',
         montant: Number(row.montant_total ?? row.montant) || 0, date: (row.created_at || '').slice(0, 10),
+        contreOffre: row.contre_offre != null ? Number(row.contre_offre) : null,
         _supabaseId: row.id
       };
     });
@@ -18718,6 +18748,7 @@ function renderDispatcher() {
     const typeIco = {moto:'🛵',tricycle:'🛺',cargo:'🚚',camionette:'🚐'}[c.type]||'📦';
     const rowBg = i % 2 === 0 ? '#fff' : '#F9FAFB';
     const btnPrendre  = c.statut === 'en attente'   ? `<button onclick="dispPrendreEnCharge(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:var(--vert);color:#fff;cursor:pointer;white-space:nowrap">Prendre</button>` : '';
+    const btnContrOffre = c.statut === 'en attente' ? `<button onclick="dispContrOffre(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#F59E0B;color:#fff;cursor:pointer;white-space:nowrap">💬 Contre-offre</button>` : '';
     const btnWA       = c.statut !== 'livré'          ? `<button onclick="dispNotifierWA(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#25D366;color:#fff;cursor:pointer;white-space:nowrap">WA</button>` : '';
     const btnLivre    = c.statut === 'en livraison'   ? `<button onclick="dispMarquerLivre(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#F59E0B;color:#fff;cursor:pointer;white-space:nowrap">Livré</button>` : '';
     const btnSuivi    = c.statut !== 'en attente'     ? `<button onclick="dispOuvrirSuivi('${c.ref}')" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#6366F1;color:#fff;cursor:pointer;white-space:nowrap">Suivi</button>` : '';
@@ -18737,6 +18768,7 @@ function renderDispatcher() {
       <td style="padding:11px 14px;font-weight:700;color:var(--vert);white-space:nowrap">
         ${c.montant.toLocaleString()} F
         ${c.montantArticle ? `<div style="font-size:10px;font-weight:600;color:var(--gris-text)">+ ${c.montantArticle.toLocaleString()} F article</div>` : ''}
+        ${c.contreOffre ? `<div style="font-size:10px;font-weight:700;color:#F59E0B">💬 Contre-offre : ${c.contreOffre.toLocaleString()} F</div>` : ''}
       </td>
       <td style="padding:11px 14px">
         <span style="background:${st.bg};color:${st.color};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">${st.label}</span>
@@ -18744,11 +18776,29 @@ function renderDispatcher() {
       <td style="padding:11px 14px;font-size:12px;color:var(--gris-text)">${livreur}</td>
       <td style="padding:11px 14px;text-align:center">
         <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap">
-          ${btnPrendre}${btnWA}${btnLivre}${btnSuivi}
+          ${btnPrendre}${btnContrOffre}${btnWA}${btnLivre}${btnSuivi}
         </div>
       </td>
     </tr>`
   }).join('');
+}
+
+// Un livreur qui trouve le prix proposé trop bas peut faire une contre-offre
+// au lieu d'accepter tel quel — le client la voit dans son historique et
+// peut l'accepter, ce qui assigne la commande à ce livreur au nouveau prix.
+async function dispContrOffre(id) {
+  const cmd = DISPATCH_COMMANDES.find(c => c.id === id);
+  if (!cmd) return;
+  const saisie = prompt(`Prix actuel proposé : ${fmtFCFA(cmd.montant)}\nVotre contre-offre (FCFA) :`, cmd.montant);
+  if (saisie === null) return;
+  const montant = parseInt(saisie, 10);
+  if (!montant || montant <= 0) { toast('Montant invalide', 'erreur'); return; }
+  if (!cmd._supabaseId || typeof proposerContrOffre !== 'function') { toast('Contre-offre indisponible en mode démo', 'erreur'); return; }
+  const r = await proposerContrOffre(cmd._supabaseId, montant);
+  if (!r.ok) { toast('⚠️ Contre-offre refusée — commande déjà prise ou plus disponible', 'erreur'); return; }
+  cmd.contreOffre = montant;
+  toast(`💬 Contre-offre de ${fmtFCFA(montant)} envoyée`);
+  renderDispatcher();
 }
 
 function dispOuvrirSuivi(ref) {
@@ -18872,6 +18922,8 @@ function selLivrType(type) {
   document.getElementById('livr-t-'+type)?.classList.add('sel');
   simTarif();
   renderLivreursChoix();
+  const prixInput = document.getElementById('livr-prix-propose');
+  if (prixInput && !prixInput.dataset.touched) prixInput.value = LIVR_TARIFS.moyen[LIVR_TYPE] || 2000;
 }
 
 // Mode "Achetez-le pour moi" (façon Glovo) — le client n'a pas encore
@@ -18971,19 +19023,23 @@ function commanderLivraison() {
     ouvrirModalInvite(null);
     return;
   }
-  const tarif = LIVR_TARIFS.moyen[LIVR_TYPE] || 2000;
+  const tarif = Math.max(0, parseInt(document.getElementById('livr-prix-propose')?.value, 10) || 0) || (LIVR_TARIFS.moyen[LIVR_TYPE] || 2000);
   const totalPaiement = tarif + (estAchat ? articleBudget : 0);
-  const livreurChoisi = LIVR_SELECTIONNE_ID
-    ? DB_LIVREURS.find(l => l.id === LIVR_SELECTIONNE_ID)
-    : [...DB_LIVREURS].filter(l => l.dispo).sort((a,b) => scoreLivreur(b)-scoreLivreur(a))[0];
+  // Un livreur choisi explicitement par le client (bouton "Choisir") est une
+  // vraie demande directe, à la différence de l'ancien comportement qui
+  // assignait automatiquement le mieux noté sans jamais lui demander s'il
+  // acceptait le prix — incompatible avec un prix négociable (façon InDrive).
+  // Sans choix explicite, la commande part "en attente" et les livreurs
+  // choisissent d'accepter ce prix ou de faire une contre-offre.
+  const livreurChoisi = LIVR_SELECTIONNE_ID ? DB_LIVREURS.find(l => l.id === LIVR_SELECTIONNE_ID) : null;
   const libellePaiement = estAchat
     ? `Achat + livraison → ${arr} (article ${fmtFCFA(articleBudget)} + service ${fmtFCFA(tarif)})`
-    : `Livraison ${dep} → ${arr}`;
+    : `Livraison ${dep} → ${arr} — offre ${fmtFCFA(tarif)}`;
   ouvrirModalPaiement(totalPaiement, libellePaiement, async () => {
     const ref = 'LVR-' + Date.now().toString().slice(-5);
     const nouvelleLivraison2 = { id: DISPATCH_COMMANDES.length+1, ref,
       client: `${SESSION.prenom} ${SESSION.nom}`,
-      tel: telExp, destTel: telDest, dep, arr, type: LIVR_TYPE, montant: tarif,
+      tel: telExp, destTel: telDest, dep, arr, type: LIVR_TYPE, montant: tarif, prixPropose: tarif,
       mode: estAchat ? 'achat_livraison' : 'transport',
       articleDesc: estAchat ? articleDesc : '', montantArticle: estAchat ? articleBudget : 0,
       statut: livreurChoisi ? 'en livraison' : 'en attente',
@@ -19136,6 +19192,10 @@ function renderLivrHistorique() {
     const icos = {moto:'🛵',tricycle:'🛺',cargo:'🚚',camionette:'🚐'};
     const badgeAchat = l.mode === 'achat_livraison'
       ? `<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;margin-left:6px">🛍️ ACHAT</span>` : '';
+    const contreOffreBox = l.contreOffre ? `<div style="width:100%;margin-top:8px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:#92400E;font-weight:600">💬 Un livreur propose ${fmtFCFA(l.contreOffre)} au lieu de ${fmtFCFA(l.montant)}</span>
+        <button onclick="livrAccepterContrOffre(${l._supabaseId||0})" style="padding:5px 12px;font-size:11px;font-weight:700;border-radius:6px;border:none;background:#F59E0B;color:#fff;cursor:pointer">Accepter</button>
+      </div>` : '';
     return `<div style="background:#fff;border-radius:var(--radius-lg);border:1.5px solid rgba(220,38,38,.12);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:var(--shadow-sm)">
       <span style="font-size:28px;flex-shrink:0">${icos[l.type]||'🛵'}</span>
       <div style="flex:1;min-width:0">
@@ -19146,8 +19206,17 @@ function renderLivrHistorique() {
         <div style="font-family:var(--font-titre);font-size:16px;color:#DC2626;font-weight:700">${fmtFCFA(l.montant)}</div>
         <div style="font-size:11px;font-weight:800;color:${l.statut==='livré'?'#16A34A':'#D97706'};margin-top:2px">${escapeHtml((l.statut||'').toUpperCase())}</div>
       </div>
+      ${contreOffreBox}
     </div>`
   }).join('');
+}
+
+async function livrAccepterContrOffre(livraisonId) {
+  if (!livraisonId || typeof accepterContrOffre !== 'function') { toast('Indisponible en mode démo', 'erreur'); return; }
+  const r = await accepterContrOffre(livraisonId);
+  if (!r.ok) { toast('⚠️ Cette contre-offre n\'est plus disponible', 'erreur'); await livrRafraichirHistorique(); return; }
+  toast('✅ Contre-offre acceptée, le livreur est assigné !');
+  await livrRafraichirHistorique();
 }
 
 function inscrireLivreur() {
