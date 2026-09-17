@@ -3158,12 +3158,19 @@
     return r.data ? r.data[0] : null;
   };
 
+  // Retourne { ok:true } si la mise à jour a bien touché la ligne, { ok:false, conflit:true }
+  // si 0 ligne n'a matché (un autre livreur a déjà pris la commande entre-temps — la policy
+  // RLS livraisons_livreur_maj fait alors office de verrou atomique), ou { ok:false, error }
+  // pour toute autre erreur réseau/Supabase.
   window.majStatutLivraison = async function(cmd) {
-    if (MODE !== 'remote' || !cmd._supabaseId) return;
+    if (MODE !== 'remote') return { ok: true }; // rien à synchroniser en mode démo local
+    if (!cmd._supabaseId) return { ok: true };  // commande seed non encore synchronisée
     const r = await _xhr('PATCH', SUPABASE_URL + `/rest/v1/livraisons?id=eq.${cmd._supabaseId}`, {
       statut: cmd.statut, livreur_id: cmd.livreurId || null
-    }, { Prefer: 'return=minimal' });
-    if (r.error) console.error('[persist] maj livraison', r.error);
+    }, { Prefer: 'return=representation' });
+    if (r.error) { console.error('[persist] maj livraison', r.error); return { ok: false, error: r.error }; }
+    if (!r.data || !r.data.length) return { ok: false, conflit: true };
+    return { ok: true };
   };
 
   // ══════════════════════════════════════════════════════════════
@@ -5601,7 +5608,7 @@
       <button class="livr-tab" onclick="livrTab('livr-livreurs')">Livreurs disponibles</button>
       <button class="livr-tab" onclick="livrTab('livr-suivi')">Suivi en cours</button>
       <button class="livr-tab" onclick="livrTab('livr-historique')">Historique</button>
-      <button class="livr-tab" id="btn-livr-dispatcher" onclick="livrTab('livr-dispatcher');renderDispatcher()">Commandes à livrer</button>
+      <button class="livr-tab" id="btn-livr-dispatcher" onclick="livrTab('livr-dispatcher');livrRafraichir(renderDispatcher)">Commandes à livrer</button>
       <button class="livr-tab" onclick="livrTab('livr-devenir')">Devenir livreur</button>
     </div>
 
@@ -5769,7 +5776,7 @@
             <option value="en livraison">En livraison</option>
             <option value="livré">Livré</option>
           </select>
-          <button onclick="renderDispatcher()" style="padding:7px 14px;border-radius:var(--radius);background:var(--vert);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer">↺ Actualiser</button>
+          <button onclick="livrRafraichir(renderDispatcher)" style="padding:7px 14px;border-radius:var(--radius);background:var(--vert);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer">↺ Actualiser</button>
         </div>
       </div>
 
@@ -7864,7 +7871,7 @@ const CGU_DATE    = '2026-05-16';
       </div>
       <div class="admin-nav">
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
-        <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');renderAdminLivraisons()">Livraisons</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');livrRafraichir(renderAdminLivraisons)">Livraisons</button>
         <button class="admin-nav-btn" id="admin-nav-inscriptions" onclick="adminTab(this,'admin-inscriptions')">Inscriptions <span id="admin-nav-badge-inscriptions" style="display:none;background:var(--or);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-profil');renderAdminProfil()">Profil & Paiements</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-tarifs');renderAdminTarifs()">Tarifs & Plans</button>
@@ -8254,7 +8261,7 @@ const CGU_DATE    = '2026-05-16';
           <option value="tricycle">Tricycle</option>
           <option value="cargo">Cargo</option>
         </select>
-        <button onclick="renderAdminLivraisons()" style="padding:7px 14px;background:var(--vert);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">↺ Actualiser</button>
+        <button onclick="livrRafraichir(renderAdminLivraisons)" style="padding:7px 14px;background:var(--vert);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">↺ Actualiser</button>
         <span id="livr-admin-count" style="font-size:13px;color:var(--gris-text);margin-left:auto"></span>
       </div>
 
@@ -18310,6 +18317,15 @@ let LIVR_HISTORIQUE = [
   {id:2,ref:'LVR-07123',livreur:'Adjoua Tricycle CI',dep:'Adjamé',arr:'Yopougon Maroc',type:'tricycle',statut:'livré',montant:2000,date:'2025-05-08'},
 ];
 
+// Recharge les livreurs/commandes depuis Supabase avant de rendre — le bouton "Actualiser"
+// et l'ouverture des onglets Dispatcher/Livraisons ne faisaient jusqu'ici que réafficher
+// DISPATCH_COMMANDES tel qu'il était au chargement de la page (même bug déjà corrigé
+// ailleurs pour Inscriptions et les autres onglets admin).
+async function livrRafraichir(render) {
+  if (typeof chargerLivraisonsDepuisSupabase === 'function') await chargerLivraisonsDepuisSupabase();
+  render();
+}
+
 // ══════════════════════════════════════════
 //  ADMIN — SUIVI LIVRAISONS
 // ══════════════════════════════════════════
@@ -18375,14 +18391,24 @@ function adminLivrSuivi(ref) {
     setTimeout(() => { livrTab('livr-suivi'); const el = document.getElementById('livr-suivi-input'); if(el){el.value=ref;suivreLivraison();} }, 200);
   }, 100);
 }
-function adminAssignerLivreur(ref) {
+async function adminAssignerLivreur(ref) {
   const cmd = DISPATCH_COMMANDES.find(c => c.ref === ref);
   if (!cmd) return;
+  if (cmd.statut !== 'en attente') { toast('Cette commande a déjà été assignée', 'erreur'); renderAdminLivraisons(); return; }
   const livreur = [...DB_LIVREURS].filter(l => l.dispo).sort((a,b) => scoreLivreur(b)-scoreLivreur(a))[0];
   if (!livreur) { toast('Aucun livreur disponible', 'erreur'); return; }
+  const avantStatut = cmd.statut, avantLivreurId = cmd.livreurId;
   cmd.statut = 'en livraison'; cmd.livreurId = livreur.id;
-  if (typeof majStatutLivraison === 'function') majStatutLivraison(cmd);
   renderAdminLivraisons();
+  if (typeof majStatutLivraison === 'function') {
+    const r = await majStatutLivraison(cmd);
+    if (!r.ok) {
+      cmd.statut = avantStatut; cmd.livreurId = avantLivreurId;
+      renderAdminLivraisons();
+      toast(r.conflit ? '❌ Déjà prise en charge entre-temps' : 'Échec : non enregistré, réessayez', 'erreur');
+      return;
+    }
+  }
   toast(`✅ ${ref} assignée à ${livreur.nom}`);
   window.open(`https://wa.me/${livreur.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent('🛵 *Commande assignée !*\n🔖 '+ref+'\n🚀 '+cmd.dep+' → '+cmd.arr+'\n💰 '+fmtFCFA(cmd.montant||0))}`, '_blank');
 }
@@ -18477,15 +18503,25 @@ function dispOuvrirSuivi(ref) {
   suivreLivraison();
 }
 
-function dispPrendreEnCharge(id) {
+async function dispPrendreEnCharge(id) {
   const cmd = DISPATCH_COMMANDES.find(c => c.id === id);
   if (!cmd) return;
+  if (cmd.statut !== 'en attente') { toast('Cette commande a déjà été prise en charge', 'erreur'); renderDispatcher(); return; }
   const moi = SESSION ? DB_LIVREURS.find(l => l.userId === SESSION.id) : null;
   if (!moi) { toast('Connectez-vous en tant que livreur pour prendre une commande', 'info'); return; }
+  const avantStatut = cmd.statut, avantLivreurId = cmd.livreurId;
   cmd.statut    = 'en livraison';
   cmd.livreurId = moi.id;
-  if (typeof majStatutLivraison === 'function') majStatutLivraison(cmd);
   renderDispatcher();
+  if (typeof majStatutLivraison === 'function') {
+    const r = await majStatutLivraison(cmd);
+    if (!r.ok) {
+      cmd.statut = avantStatut; cmd.livreurId = avantLivreurId;
+      renderDispatcher();
+      toast(r.conflit ? '❌ Trop tard — un autre livreur vient de la prendre' : 'Échec : non enregistré, réessayez', 'erreur');
+      return;
+    }
+  }
   toast(`✅ Commande ${cmd.ref} prise en charge`);
   // Notifier le client via WhatsApp avec lien de suivi
   const msg = encodeURIComponent(
@@ -18520,12 +18556,21 @@ function dispNotifierWA(id) {
   window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
 }
 
-function dispMarquerLivre(id) {
+async function dispMarquerLivre(id) {
   const cmd = DISPATCH_COMMANDES.find(c => c.id === id);
   if (!cmd) return;
+  const avantStatut = cmd.statut;
   cmd.statut = 'livré';
-  if (typeof majStatutLivraison === 'function') majStatutLivraison(cmd);
   renderDispatcher();
+  if (typeof majStatutLivraison === 'function') {
+    const r = await majStatutLivraison(cmd);
+    if (!r.ok) {
+      cmd.statut = avantStatut;
+      renderDispatcher();
+      toast('Échec : non enregistré, réessayez', 'erreur');
+      return;
+    }
+  }
   toast(`📦 Commande ${cmd.ref} marquée comme livrée`);
   // Notifier automatiquement le client
   dispNotifierClientLivre(cmd);
