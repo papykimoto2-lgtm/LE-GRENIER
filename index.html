@@ -3165,6 +3165,7 @@
           commission: Number(c.commission) || 0, commissionTaux: Number(c.commission_taux) || 0,
           mode: c.mode || 'transport', articleDesc: c.article_desc || '', montantArticle: Number(c.montant_article) || 0,
           contreOffre: c.contre_offre != null ? Number(c.contre_offre) : null, contreOffreLivreurId: c.contre_offre_livreur_id,
+          tourneeId: c.tournee_id || null, tourneeOrdre: c.tournee_ordre || null,
           statut: c.statut, livreurId: c.livreur_id, date: (c.created_at || '').slice(0, 10),
           _supabaseId: c.id
         }));
@@ -3212,6 +3213,15 @@
       p_livraison_id: livraisonId
     });
     if (r.error) { console.error('[contre-offre] acceptation échouée', r.error); return { ok: false, error: r.error }; }
+    return { ok: true, data: r.data };
+  };
+
+  // Tournée groupée (façon Yango) — claim "tout ou rien" de plusieurs
+  // livraisons encore libres pour un même livreur, en un seul trajet.
+  window.prendreTournee = async function(ids) {
+    if (MODE !== 'remote') return { ok: false, error: 'mode_local' };
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/rpc/prendre_tournee', { p_ids: ids });
+    if (r.error) { console.error('[tournée] prise échouée', r.error); return { ok: false, error: r.error }; }
     return { ok: true, data: r.data };
   };
 
@@ -5708,7 +5718,7 @@
     <div class="livr-tabs">
       <button class="livr-tab actif" onclick="livrTab('livr-commander')">Commander</button>
       <button class="livr-tab" onclick="livrTab('livr-livreurs')">Livreurs disponibles</button>
-      <button class="livr-tab" onclick="livrTab('livr-suivi')">Suivi en cours</button>
+      <button class="livr-tab" onclick="livrTab('livr-suivi');livrRafraichir(()=>{ if(document.getElementById('livr-suivi-input').value.trim()) suivreLivraison(); })">Suivi en cours</button>
       <button class="livr-tab" onclick="livrTab('livr-historique');livrRafraichirHistorique()">Historique</button>
       <button class="livr-tab" id="btn-livr-dispatcher" onclick="livrTab('livr-dispatcher');livrRafraichir(renderDispatcher)">Commandes à livrer</button>
       <button class="livr-tab" onclick="livrTab('livr-devenir')">Devenir livreur</button>
@@ -5906,12 +5916,19 @@
       <!-- Stats rapides -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px" id="disp-stats"></div>
 
+      <!-- Barre "tournée groupée" -->
+      <div id="disp-tournee-bar" style="display:none;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#FEF3C7;border:1.5px solid #FDE68A;border-radius:var(--radius);padding:10px 14px;margin-bottom:14px">
+        <span style="font-size:13px;font-weight:600;color:#92400E"><span id="disp-tournee-count">0</span> commande(s) sélectionnée(s) — regroupez-les sur un même trajet</span>
+        <button onclick="dispPrendreTournee()" style="padding:7px 14px;border-radius:var(--radius);background:#F59E0B;color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer">🔗 Prendre en tournée</button>
+      </div>
+
       <!-- Tableau -->
       <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);overflow:hidden;box-shadow:var(--shadow-sm)">
         <div style="overflow-x:auto">
           <table id="disp-table" style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
               <tr style="background:var(--vert);color:#fff;text-align:left">
+                <th style="padding:12px 8px;width:30px"></th>
                 <th style="padding:12px 14px;font-weight:600">Réf.</th>
                 <th style="padding:12px 14px;font-weight:600">Client</th>
                 <th style="padding:12px 14px;font-weight:600">Départ → Arrivée</th>
@@ -18638,7 +18655,7 @@ function renderAdminLivraisons() {
     const btnSuivi = `<button onclick="adminLivrSuivi('${c.ref}')" title="Suivi" style="padding:4px 8px;font-size:11px;background:#6366F1;color:#fff;border:none;border-radius:5px;cursor:pointer">📡</button>`;
     const btnAssign = c.statut==='en attente' ? `<button onclick="adminAssignerLivreur('${c.ref}')" title="Assigner" style="padding:4px 8px;font-size:11px;background:var(--vert);color:#fff;border:none;border-radius:5px;cursor:pointer">✋</button>` : '';
     return `<tr style="background:${bg};border-bottom:1px solid #F3F4F6">
-      <td style="padding:10px 14px;font-weight:600;color:var(--vert);font-family:monospace;font-size:11px">${c.ref}</td>
+      <td style="padding:10px 14px;font-weight:600;color:var(--vert);font-family:monospace;font-size:11px">${c.ref}${c.tourneeId ? `<div style="font-size:9px;font-weight:700;color:#F59E0B;margin-top:2px">🔗 Tournée #${c.tourneeId}</div>` : ''}</td>
       <td style="padding:10px 14px"><div style="font-weight:600">${escapeHtml(c.client||'—')}</div><div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div></td>
       <td style="padding:10px 14px;font-size:12px">${c.mode === 'achat_livraison' ? `<div style="color:#92400E;font-weight:700;margin-bottom:2px">🛍️ ${escapeHtml(c.articleDesc||'Achat')}</div>` : ''}<div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div>${c.destTel ? `<div style="color:var(--gris-text);margin-top:2px">📞 ${escapeHtml(c.destTel)}</div>` : ''}</td>
       <td style="padding:10px 14px">${typeIco[c.type]||'📦'} ${escapeHtml(c.type||'—')}</td>
@@ -18715,7 +18732,7 @@ function renderDispatcher() {
   const estLivreur = SESSION && (SESSION.role === 'livreur' || SESSION.role === 'admin');
   if (!estLivreur) {
     const tbodyCheck = document.getElementById('disp-tbody');
-    if (tbodyCheck) tbodyCheck.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gris-text)">Connectez-vous en tant que livreur pour accéder à cette section.</td></tr>`;
+    if (tbodyCheck) tbodyCheck.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gris-text)">Connectez-vous en tant que livreur pour accéder à cette section.</td></tr>`;
     return;
   }
   const filtre = document.getElementById('disp-filtre-statut')?.value || 'tous';
@@ -18739,7 +18756,7 @@ function renderDispatcher() {
   const tbody = document.getElementById('disp-tbody');
   if (!tbody) return;
   if (!liste.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gris-text)">Aucune commande</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gris-text)">Aucune commande</td></tr>`;
     return;
   }
   tbody.innerHTML = liste.map((c, i) => {
@@ -18752,8 +18769,13 @@ function renderDispatcher() {
     const btnWA       = c.statut !== 'livré'          ? `<button onclick="dispNotifierWA(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#25D366;color:#fff;cursor:pointer;white-space:nowrap">WA</button>` : '';
     const btnLivre    = c.statut === 'en livraison'   ? `<button onclick="dispMarquerLivre(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#F59E0B;color:#fff;cursor:pointer;white-space:nowrap">Livré</button>` : '';
     const btnSuivi    = c.statut !== 'en attente'     ? `<button onclick="dispOuvrirSuivi('${c.ref}')" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#6366F1;color:#fff;cursor:pointer;white-space:nowrap">Suivi</button>` : '';
+    const peutSelectionner = c.statut === 'en attente' && !c.livreurId && c._supabaseId;
     return `<tr style="background:${rowBg};border-bottom:1px solid #F3F4F6">
-      <td style="padding:11px 14px;font-weight:600;color:var(--vert);font-family:var(--font-mono);font-size:11px">${escapeHtml(c.ref||'')}</td>
+      <td style="padding:11px 8px;text-align:center">${peutSelectionner ? `<input type="checkbox" class="disp-select" value="${c._supabaseId}" onchange="dispMajBarreTournee()">` : ''}</td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--vert);font-family:var(--font-mono);font-size:11px">
+        ${escapeHtml(c.ref||'')}
+        ${c.tourneeId ? `<div style="font-size:9px;font-weight:700;color:#F59E0B;margin-top:2px">🔗 Tournée #${c.tourneeId}${c.tourneeOrdre?` (${c.tourneeOrdre})`:''}</div>` : ''}
+      </td>
       <td style="padding:11px 14px">
         <div style="font-weight:600">${escapeHtml(c.client||'')}</div>
         <div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div>
@@ -18799,6 +18821,28 @@ async function dispContrOffre(id) {
   cmd.contreOffre = montant;
   toast(`💬 Contre-offre de ${fmtFCFA(montant)} envoyée`);
   renderDispatcher();
+}
+
+// Regrouper plusieurs livraisons libres sur un même trajet — plus de revenu
+// par sortie, moins de carburant par livraison (pertinent vu le coût du
+// carburant et les embouteillages).
+function dispMajBarreTournee() {
+  const cases = document.querySelectorAll('.disp-select:checked');
+  const bar = document.getElementById('disp-tournee-bar');
+  const countEl = document.getElementById('disp-tournee-count');
+  if (!bar || !countEl) return;
+  countEl.textContent = cases.length;
+  bar.style.display = cases.length >= 2 ? 'flex' : 'none';
+}
+
+async function dispPrendreTournee() {
+  const ids = [...document.querySelectorAll('.disp-select:checked')].map(el => parseInt(el.value, 10));
+  if (ids.length < 2) { toast('Sélectionnez au moins 2 commandes', 'erreur'); return; }
+  if (typeof prendreTournee !== 'function') { toast('Tournée indisponible en mode démo', 'erreur'); return; }
+  const r = await prendreTournee(ids);
+  if (!r.ok) { toast('⚠️ Une des commandes sélectionnées n\'est plus disponible — réessayez', 'erreur'); await livrRafraichir(renderDispatcher); return; }
+  toast(`🔗 Tournée de ${ids.length} livraisons prise en charge !`);
+  await livrRafraichir(renderDispatcher);
 }
 
 function dispOuvrirSuivi(ref) {
@@ -19143,7 +19187,16 @@ function suivreLivraison() {
     document.getElementById('livr-suivi-livreur').textContent = livreur.nom || 'En attente d\'assignation';
     document.getElementById('livr-suivi-vehicle').textContent = livreur.ico ? `${livreur.ico} ${livreur.type}` : '—';
     document.getElementById('livr-suivi-dep').textContent     = cmd.dep;
-    document.getElementById('livr-suivi-eta').textContent     = cmd.statut === 'livré' ? 'Livré ✅' : (livreur.delai || 'À confirmer');
+    let etaTexte = cmd.statut === 'livré' ? 'Livré ✅' : (livreur.delai || 'À confirmer');
+    if (cmd.tourneeId && cmd.statut === 'en livraison') {
+      const arretsAvant = DISPATCH_COMMANDES.filter(c =>
+        c.tourneeId === cmd.tourneeId && c.tourneeOrdre < cmd.tourneeOrdre && c.statut !== 'livré'
+      ).length;
+      etaTexte += arretsAvant > 0
+        ? ` · 🔗 Tournée groupée — ${arretsAvant} arrêt${arretsAvant>1?'s':''} avant vous`
+        : ` · 🔗 Tournée groupée — vous êtes le prochain arrêt`;
+    }
+    document.getElementById('livr-suivi-eta').textContent     = etaTexte;
     document.getElementById('livr-suivi-steps').innerHTML     = etapes.map(e => `
       <div class="suivi-livr-step ${e.done?'done':''} ${e.current?'current':''}">
         <div class="suivi-livr-titre">${e.titre}</div>
