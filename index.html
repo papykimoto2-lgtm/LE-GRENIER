@@ -16119,16 +16119,33 @@ function souscrirePlan(nom, prix) {
 
 // ── Mise à jour adminTab pour inclure les nouveaux onglets ──
 const _adminTabOrig = adminTab;
-function adminTab(el, tabId) {
+// Recharge depuis Supabase les clés CACHE données (une seule table = un seul GET), pour
+// que changer d'onglet admin montre l'état réel plutôt que le cache chargé au démarrage
+// de la page (même bug déjà corrigé pour Inscriptions, généralisé ici aux autres onglets).
+async function _adminRafraichirCache(cles) {
+  if (typeof MODE === 'undefined' || MODE !== 'remote') return;
+  await Promise.all(cles.map(async (cle) => {
+    const table = TABLE_MAP[cle] || cle;
+    try {
+      const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/' + table + '?select=*');
+      if (!r.error && typeof CACHE !== 'undefined') {
+        CACHE[cle] = (r.data || []).map(row => _mapRowToFront(table, row));
+      }
+    } catch (e) { console.warn('[adminRafraichir]', cle, e); }
+  }));
+}
+
+async function adminTab(el, tabId) {
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
   el.classList.add('actif');
   document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
-  if (tabId==='admin-pub') renderAdminPub();
-  if (tabId==='admin-abonnements') renderAdminAbonnements();
-  if (tabId==='admin-promos') { renderAdminPromos(); peuplerSelectsPromo(); }
-  if (tabId==='admin-finances') renderAdminFinancesComplet();
-  if (tabId==='admin-litiges') renderAdminLitiges();
+  if (tabId==='admin-annonces') { await _adminRafraichirCache(['annonces','utilisateurs']); renderAdmin(); }
+  if (tabId==='admin-pub') { await _adminRafraichirCache(['bannieres']); renderAdminPub(); }
+  if (tabId==='admin-abonnements') { await _adminRafraichirCache(['abonnements','plans']); renderAdminAbonnements(); }
+  if (tabId==='admin-promos') { await _adminRafraichirCache(['promos','bannieres','annonces']); renderAdminPromos(); peuplerSelectsPromo(); }
+  if (tabId==='admin-finances') { await _adminRafraichirCache(['paiements','abonnements','bannieres']); renderAdminFinancesComplet(); }
+  if (tabId==='admin-litiges') { await _adminRafraichirCache(['litiges','utilisateurs']); renderAdminLitiges(); }
   if (tabId==='admin-inscriptions') insRafraichir();
   if (tabId==='admin-profil') renderAdminProfil();
   if (tabId==='admin-visibilite') renderAdminVisibilite();
