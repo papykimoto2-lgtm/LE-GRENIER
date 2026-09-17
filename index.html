@@ -13403,9 +13403,9 @@ function renderAdminPromos() {
       </div>
       ${(()=>{
         const liens = [];
-        if (p.banniereId) { const b = DAO._local.bannieres.find(x=>x.id===p.banniereId); if(b) liens.push('<span style="background:var(--bleu-pale);color:var(--bleu);padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">📢 '+b.annonceur+'</span>'); }
-        if (p.annonceurId) { const b = DAO._local.bannieres.find(x=>x.id===p.annonceurId); if(b) liens.push('<span style="background:var(--or-pale);color:var(--or);padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">Exclu: '+b.annonceur+'</span>'); }
-        if (p.annonceId) { const a = DAO._local.annonces.find(x=>x.id===p.annonceId); if(a) liens.push('<span style="background:var(--vert-pale);color:var(--vert);padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">📦 '+a.titre+'</span>'); }
+        if (p.banniereId) { const b = DAO._local.bannieres.find(x=>x.id===p.banniereId); if(b) liens.push('<span style="background:var(--bleu-pale);color:var(--bleu);padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">📢 '+escapeHtml(b.annonceur)+'</span>'); }
+        if (p.annonceurId) { const b = DAO._local.bannieres.find(x=>x.id===p.annonceurId); if(b) liens.push('<span style="background:var(--or-pale);color:var(--or);padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">Exclu: '+escapeHtml(b.annonceur)+'</span>'); }
+        if (p.annonceId) { const a = DAO._local.annonces.find(x=>x.id===p.annonceId); if(a) liens.push('<span style="background:var(--vert-pale);color:var(--vert);padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">📦 '+escapeHtml(a.titre)+'</span>'); }
         return liens.length ? '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px;border-top:1px solid var(--gris-clair)">'+liens.join('')+'</div>' : '';
       })()}
     </div>`
@@ -13418,7 +13418,7 @@ function peuplerSelectsPromo() {
   const selAnn = document.getElementById('np-annonceur');
   const selAnc = document.getElementById('np-annonce');
   if (!selBan || !selAnn || !selAnc) return;
-  const optBan = DAO._local.bannieres.map(b => `<option value="${b.id}">${b.annonceur} — ${b.position}</option>`).join('');
+  const optBan = DAO._local.bannieres.map(b => `<option value="${b.id}">${escapeHtml(b.annonceur)} — ${escapeHtml(b.position)}</option>`).join('');
   selBan.innerHTML  = '<option value="">— Aucune —</option>' + optBan;
   selAnn.innerHTML  = '<option value="">— Tous —</option>' + optBan;
   const optAnc = DAO._local.annonces.map(a => `<option value="${a.id}">${escapeHtml(a.titre)} (${escapeHtml(a.ville)})</option>`).join('');
@@ -13431,9 +13431,9 @@ function majLiaisonInfo() {
   const annId  = parseInt(document.getElementById('np-annonceur')?.value) || 0;
   const ancId  = parseInt(document.getElementById('np-annonce')?.value) || 0;
   const infos = [];
-  if (banId)  { const b = DAO._local.bannieres.find(x=>x.id===banId);  if(b) infos.push('📢 Bannière liée : '+b.annonceur+' (code affiché sur la bannière)'); }
-  if (annId)  { const b = DAO._local.bannieres.find(x=>x.id===annId);  if(b) infos.push('🏢 Code exclusif annonceur : '+b.annonceur); }
-  if (ancId)  { const a = DAO._local.annonces.find(x=>x.id===ancId);   if(a) infos.push('📦 Valide uniquement pour : '+a.titre); }
+  if (banId)  { const b = DAO._local.bannieres.find(x=>x.id===banId);  if(b) infos.push('📢 Bannière liée : '+escapeHtml(b.annonceur)+' (code affiché sur la bannière)'); }
+  if (annId)  { const b = DAO._local.bannieres.find(x=>x.id===annId);  if(b) infos.push('🏢 Code exclusif annonceur : '+escapeHtml(b.annonceur)); }
+  if (ancId)  { const a = DAO._local.annonces.find(x=>x.id===ancId);   if(a) infos.push('📦 Valide uniquement pour : '+escapeHtml(a.titre)); }
   const el = document.getElementById('np-liaison-info');
   if (!el) return;
   if (infos.length) { el.innerHTML = infos.join(' &nbsp;·&nbsp; '); el.style.display = 'block'; }
@@ -16424,14 +16424,14 @@ window.renderAdminInscriptions = function() {
           <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;${bSt[u.statut]}">${lSt[u.statut]}</span>
           <span style="padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;background:var(--vert-pale);color:var(--vert)">${u.role}</span>
         </div>
-        ${u.entreprise?'<div style="font-size:12px;color:var(--or);font-weight:600;margin-top:2px">'+u.entreprise+'</div>':''}
+        ${u.entreprise?'<div style="font-size:12px;color:var(--or);font-weight:600;margin-top:2px">'+escapeHtml(u.entreprise)+'</div>':''}
         <div style="font-size:12px;color:var(--gris-text);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
-          <span>${u.tel}</span>
-          ${u.email?'<span>'+u.email+'</span>':''}
-          <span>${u.ville}</span>
+          <span>${escapeHtml(u.tel)}</span>
+          ${u.email?'<span>'+escapeHtml(u.email)+'</span>':''}
+          <span>${escapeHtml(u.ville)}</span>
           <span>Inscrit le ${fmtD(u.dateInscription)}</span>
-          ${u.dateValidation?'<span style="color:var(--vert)">Valide le '+fmtD(u.dateValidation)+' par '+(u.validePar||'Admin')+'</span>':''}
-          ${u.motifRefus?'<span style="color:var(--rouge)">'+u.motifRefus+'</span>':''}
+          ${u.dateValidation?'<span style="color:var(--vert)">Valide le '+fmtD(u.dateValidation)+' par '+escapeHtml(u.validePar||'Admin')+'</span>':''}
+          ${u.motifRefus?'<span style="color:var(--rouge)">'+escapeHtml(u.motifRefus)+'</span>':''}
           ${typeof insFormatCGU==='function' ? '<span>CGU : '+insFormatCGU(u)+'</span>' : ''}
           ${u.antiBotScore !== undefined ? '<span title="Score de confiance humain (0=bot, 100=humain certain)">Score : <strong style="color:'+(u.antiBotScore>=60?'var(--vert)':u.antiBotScore>=40?'#D97706':'var(--rouge)')+'">'+u.antiBotScore+'/100</strong></span>' : ''}
         </div>
@@ -20051,15 +20051,15 @@ function renderLitigesTable() {
       <td style="font-size:12px">${l.date}</td>
       <td style="font-size:12px">${l.type}</td>
       <td style="font-size:12px">${userMap[l.vendeurId]||'—'}</td>
-      <td style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.annonce}</td>
+      <td style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.annonce)}</td>
       <td><strong>${fmtFCFA(l.montant)}</strong></td>
-      <td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--gris-text)">${l.motif}</td>
+      <td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--gris-text)">${escapeHtml(l.motif)}</td>
       <td><span style="color:${couleurS};font-weight:700;font-size:12px">${l.statut}</span></td>
       <td style="display:flex;gap:5px;flex-wrap:wrap">
         ${l.statut==='en cours'?`
           <button class="btn btn-sm btn-outline" style="font-size:11px;padding:4px 8px;color:var(--vert);border-color:var(--vert)" onclick="resoudreLitige(${l.id},'résolu')">Rembourser</button>
           <button class="btn btn-sm btn-outline" style="font-size:11px;padding:4px 8px;color:var(--rouge);border-color:var(--rouge)" onclick="resoudreLitige(${l.id},'refusé')">Refuser</button>
-        `:l.decision||'—'}
+        `:escapeHtml(l.decision||'—')}
       </td>
     </tr>`
   }).join('');
