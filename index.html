@@ -18876,7 +18876,10 @@ function selectionnerLivreur(id) {
 function commanderLivraison() {
   const dep     = document.getElementById('livr-depart').value.trim();
   const arr     = document.getElementById('livr-arrivee').value.trim();
+  const telExp  = document.getElementById('livr-tel-exp').value.trim();
+  const telDest = document.getElementById('livr-tel-dest').value.trim();
   if (!dep || !arr) { toast('Remplissez les adresses de départ et d\'arrivée', 'erreur'); return; }
+  if (!telExp) { toast('Renseignez votre numéro (expéditeur)', 'erreur'); return; }
 
   // Mode invité si non connecté
   if (!SESSION) {
@@ -18889,17 +18892,21 @@ function commanderLivraison() {
   const livreurChoisi = LIVR_SELECTIONNE_ID
     ? DB_LIVREURS.find(l => l.id === LIVR_SELECTIONNE_ID)
     : [...DB_LIVREURS].filter(l => l.dispo).sort((a,b) => scoreLivreur(b)-scoreLivreur(a))[0];
-  ouvrirModalPaiement(tarif, `Livraison ${dep} → ${arr}`, () => {
+  ouvrirModalPaiement(tarif, `Livraison ${dep} → ${arr}`, async () => {
     const ref = 'LVR-' + Date.now().toString().slice(-5);
     const nouvelleLivraison2 = { id: DISPATCH_COMMANDES.length+1, ref,
-      client: SESSION ? `${SESSION.prenom} ${SESSION.nom}` : 'Client',
+      client: `${SESSION.prenom} ${SESSION.nom}`,
       tel: telExp, dep, arr, type: LIVR_TYPE, montant: tarif,
       statut: livreurChoisi ? 'en livraison' : 'en attente',
       livreurId: livreurChoisi?.id || null, date: new Date().toISOString().slice(0,10) };
     DISPATCH_COMMANDES.unshift(nouvelleLivraison2);
-    if (typeof persisterLivraison === 'function') persisterLivraison(nouvelleLivraison2);
+    if (typeof persisterLivraison === 'function') {
+      const enregistre = await persisterLivraison(nouvelleLivraison2);
+      if (!enregistre && typeof MODE !== 'undefined' && MODE === 'remote') {
+        toast('⚠️ Livraison non enregistrée côté serveur — contactez l\'admin', 'erreur');
+      }
+    }
     LIVR_HISTORIQUE.unshift({ id: LIVR_HISTORIQUE.length+1, ref, livreur: livreurChoisi?.nom||'Assignation en cours…', dep, arr, type: LIVR_TYPE, statut: livreurChoisi?'en livraison':'en cours', montant: tarif, date: new Date().toISOString().slice(0,10) });
-    enregistrerRevenuAnnexe && enregistrerRevenuAnnexe('livraison', `Livraison ${dep}→${arr}`, Math.round(tarif*0.3));
     const desc = document.getElementById('livr-colis-desc').value.trim();
     if (livreurChoisi) {
       const msgL = `🛵 *Nouvelle commande Le Grenier !*\n📦 ${desc||'Colis'}\n🚀 ${dep} → ${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 ${fmtFCFA(tarif)} · Réf: ${ref}`;
