@@ -3157,7 +3157,7 @@
       }
       if (!rCmd.error && Array.isArray(rCmd.data) && typeof DISPATCH_COMMANDES !== 'undefined') {
         const mapped = rCmd.data.map(c => ({
-          id: c.id, ref: c.ref, client: c.client_nom, tel: c.client_tel,
+          id: c.id, ref: c.ref, client: c.client_nom, tel: c.client_tel, destTel: c.destinataire_tel,
           dep: c.depart, arr: c.arrivee, type: c.type, montant: Number(c.montant) || 0,
           commission: Number(c.commission) || 0, commissionTaux: Number(c.commission_taux) || 0,
           statut: c.statut, livreurId: c.livreur_id, date: (c.created_at || '').slice(0, 10),
@@ -3173,7 +3173,8 @@
     const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/livraisons', {
       ref: cmd.ref, client_nom: cmd.client, client_tel: cmd.tel,
       depart: cmd.dep, arrivee: cmd.arr, type: cmd.type, montant: cmd.montant,
-      statut: cmd.statut, livreur_id: cmd.livreurId || null
+      statut: cmd.statut, livreur_id: cmd.livreurId || null,
+      destinataire_tel: cmd.destTel || null
     }, { Prefer: 'return=representation' });
     if (r.error) { console.error('[persist] livraison', r.error); return null; }
     if (r.data && r.data[0]) {
@@ -5678,7 +5679,7 @@
       <button class="livr-tab actif" onclick="livrTab('livr-commander')">Commander</button>
       <button class="livr-tab" onclick="livrTab('livr-livreurs')">Livreurs disponibles</button>
       <button class="livr-tab" onclick="livrTab('livr-suivi')">Suivi en cours</button>
-      <button class="livr-tab" onclick="livrTab('livr-historique')">Historique</button>
+      <button class="livr-tab" onclick="livrTab('livr-historique');livrRafraichirHistorique()">Historique</button>
       <button class="livr-tab" id="btn-livr-dispatcher" onclick="livrTab('livr-dispatcher');livrRafraichir(renderDispatcher)">Commandes à livrer</button>
       <button class="livr-tab" onclick="livrTab('livr-devenir')">Devenir livreur</button>
     </div>
@@ -18521,6 +18522,35 @@ async function livrRafraichir(render) {
   render();
 }
 
+// "Mes livraisons envoyées" — sert aussi bien un particulier qu'un vendeur en
+// ligne (Instagram/WhatsApp/Facebook) qui commande des livraisons pour ses
+// propres clients : chaque livraison est rattachée en base au compte qui l'a
+// commandée (commanditaire_id, fixé côté serveur), donc cet historique est
+// réel et partagé entre tous ses appareils — contrairement à l'ancien
+// LIVR_HISTORIQUE, qui n'était qu'un tableau de démo en mémoire.
+async function chargerMesLivraisonsDepuisSupabase() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote' || !SESSION || !SESSION.id) return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + `/rest/v1/livraisons?commanditaire_id=eq.${SESSION.id}&select=*&order=created_at.desc`);
+    if (r.error || !Array.isArray(r.data)) { console.error('[mes-livraisons] chargement échoué', r.error); return; }
+    const mapped = r.data.map(row => {
+      const livreur = (typeof DB_LIVREURS !== 'undefined') ? DB_LIVREURS.find(l => l.id === row.livreur_id) : null;
+      return {
+        id: row.id, ref: row.ref,
+        livreur: livreur ? livreur.nom : (row.livreur_id ? 'Livreur assigné' : "Assignation en cours…"),
+        dep: row.depart, arr: row.arrivee, type: row.type, statut: row.statut,
+        montant: Number(row.montant) || 0, date: (row.created_at || '').slice(0, 10),
+        _supabaseId: row.id
+      };
+    });
+    LIVR_HISTORIQUE.splice(0, LIVR_HISTORIQUE.length, ...mapped);
+  } catch (e) { console.error('[mes-livraisons] chargement échoué', e); }
+}
+async function livrRafraichirHistorique() {
+  await chargerMesLivraisonsDepuisSupabase();
+  renderLivrHistorique();
+}
+
 // ══════════════════════════════════════════
 //  ADMIN — SUIVI LIVRAISONS
 // ══════════════════════════════════════════
@@ -18557,7 +18587,7 @@ function renderAdminLivraisons() {
     return `<tr style="background:${bg};border-bottom:1px solid #F3F4F6">
       <td style="padding:10px 14px;font-weight:600;color:var(--vert);font-family:monospace;font-size:11px">${c.ref}</td>
       <td style="padding:10px 14px"><div style="font-weight:600">${escapeHtml(c.client||'—')}</div><div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div></td>
-      <td style="padding:10px 14px;font-size:12px"><div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div></td>
+      <td style="padding:10px 14px;font-size:12px"><div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div>${c.destTel ? `<div style="color:var(--gris-text);margin-top:2px">📞 ${escapeHtml(c.destTel)}</div>` : ''}</td>
       <td style="padding:10px 14px">${typeIco[c.type]||'📦'} ${escapeHtml(c.type||'—')}</td>
       <td style="padding:10px 14px;font-size:12px;color:var(--gris-text)">${escapeHtml(livreur)}</td>
       <td style="padding:10px 14px;font-weight:700;color:var(--vert);white-space:nowrap">${fmtFCFA(c.montant||0)}</td>
@@ -18669,16 +18699,17 @@ function renderDispatcher() {
     const btnLivre    = c.statut === 'en livraison'   ? `<button onclick="dispMarquerLivre(${c.id})" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#F59E0B;color:#fff;cursor:pointer;white-space:nowrap">Livré</button>` : '';
     const btnSuivi    = c.statut !== 'en attente'     ? `<button onclick="dispOuvrirSuivi('${c.ref}')" style="padding:5px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;background:#6366F1;color:#fff;cursor:pointer;white-space:nowrap">Suivi</button>` : '';
     return `<tr style="background:${rowBg};border-bottom:1px solid #F3F4F6">
-      <td style="padding:11px 14px;font-weight:600;color:var(--vert);font-family:var(--font-mono);font-size:11px">${c.ref}</td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--vert);font-family:var(--font-mono);font-size:11px">${escapeHtml(c.ref||'')}</td>
       <td style="padding:11px 14px">
-        <div style="font-weight:600">${c.client}</div>
-        <div style="font-size:11px;color:var(--gris-text)">${c.tel}</div>
+        <div style="font-weight:600">${escapeHtml(c.client||'')}</div>
+        <div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div>
       </td>
       <td style="padding:11px 14px">
-        <div style="font-size:12px"><span style="color:var(--gris-text)">De :</span> ${c.dep}</div>
-        <div style="font-size:12px"><span style="color:var(--gris-text)">À :</span> ${c.arr}</div>
+        <div style="font-size:12px"><span style="color:var(--gris-text)">De :</span> ${escapeHtml(c.dep||'')}</div>
+        <div style="font-size:12px"><span style="color:var(--gris-text)">À :</span> ${escapeHtml(c.arr||'')}</div>
+        ${c.destTel ? `<div style="font-size:11px;color:var(--gris-text);margin-top:2px">📞 Destinataire : ${escapeHtml(c.destTel)}</div>` : ''}
       </td>
-      <td style="padding:11px 14px">${typeIco} ${c.type}</td>
+      <td style="padding:11px 14px">${typeIco} ${escapeHtml(c.type||'')}</td>
       <td style="padding:11px 14px;font-weight:700;color:var(--vert);white-space:nowrap">${c.montant.toLocaleString()} F</td>
       <td style="padding:11px 14px">
         <span style="background:${st.bg};color:${st.color};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">${st.label}</span>
@@ -18896,7 +18927,7 @@ function commanderLivraison() {
     const ref = 'LVR-' + Date.now().toString().slice(-5);
     const nouvelleLivraison2 = { id: DISPATCH_COMMANDES.length+1, ref,
       client: `${SESSION.prenom} ${SESSION.nom}`,
-      tel: telExp, dep, arr, type: LIVR_TYPE, montant: tarif,
+      tel: telExp, destTel: telDest, dep, arr, type: LIVR_TYPE, montant: tarif,
       statut: livreurChoisi ? 'en livraison' : 'en attente',
       livreurId: livreurChoisi?.id || null, date: new Date().toISOString().slice(0,10) };
     DISPATCH_COMMANDES.unshift(nouvelleLivraison2);
