@@ -2298,6 +2298,9 @@
      l'écroulement en 1 colonne ci-dessous, le 2e panneau déborde sur mobile. */
   .pub-2col-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
   .livr-commander-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+  .livr-mode-toggle{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+  .livr-mode-btn{flex:1;min-width:160px;padding:12px 14px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:var(--transition);color:var(--noir)}
+  .livr-mode-btn.sel{border-color:#DC2626;background:rgba(220,38,38,.06);color:#DC2626}
   .livr-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(140px,100%),1fr));gap:10px;margin-bottom:18px}
   .livr-type-btn{border:2px solid var(--gris-mid);border-radius:var(--radius-lg);padding:14px 10px;text-align:center;cursor:pointer;transition:var(--transition);background:#fff}
   .livr-type-btn.sel{border-color:#DC2626;background:var(--livr-pale)}
@@ -3160,6 +3163,7 @@
           id: c.id, ref: c.ref, client: c.client_nom, tel: c.client_tel, destTel: c.destinataire_tel,
           dep: c.depart, arr: c.arrivee, type: c.type, montant: Number(c.montant) || 0,
           commission: Number(c.commission) || 0, commissionTaux: Number(c.commission_taux) || 0,
+          mode: c.mode || 'transport', articleDesc: c.article_desc || '', montantArticle: Number(c.montant_article) || 0,
           statut: c.statut, livreurId: c.livreur_id, date: (c.created_at || '').slice(0, 10),
           _supabaseId: c.id
         }));
@@ -3174,7 +3178,9 @@
       ref: cmd.ref, client_nom: cmd.client, client_tel: cmd.tel,
       depart: cmd.dep, arrivee: cmd.arr, type: cmd.type, montant: cmd.montant,
       statut: cmd.statut, livreur_id: cmd.livreurId || null,
-      destinataire_tel: cmd.destTel || null
+      destinataire_tel: cmd.destTel || null,
+      mode: cmd.mode || 'transport', article_desc: cmd.articleDesc || null,
+      montant_article: cmd.montantArticle || 0
     }, { Prefer: 'return=representation' });
     if (r.error) { console.error('[persist] livraison', r.error); return null; }
     if (r.data && r.data[0]) {
@@ -5689,6 +5695,11 @@
       <div style="font-family:var(--font-titre);font-size:24px;font-weight:700;margin-bottom:4px">Nouvelle livraison</div>
       <div style="font-size:14px;color:var(--gris-text);margin-bottom:20px">Remplissez le formulaire — un livreur vous est assigné sous 5 minutes</div>
 
+      <div class="livr-mode-toggle">
+        <button type="button" class="livr-mode-btn sel" id="livr-mode-transport" onclick="selLivrMode('transport')">📦 J'ai déjà l'article</button>
+        <button type="button" class="livr-mode-btn" id="livr-mode-achat" onclick="selLivrMode('achat')">🛍️ Achetez-le pour moi</button>
+      </div>
+
       <div class="livr-commander-grid">
         <div class="livr-sim-card">
           <div style="font-weight:700;font-size:15px;margin-bottom:14px;color:var(--noir)">Type de livraison</div>
@@ -5716,16 +5727,27 @@
           </div>
 
           <div class="form-group" style="margin-bottom:12px">
-            <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Adresse de départ *</label>
+            <label id="livr-depart-label" style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Adresse de départ *</label>
             <input type="text" id="livr-depart" placeholder="Ex: Cocody Riviera 3, Carrefour Palmeraie" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
           </div>
           <div class="form-group" style="margin-bottom:12px">
             <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Adresse de livraison *</label>
             <input type="text" id="livr-arrivee" placeholder="Ex: Marcory Zone 4, Résidence Les Cocotiers" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
           </div>
-          <div class="form-group" style="margin-bottom:12px">
+          <div class="form-group" style="margin-bottom:12px" id="livr-colis-desc-group">
             <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Description du colis</label>
             <input type="text" id="livr-colis-desc" placeholder="Ex: Repas emballé, téléphone réparé, 2 sacs marché…" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+          </div>
+          <div style="display:none" id="livr-achat-fields">
+            <div class="form-group" style="margin-bottom:12px">
+              <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Que voulez-vous acheter ? *</label>
+              <textarea id="livr-article-desc" rows="2" placeholder="Ex: lien du produit, ou liste de courses (2kg riz, 1L huile, du pain…)" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none;resize:vertical"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Budget pour l'achat (FCFA) *</label>
+              <input type="number" id="livr-article-budget" min="0" placeholder="Ex: 5000" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+              <div style="font-size:11px;color:var(--gris-text);margin-top:5px">Avancé au livreur pour l'achat, en plus des frais de livraison ci-dessous.</div>
+            </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <div>
@@ -18539,7 +18561,8 @@ async function chargerMesLivraisonsDepuisSupabase() {
         id: row.id, ref: row.ref,
         livreur: livreur ? livreur.nom : (row.livreur_id ? 'Livreur assigné' : "Assignation en cours…"),
         dep: row.depart, arr: row.arrivee, type: row.type, statut: row.statut,
-        montant: Number(row.montant) || 0, date: (row.created_at || '').slice(0, 10),
+        mode: row.mode || 'transport', articleDesc: row.article_desc || '',
+        montant: Number(row.montant_total ?? row.montant) || 0, date: (row.created_at || '').slice(0, 10),
         _supabaseId: row.id
       };
     });
@@ -18587,7 +18610,7 @@ function renderAdminLivraisons() {
     return `<tr style="background:${bg};border-bottom:1px solid #F3F4F6">
       <td style="padding:10px 14px;font-weight:600;color:var(--vert);font-family:monospace;font-size:11px">${c.ref}</td>
       <td style="padding:10px 14px"><div style="font-weight:600">${escapeHtml(c.client||'—')}</div><div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div></td>
-      <td style="padding:10px 14px;font-size:12px"><div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div>${c.destTel ? `<div style="color:var(--gris-text);margin-top:2px">📞 ${escapeHtml(c.destTel)}</div>` : ''}</td>
+      <td style="padding:10px 14px;font-size:12px">${c.mode === 'achat_livraison' ? `<div style="color:#92400E;font-weight:700;margin-bottom:2px">🛍️ ${escapeHtml(c.articleDesc||'Achat')}</div>` : ''}<div>${escapeHtml(c.dep||'—')}</div><div style="color:var(--gris-text)">→ ${escapeHtml(c.arr||'—')}</div>${c.destTel ? `<div style="color:var(--gris-text);margin-top:2px">📞 ${escapeHtml(c.destTel)}</div>` : ''}</td>
       <td style="padding:10px 14px">${typeIco[c.type]||'📦'} ${escapeHtml(c.type||'—')}</td>
       <td style="padding:10px 14px;font-size:12px;color:var(--gris-text)">${escapeHtml(livreur)}</td>
       <td style="padding:10px 14px;font-weight:700;color:var(--vert);white-space:nowrap">${fmtFCFA(c.montant||0)}</td>
@@ -18705,12 +18728,16 @@ function renderDispatcher() {
         <div style="font-size:11px;color:var(--gris-text)">${escapeHtml(c.tel||'')}</div>
       </td>
       <td style="padding:11px 14px">
-        <div style="font-size:12px"><span style="color:var(--gris-text)">De :</span> ${escapeHtml(c.dep||'')}</div>
+        ${c.mode === 'achat_livraison' ? `<div style="background:#FEF3C7;color:#92400E;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;margin-bottom:4px">🛍️ À acheter : ${escapeHtml(c.articleDesc||'')}</div>` : ''}
+        <div style="font-size:12px">${c.dep?`<span style="color:var(--gris-text)">De :</span> ${escapeHtml(c.dep)}` : `<span style="color:var(--gris-text)">Achat au choix du livreur</span>`}</div>
         <div style="font-size:12px"><span style="color:var(--gris-text)">À :</span> ${escapeHtml(c.arr||'')}</div>
         ${c.destTel ? `<div style="font-size:11px;color:var(--gris-text);margin-top:2px">📞 Destinataire : ${escapeHtml(c.destTel)}</div>` : ''}
       </td>
       <td style="padding:11px 14px">${typeIco} ${escapeHtml(c.type||'')}</td>
-      <td style="padding:11px 14px;font-weight:700;color:var(--vert);white-space:nowrap">${c.montant.toLocaleString()} F</td>
+      <td style="padding:11px 14px;font-weight:700;color:var(--vert);white-space:nowrap">
+        ${c.montant.toLocaleString()} F
+        ${c.montantArticle ? `<div style="font-size:10px;font-weight:600;color:var(--gris-text)">+ ${c.montantArticle.toLocaleString()} F article</div>` : ''}
+      </td>
       <td style="padding:11px 14px">
         <span style="background:${st.bg};color:${st.color};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">${st.label}</span>
       </td>
@@ -18847,6 +18874,25 @@ function selLivrType(type) {
   renderLivreursChoix();
 }
 
+// Mode "Achetez-le pour moi" (façon Glovo) — le client n'a pas encore
+// l'article : un livreur l'achète (magasin, marché, lien produit) puis le
+// livre. Le budget d'achat est distinct des frais de service, pour ne
+// jamais faire porter de commission sur un simple remboursement d'achat.
+let LIVR_MODE = 'transport';
+function selLivrMode(mode) {
+  LIVR_MODE = mode;
+  document.getElementById('livr-mode-transport')?.classList.toggle('sel', mode === 'transport');
+  document.getElementById('livr-mode-achat')?.classList.toggle('sel', mode === 'achat');
+  const achatFields = document.getElementById('livr-achat-fields');
+  const colisGroup = document.getElementById('livr-colis-desc-group');
+  const departLabel = document.getElementById('livr-depart-label');
+  if (achatFields) achatFields.style.display = mode === 'achat' ? 'block' : 'none';
+  if (colisGroup) colisGroup.style.display = mode === 'achat' ? 'none' : 'block';
+  if (departLabel) departLabel.textContent = mode === 'achat'
+    ? 'Où acheter ? (boutique/marché — optionnel, le livreur peut choisir)'
+    : 'Adresse de départ *';
+}
+
 function simTarif() {
   const dep = document.getElementById('sim-zone-dep')?.value;
   const arr = document.getElementById('sim-zone-arr')?.value;
@@ -18905,12 +18951,18 @@ function selectionnerLivreur(id) {
 }
 
 function commanderLivraison() {
+  const estAchat = LIVR_MODE === 'achat';
   const dep     = document.getElementById('livr-depart').value.trim();
   const arr     = document.getElementById('livr-arrivee').value.trim();
   const telExp  = document.getElementById('livr-tel-exp').value.trim();
   const telDest = document.getElementById('livr-tel-dest').value.trim();
-  if (!dep || !arr) { toast('Remplissez les adresses de départ et d\'arrivée', 'erreur'); return; }
+  const articleDesc = document.getElementById('livr-article-desc')?.value.trim() || '';
+  const articleBudget = Math.max(0, parseInt(document.getElementById('livr-article-budget')?.value, 10) || 0);
+  if (!estAchat && !dep) { toast('Remplissez l\'adresse de départ', 'erreur'); return; }
+  if (!arr) { toast('Remplissez l\'adresse de livraison', 'erreur'); return; }
   if (!telExp) { toast('Renseignez votre numéro (expéditeur)', 'erreur'); return; }
+  if (estAchat && !articleDesc) { toast('Décrivez ce que le livreur doit acheter', 'erreur'); return; }
+  if (estAchat && articleBudget <= 0) { toast('Indiquez un budget d\'achat', 'erreur'); return; }
 
   // Mode invité si non connecté
   if (!SESSION) {
@@ -18920,14 +18972,20 @@ function commanderLivraison() {
     return;
   }
   const tarif = LIVR_TARIFS.moyen[LIVR_TYPE] || 2000;
+  const totalPaiement = tarif + (estAchat ? articleBudget : 0);
   const livreurChoisi = LIVR_SELECTIONNE_ID
     ? DB_LIVREURS.find(l => l.id === LIVR_SELECTIONNE_ID)
     : [...DB_LIVREURS].filter(l => l.dispo).sort((a,b) => scoreLivreur(b)-scoreLivreur(a))[0];
-  ouvrirModalPaiement(tarif, `Livraison ${dep} → ${arr}`, async () => {
+  const libellePaiement = estAchat
+    ? `Achat + livraison → ${arr} (article ${fmtFCFA(articleBudget)} + service ${fmtFCFA(tarif)})`
+    : `Livraison ${dep} → ${arr}`;
+  ouvrirModalPaiement(totalPaiement, libellePaiement, async () => {
     const ref = 'LVR-' + Date.now().toString().slice(-5);
     const nouvelleLivraison2 = { id: DISPATCH_COMMANDES.length+1, ref,
       client: `${SESSION.prenom} ${SESSION.nom}`,
       tel: telExp, destTel: telDest, dep, arr, type: LIVR_TYPE, montant: tarif,
+      mode: estAchat ? 'achat_livraison' : 'transport',
+      articleDesc: estAchat ? articleDesc : '', montantArticle: estAchat ? articleBudget : 0,
       statut: livreurChoisi ? 'en livraison' : 'en attente',
       livreurId: livreurChoisi?.id || null, date: new Date().toISOString().slice(0,10) };
     DISPATCH_COMMANDES.unshift(nouvelleLivraison2);
@@ -18937,13 +18995,15 @@ function commanderLivraison() {
         toast('⚠️ Livraison non enregistrée côté serveur — contactez l\'admin', 'erreur');
       }
     }
-    LIVR_HISTORIQUE.unshift({ id: LIVR_HISTORIQUE.length+1, ref, livreur: livreurChoisi?.nom||'Assignation en cours…', dep, arr, type: LIVR_TYPE, statut: livreurChoisi?'en livraison':'en cours', montant: tarif, date: new Date().toISOString().slice(0,10) });
+    LIVR_HISTORIQUE.unshift({ id: LIVR_HISTORIQUE.length+1, ref, livreur: livreurChoisi?.nom||'Assignation en cours…', dep, arr, type: LIVR_TYPE, statut: livreurChoisi?'en livraison':'en cours', montant: tarif + (estAchat?articleBudget:0), date: new Date().toISOString().slice(0,10) });
     const desc = document.getElementById('livr-colis-desc').value.trim();
     if (livreurChoisi) {
-      const msgL = `🛵 *Nouvelle commande Le Grenier !*\n📦 ${desc||'Colis'}\n🚀 ${dep} → ${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 ${fmtFCFA(tarif)} · Réf: ${ref}`;
+      const msgL = estAchat
+        ? `🛍️ *Nouvel achat + livraison — Le Grenier !*\n🛒 À acheter : ${articleDesc}\n💵 Budget article : ${fmtFCFA(articleBudget)} (à récupérer chez le client)\n📍 ${dep ? dep+' → ' : ''}${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 Frais de service : ${fmtFCFA(tarif)} · Réf: ${ref}`
+        : `🛵 *Nouvelle commande Le Grenier !*\n📦 ${desc||'Colis'}\n🚀 ${dep} → ${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 ${fmtFCFA(tarif)} · Réf: ${ref}`;
       window.open(`https://wa.me/${livreurChoisi.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msgL)}`, '_blank');
     }
-    const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreurChoisi?.nom||"En cours d'assignation"}\n📍 ${dep} → ${arr}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*`;
+    const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreurChoisi?.nom||"En cours d'assignation"}\n📍 ${dep ? dep+' → ' : ''}${arr}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*`;
     window.open(`https://wa.me/${telExp.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msgC)}`, '_blank');
     toast(`🛵 Commande ${ref} enregistrée !`);
     renderLivrHistorique(); LIVR_SELECTIONNE_ID = null;
@@ -19074,15 +19134,17 @@ function renderLivrHistorique() {
   if (!LIVR_HISTORIQUE.length) { list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--gris-text)"><div style="font-size:48px">📋</div><div style="margin-top:10px;font-weight:600">Aucune livraison</div></div>'; return; }
   list.innerHTML = LIVR_HISTORIQUE.map(l => {
     const icos = {moto:'🛵',tricycle:'🛺',cargo:'🚚',camionette:'🚐'};
+    const badgeAchat = l.mode === 'achat_livraison'
+      ? `<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;margin-left:6px">🛍️ ACHAT</span>` : '';
     return `<div style="background:#fff;border-radius:var(--radius-lg);border:1.5px solid rgba(220,38,38,.12);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:var(--shadow-sm)">
       <span style="font-size:28px;flex-shrink:0">${icos[l.type]||'🛵'}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px">${l.dep} → ${l.arr}</div>
-        <div style="font-size:12px;color:var(--gris-text);margin-top:2px">${l.date} · ${l.livreur} · Réf: <strong style="font-family:monospace">${l.ref}</strong></div>
+        <div style="font-weight:700;font-size:13px">${escapeHtml(l.dep||'')}${l.dep?' → ':''}${escapeHtml(l.arr||'')}${badgeAchat}</div>
+        <div style="font-size:12px;color:var(--gris-text);margin-top:2px">${escapeHtml(l.date||'')} · ${escapeHtml(l.livreur||'')} · Réf: <strong style="font-family:monospace">${escapeHtml(l.ref||'')}</strong></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:var(--font-titre);font-size:16px;color:#DC2626;font-weight:700">${fmtFCFA(l.montant)}</div>
-        <div style="font-size:11px;font-weight:800;color:${l.statut==='livré'?'#16A34A':'#D97706'};margin-top:2px">${l.statut.toUpperCase()}</div>
+        <div style="font-size:11px;font-weight:800;color:${l.statut==='livré'?'#16A34A':'#D97706'};margin-top:2px">${escapeHtml((l.statut||'').toUpperCase())}</div>
       </div>
     </div>`
   }).join('');
