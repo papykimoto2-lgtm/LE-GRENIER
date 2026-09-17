@@ -2415,20 +2415,29 @@
   // ══════════════════════════════════════════════════════════════
   //  CLIENT SUPABASE XHR — sans SDK, compatible file:// (standard SANIX)
   // ══════════════════════════════════════════════════════════════
-  function _xhr(method, url, body, headers) {
+  function _xhr(method, url, body, headers, _retried) {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
       x.open(method, url, true);
+      const storedToken = localStorage.getItem('lg_sb_access_token');
       const finalHeaders = Object.assign(
-        { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + (localStorage.getItem('lg_sb_access_token') || SUPABASE_ANON_KEY), 'Content-Type': 'application/json' },
+        { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + (storedToken || SUPABASE_ANON_KEY), 'Content-Type': 'application/json' },
         headers || {}
       );
       Object.entries(finalHeaders).forEach(([k, v]) => x.setRequestHeader(k, v));
       x.onload = () => {
         let data = null;
         try { data = x.responseText ? JSON.parse(x.responseText) : null; } catch (e) {}
-        if (x.status >= 200 && x.status < 300) resolve({ data, error: null, status: x.status });
-        else resolve({ data: null, error: { message: (data && (data.message || data.msg)) || x.statusText, status: x.status }, status: x.status });
+        if (x.status >= 200 && x.status < 300) { resolve({ data, error: null, status: x.status }); return; }
+        // Jeton de session expiré/invalide : PostgREST renvoie 401 même si la lecture est publique.
+        // On efface le jeton périmé et on retente une fois en anonyme au lieu d'échouer silencieusement.
+        if (x.status === 401 && storedToken && !_retried) {
+          localStorage.removeItem('lg_sb_access_token');
+          localStorage.removeItem('lg_sb_refresh_token');
+          resolve(_xhr(method, url, body, headers, true));
+          return;
+        }
+        resolve({ data: null, error: { message: (data && (data.message || data.msg)) || x.statusText, status: x.status }, status: x.status });
       };
       x.onerror = () => resolve({ data: null, error: { message: 'Erreur réseau XHR' }, status: 0 });
       x.send(body != null ? JSON.stringify(body) : null);
@@ -7750,7 +7759,7 @@ const CGU_DATE    = '2026-05-16';
       <div class="admin-nav">
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');renderAdminLivraisons()">Livraisons</button>
-        <button class="admin-nav-btn" id="admin-nav-inscriptions" onclick="adminTab(this,'admin-inscriptions');renderAdminInscriptions()">Inscriptions <span id="admin-nav-badge-inscriptions" style="display:none;background:var(--or);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
+        <button class="admin-nav-btn" id="admin-nav-inscriptions" onclick="adminTab(this,'admin-inscriptions')">Inscriptions <span id="admin-nav-badge-inscriptions" style="display:none;background:var(--or);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-profil');renderAdminProfil()">Profil & Paiements</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-tarifs');renderAdminTarifs()">Tarifs & Plans</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-visibilite');renderAdminVisibilite()">Visibilité</button>
@@ -8476,7 +8485,7 @@ const CGU_DATE    = '2026-05-16';
           <select id="ins-filtre-role" onchange="renderAdminInscriptions()" style="padding:9px 14px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
             <option value="">Tous les rôles</option><option value="utilisateur">Utilisateurs</option><option value="annonceur">Annonceurs</option><option value="livreur">Livreurs</option>
           </select>
-          <button onclick="renderAdminInscriptions()" style="padding:9px 16px;border:none;border-radius:var(--radius);background:var(--vert-pale);color:var(--vert);font-size:13px;font-weight:600;cursor:pointer">Actualiser</button>
+          <button onclick="insRafraichir()" style="padding:9px 16px;border:none;border-radius:var(--radius);background:var(--vert-pale);color:var(--vert);font-size:13px;font-weight:600;cursor:pointer">Actualiser</button>
         </div>
       </div>
       <div id="ins-list" style="display:flex;flex-direction:column;gap:12px"></div>
@@ -15948,7 +15957,7 @@ function adminTab(el, tabId) {
   if (tabId==='admin-promos') { renderAdminPromos(); peuplerSelectsPromo(); }
   if (tabId==='admin-finances') renderAdminFinancesComplet();
   if (tabId==='admin-litiges') renderAdminLitiges();
-  if (tabId==='admin-inscriptions') renderAdminInscriptions();
+  if (tabId==='admin-inscriptions') insRafraichir();
   if (tabId==='admin-profil') renderAdminProfil();
   if (tabId==='admin-visibilite') renderAdminVisibilite();
 }
@@ -16304,6 +16313,17 @@ if (!window.DB_INSCRIPTIONS) {
     { id:105, prenom:'Fatou', nom:'Bamba', email:'fatou.b@gmail.com', tel:'+225 07 00 11 22 33', ville:'Abidjan', role:'utilisateur', statut:'refuse', dateInscription:'2026-05-10', mdpTemp:null, entreprise:null, motifRefus:'Informations incompletes' },
   ];
 }
+
+// Recharge les inscriptions depuis Supabase (bouton Actualiser / ouverture de l'onglet) —
+// avant, ces deux actions se contentaient de re-rendre le tableau déjà en mémoire, donc une
+// inscription arrivée après le chargement initial de la page n'apparaissait jamais.
+window.insRafraichir = async function() {
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof bootstrapCache === 'function') {
+    await bootstrapCache();
+  }
+  if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
+  else if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
+};
 
 // Synchronise DB_INSCRIPTIONS depuis les données réelles Supabase (appelé après bootstrapCache)
 window._syncInscriptionsDepuisSupabase = function() {
