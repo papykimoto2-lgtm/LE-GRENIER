@@ -2909,7 +2909,8 @@
       id: row.id, annonceur: row.annonceur, slogan: row.slogan, lien: row.lien,
       couleur: row.couleur, position: row.position, debut: row.debut, fin: row.fin,
       budget: Number(row.budget) || 0, impressions: row.impressions || 0,
-      clics: row.clics || 0, actif: row.actif
+      clics: row.clics || 0, actif: row.actif, statut: row.statut || 'valide',
+      ico: row.ico, paiement: row.paiement, dateSoumission: row.date_soumission
     };
     if (table === 'promos') return {
       id: row.id, code: row.code, type: row.type, valeur: Number(row.valeur),
@@ -3040,7 +3041,9 @@
         annonceur: record.annonceur, slogan: record.slogan, lien: record.lien,
         couleur: record.couleur, position: record.position, debut: record.debut,
         fin: record.fin, budget: record.budget, impressions: record.impressions || 0,
-        clics: record.clics || 0, actif: record.actif
+        clics: record.clics || 0, actif: record.actif, statut: record.statut || 'valide',
+        ico: record.ico || null, paiement: record.paiement || null,
+        date_soumission: record.dateSoumission || null
       }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] banniere', r.error);
       return r;
@@ -8106,6 +8109,11 @@ const CGU_DATE    = '2026-05-16';
         <button class="btn btn-or mt-16" onclick="creerBanniere()">Publier cette bannière</button>
       </div>
 
+      <div class="admin-section" style="margin-bottom:20px">
+        <div class="admin-section-titre">Demandes de campagnes en attente</div>
+        <div id="pub-demandes" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+
       <div class="admin-section">
         <div class="admin-section-titre">Bannières en cours</div>
         <div id="pub-liste" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"></div>
@@ -10565,7 +10573,6 @@ if (!DB.annonceurs) DB.annonceurs = [
   {id:1, entreprise:'CFAO Motors CI', secteur:'Automobile', prenom:'Konan', nom:'Brou', email:'cfao@grenier.ci', tel:'+225 07 11 22 33', pass:'123456', actif:true},
   {id:2, entreprise:'Nestlé CI', secteur:'Alimentation & Boissons', prenom:'Aminata', nom:'Koné', email:'nestle@grenier.ci', tel:'+225 05 33 44 55', pass:'123456', actif:true},
 ];
-if (!DB.demandesCampagnes) DB.demandesCampagnes = [];
 
 // ── Navigation ──
 function annTab(el, tabId) {
@@ -10639,13 +10646,13 @@ const _origGoScreenProtect = goScreen;
 function renderAnnTableau() {
   if (!SESSION_ANN) return;
   const mesBannieres = DAO._local.bannieres.filter(b => b.annonceur === SESSION_ANN.entreprise);
-  const mesDemandes = DB.demandesCampagnes.filter(d => d.annonceurId === SESSION_ANN.id);
+  const mesDemandes = mesBannieres.filter(b => b.statut === 'attente');
   const totalImpr = mesBannieres.reduce((s, b) => s + (b.impressions || 0), 0);
   const totalClics = mesBannieres.reduce((s, b) => s + (b.clics || 0), 0);
   const totalBudget = mesBannieres.reduce((s, b) => s + (b.budget || 0), 0);
   const ctr = totalImpr ? ((totalClics / totalImpr) * 100).toFixed(2) + '%' : '—';
   const actives = mesBannieres.filter(b => b.actif).length;
-  const attente = mesDemandes.filter(d => d.statut === 'attente').length;
+  const attente = mesDemandes.length;
 
   const fmt = n => n >= 1000000 ? (n/1000000).toFixed(1) + 'M' : n >= 1000 ? (n/1000).toFixed(0) + 'k' : n;
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -10692,28 +10699,35 @@ function renderAnnTableau() {
 
 function renderCampagneCard(b, compact) {
   const today = new Date().toISOString().slice(0, 10);
-  let statut = 'attente';
-  if (b.actif && b.debut <= today && b.fin >= today) statut = 'actif';
-  else if (b.fin < today) statut = 'termine';
-  const statutLabels = { actif: '<span class="ann-badge-statut ann-badge-actif">Active</span>', attente: '<span class="ann-badge-statut ann-badge-attente">En attente</span>', termine: '<span class="ann-badge-statut ann-badge-termine">Terminée</span>' };
+  let statut;
+  if (b.statut === 'refuse') statut = 'refuse';
+  else if (b.statut === 'attente') statut = 'attente';
+  else if (b.actif && b.debut <= today && b.fin >= today) statut = 'actif';
+  else statut = 'termine';
+  const statutLabels = { actif: '<span class="ann-badge-statut ann-badge-actif">Active</span>', attente: '<span class="ann-badge-statut ann-badge-attente">En attente</span>', termine: '<span class="ann-badge-statut ann-badge-termine">Terminée</span>', refuse: '<span class="ann-badge-statut ann-badge-termine" style="background:#FEE2E2;color:#991B1B">Refusée</span>' };
   const ctr = b.impressions ? ((b.clics / b.impressions) * 100).toFixed(1) + '%' : '0%';
-  return '<div class="ann-campagne-card"><div class="ann-campagne-ico" style="background:' + b.couleur + '22">' + (b.ico || '📢') + '</div><div class="ann-campagne-body"><div class="ann-campagne-nom">' + b.slogan.substring(0, 60) + (b.slogan.length > 60 ? '…' : '') + '</div><div class="ann-campagne-meta"><span>📍 ' + b.position + '</span><span>📅 ' + b.debut + ' → ' + b.fin + '</span>' + statutLabels[statut] + '</div>' + (!compact ? '<div style="display:flex;gap:8px;flex-wrap:wrap"><span class="ann-stat-pill">👁 ' + (b.impressions || 0).toLocaleString() + ' impr.</span><span class="ann-stat-pill">🖱 ' + (b.clics || 0) + ' clics</span><span class="ann-stat-pill">CTR ' + ctr + '</span><span class="ann-stat-pill">💰 ' + (b.budget || 0).toLocaleString() + ' F</span></div>' : '') + '</div></div>';
+  const slogan = escapeHtml(b.slogan || '');
+  return '<div class="ann-campagne-card"><div class="ann-campagne-ico" style="background:' + escapeHtml(b.couleur||'#1C2833') + '22">' + escapeHtml(b.ico || '📢') + '</div><div class="ann-campagne-body"><div class="ann-campagne-nom">' + slogan.substring(0, 60) + (slogan.length > 60 ? '…' : '') + '</div><div class="ann-campagne-meta"><span>📍 ' + escapeHtml(b.position) + '</span><span>📅 ' + escapeHtml(b.debut) + ' → ' + escapeHtml(b.fin) + '</span>' + statutLabels[statut] + '</div>' + (!compact ? '<div style="display:flex;gap:8px;flex-wrap:wrap"><span class="ann-stat-pill">👁 ' + (b.impressions || 0).toLocaleString() + ' impr.</span><span class="ann-stat-pill">🖱 ' + (b.clics || 0) + ' clics</span><span class="ann-stat-pill">CTR ' + ctr + '</span><span class="ann-stat-pill">💰 ' + (b.budget || 0).toLocaleString() + ' F</span></div>' : '') + '</div></div>';
 }
 
 // ── Liste campagnes ──
 function renderAnnCampagnes() {
   if (!SESSION_ANN) return;
   const mesBannieres = DAO._local.bannieres.filter(b => b.annonceur === SESSION_ANN.entreprise);
-  const mesDemandes = DB.demandesCampagnes.filter(d => d.annonceurId === SESSION_ANN.id);
   const today = new Date().toISOString().slice(0, 10);
 
   const el = document.getElementById('ann-liste-campagnes');
   if (!el) return;
 
-  const all = [
-    ...mesBannieres.map(b => ({ ...b, _type: 'banniere', _statut: b.actif && b.debut <= today && b.fin >= today ? 'actif' : b.fin < today ? 'termine' : 'attente' })),
-    ...mesDemandes.map(d => ({ ...d, _type: 'demande', _statut: d.statut }))
-  ].filter(x => ANN_CAMP_FILTRE === 'all' || x._statut === ANN_CAMP_FILTRE);
+  const all = mesBannieres.map(b => {
+    let _statut;
+    if (b.statut === 'refuse') _statut = 'refuse';
+    else if (b.statut === 'attente') _statut = 'attente';
+    else if (b.actif && b.debut <= today && b.fin >= today) _statut = 'actif';
+    else _statut = 'termine';
+    return { ...b, _statut };
+  }).filter(x => ANN_CAMP_FILTRE === 'all' || x._statut === ANN_CAMP_FILTRE
+    || (ANN_CAMP_FILTRE === 'termine' && x._statut === 'refuse'));
 
   if (!all.length) {
     el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gris-text)">Aucune campagne dans cette catégorie.</div>';
@@ -10924,7 +10938,7 @@ function selPayAnn(el, val) {
   el.style.borderColor = 'var(--or)';
 }
 
-function soumettreNouvelleCampagne() {
+async function soumettreNouvelleCampagne() {
   if (!SESSION_ANN) { toast('Connexion annonceur requise', 'erreur'); return; }
   const annonceur = (document.getElementById('nc-annonceur') || {}).value.trim();
   const slogan = (document.getElementById('nc-slogan') || {}).value.trim();
@@ -10936,10 +10950,11 @@ function soumettreNouvelleCampagne() {
   const paySelected = document.querySelector('[name="ann-pay"]:checked');
   if (!paySelected) { toast('Choisissez un mode de paiement', 'erreur'); return; }
 
-  // Créer la demande (en attente validation admin)
+  // Créer la demande (en attente validation admin) — une vraie ligne bannieres, pas juste
+  // un objet local : avant ce correctif, DB.demandesCampagnes n'était jamais persisté nulle
+  // part et disparaissait au rechargement de la page, sans qu'aucun admin ne puisse la voir.
   const demande = {
-    id: DB.demandesCampagnes.length + 1,
-    annonceurId: SESSION_ANN.id,
+    id: DAO._local.bannieres.length + 1,
     annonceur: annonceur || SESSION_ANN.entreprise,
     slogan,
     lien: (document.getElementById('nc-lien') || {}).value || '#',
@@ -10948,14 +10963,22 @@ function soumettreNouvelleCampagne() {
     position: NC_POSITION_SEL,
     debut, fin, budget,
     impressions: 0, clics: 0,
-    statut: 'attente',
+    statut: 'attente', actif: false,
     paiement: paySelected.value,
-    datesoumission: new Date().toISOString().slice(0, 10)
+    dateSoumission: new Date().toISOString().slice(0, 10)
   };
-  DB.demandesCampagnes.push(demande);
+  DAO._local.bannieres.push(demande);
+  const r = await DAO_PERSIST.banniere(demande);
+  if (r && r.error) {
+    const idx = DAO._local.bannieres.indexOf(demande);
+    if (idx >= 0) DAO._local.bannieres.splice(idx, 1);
+    toast('Échec : campagne non enregistrée, réessayez', 'erreur');
+    return;
+  }
+  if (r && r.data && r.data[0]) demande.id = r.data[0].id;
 
   // Notifier dans admin (ajouter la demande aux revenus annexes comme "pub en attente")
-  DB.revenus_annexes.push({ id: DB.revenus_annexes.length + 1, type: 'pub', label: 'Demande pub — ' + annonceur, montant: budget, date: demande.datesoumission, statut: 'en attente' });
+  DB.revenus_annexes.push({ id: DB.revenus_annexes.length + 1, type: 'pub', label: 'Demande pub — ' + annonceur, montant: budget, date: demande.dateSoumission, statut: 'en attente' });
 
   toast('✅ Campagne soumise ! Notre équipe la validera sous 24h. Vous serez notifié par WhatsApp.');
 
@@ -10975,17 +10998,18 @@ function soumettreNouvelleCampagne() {
 // ── Facturation ──
 function renderAnnFacturation() {
   if (!SESSION_ANN) return;
-  const mesBannieres = DAO._local.bannieres.filter(b => b.annonceur === SESSION_ANN.entreprise);
-  const mesDemandes = DB.demandesCampagnes.filter(d => d.annonceurId === SESSION_ANN.id);
+  const mesBannieres = DAO._local.bannieres.filter(b => b.annonceur === SESSION_ANN.entreprise && b.statut !== 'refuse');
   const el = document.getElementById('ann-factures-liste');
   if (!el) return;
-  const all = [
-    ...mesBannieres.map(b => ({ label: b.slogan.substring(0, 50), montant: b.budget, date: b.debut, statut: 'payé' })),
-    ...mesDemandes.map(d => ({ label: d.slogan.substring(0, 50), montant: d.budget, date: d.datesoumission, statut: d.statut === 'attente' ? 'en attente' : 'payé' }))
-  ];
+  const all = mesBannieres.map(b => ({
+    label: (b.slogan||'').substring(0, 50),
+    montant: b.budget,
+    date: b.statut === 'attente' ? (b.dateSoumission || b.debut) : b.debut,
+    statut: b.statut === 'attente' ? 'en attente' : 'payé'
+  }));
   if (!all.length) { el.innerHTML = '<div style="color:var(--gris-text);padding:12px 0">Aucune facture disponible.</div>'; return; }
   el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--gris-clair)"><th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--gris-text)">Campagne</th><th style="text-align:right;padding:10px 8px;font-size:11px;color:var(--gris-text)">Montant</th><th style="text-align:center;padding:10px 8px;font-size:11px;color:var(--gris-text)">Date</th><th style="text-align:center;padding:10px 8px;font-size:11px;color:var(--gris-text)">Statut</th></tr></thead><tbody>' +
-    all.map(f => '<tr style="border-bottom:1px solid var(--gris-clair)"><td style="padding:10px 8px">' + f.label + '</td><td style="padding:10px 8px;text-align:right;font-weight:600">' + (f.montant || 0).toLocaleString() + ' F</td><td style="padding:10px 8px;text-align:center;color:var(--gris-text)">' + f.date + '</td><td style="padding:10px 8px;text-align:center"><span class="ann-badge-statut ' + (f.statut === 'payé' ? 'ann-badge-actif' : 'ann-badge-attente') + '">' + f.statut + '</span></td></tr>').join('') +
+    all.map(f => '<tr style="border-bottom:1px solid var(--gris-clair)"><td style="padding:10px 8px">' + escapeHtml(f.label) + '</td><td style="padding:10px 8px;text-align:right;font-weight:600">' + (f.montant || 0).toLocaleString() + ' F</td><td style="padding:10px 8px;text-align:center;color:var(--gris-text)">' + escapeHtml(f.date) + '</td><td style="padding:10px 8px;text-align:center"><span class="ann-badge-statut ' + (f.statut === 'payé' ? 'ann-badge-actif' : 'ann-badge-attente') + '">' + f.statut + '</span></td></tr>').join('') +
     '</tbody></table>';
 }
 
@@ -11001,9 +11025,9 @@ if (_origRenderAdmin) {
   window.renderAdmin = function() {
     _origRenderAdmin();
     // Badge demandes annonceurs
-    const attentes = (DB.demandesCampagnes || []).filter(d => d.statut === 'attente').length;
+    const attentes = (DAO._local.bannieres || []).filter(b => b.statut === 'attente').length;
     const pubBtn = document.querySelector('[onclick*="admin-pub"]');
-    if (pubBtn && attentes > 0) pubBtn.textContent = 'Publicités (' + attentes + ')';
+    if (pubBtn) pubBtn.textContent = attentes > 0 ? 'Publicités (' + attentes + ')' : 'Publicités';
   };
 }
 
@@ -15446,17 +15470,21 @@ function buildBannerHTML(b, zoneId) {
   }
   const hasMedia = (b.photos && b.photos.length > 0) || b.video;
   const couleur = b.couleur || '#0D5C35';
+  // Contenu annonceur/slogan soumis par un annonceur externe (portail annonceur) — jamais
+  // fait confiance, échappé avant injection dans cette bannière visible par tout visiteur.
+  const annonceur = escapeHtml(b.annonceur || '');
+  const slogan = escapeHtml(b.slogan || '');
 
   if (!hasMedia) {
     // Bannière simple sans media — layout solo
     return `
       <div class="banner-pub banner-pub-solo" id="bp-${zoneId}"
            style="background:linear-gradient(135deg,${couleur} 0%,${couleur}BB 100%);color:#fff;--bp-color:${couleur}"
-           onclick="cliquerBanniere(${b.id})" role="button" aria-label="Publicité : ${b.annonceur}">
-        ${b.logo ? `<div class="banner-pub-logo"><img src="${b.logo}" alt="${b.annonceur}"></div>` : ''}
+           onclick="cliquerBanniere(${b.id})" role="button" aria-label="Publicité : ${annonceur}">
+        ${b.logo ? `<div class="banner-pub-logo"><img src="${b.logo}" alt="${annonceur}"></div>` : ''}
         <div style="flex:1;min-width:0">
-          <div class="banner-pub-annonceur">${b.annonceur}</div>
-          <div class="banner-pub-slogan" style="margin-top:6px">${b.slogan}</div>
+          <div class="banner-pub-annonceur">${annonceur}</div>
+          <div class="banner-pub-slogan" style="margin-top:6px">${slogan}</div>
           <div class="banner-pub-cta" style="margin-top:14px">Découvrir</div>
         </div>
         <span class="banner-pub-tag">Pub</span>
@@ -15485,12 +15513,12 @@ function buildBannerHTML(b, zoneId) {
   return `
     <div class="banner-pub" id="bp-${zoneId}"
          style="background:linear-gradient(135deg,${couleur} 0%,${couleur}BB 100%);color:#fff;--bp-color:${couleur}"
-         onclick="cliquerBanniere(${b.id})" role="button" aria-label="Publicité : ${b.annonceur}">
+         onclick="cliquerBanniere(${b.id})" role="button" aria-label="Publicité : ${annonceur}">
       <div class="banner-pub-left">
-        ${b.logo ? `<div class="banner-pub-logo"><img src="${b.logo}" alt="${b.annonceur}"></div>` : ''}
+        ${b.logo ? `<div class="banner-pub-logo"><img src="${b.logo}" alt="${annonceur}"></div>` : ''}
         <div>
-          <div class="banner-pub-annonceur">${b.annonceur}</div>
-          <div class="banner-pub-slogan" style="margin-top:5px">${b.slogan}</div>
+          <div class="banner-pub-annonceur">${annonceur}</div>
+          <div class="banner-pub-slogan" style="margin-top:5px">${slogan}</div>
         </div>
         <div class="banner-pub-cta">Découvrir</div>
       </div>
@@ -15599,32 +15627,62 @@ function fermerBanniere(btn, id) {
 
 // ── Admin : rendu onglet pub ──
 function renderAdminPub() {
-  // KPIs
-  const actives = DAO._local.bannieres.filter(b => b.actif);
-  const totalImpressions = DAO._local.bannieres.reduce((s,b) => s + (b.impressions||0), 0);
-  const totalClics = DAO._local.bannieres.reduce((s,b) => s + (b.clics||0), 0);
-  const revenusPub = DAO._local.bannieres.reduce((s,b) => s + (b.budget||0), 0);
+  const toutes = DAO._local.bannieres;
+  const demandes = toutes.filter(b => b.statut === 'attente');
+  const decidees = toutes.filter(b => b.statut !== 'attente');
+
+  // KPIs (uniquement sur les campagnes déjà décidées — une demande en attente n'est pas
+  // encore une bannière active, ni un revenu confirmé)
+  const actives = decidees.filter(b => b.actif);
+  const totalImpressions = decidees.reduce((s,b) => s + (b.impressions||0), 0);
+  const totalClics = decidees.reduce((s,b) => s + (b.clics||0), 0);
+  const revenusPub = decidees.reduce((s,b) => s + (b.budget||0), 0);
   document.getElementById('kpi-pub-actives').textContent = actives.length;
   document.getElementById('kpi-pub-impressions').textContent = totalImpressions.toLocaleString('fr-FR');
   document.getElementById('kpi-pub-clics').textContent = totalClics.toLocaleString('fr-FR');
   document.getElementById('kpi-pub-revenus').textContent = fmtFCFA(revenusPub);
 
-  // Liste bannières
+  // Demandes de campagnes soumises par les annonceurs, en attente de décision admin
+  const zoneDemandes = document.getElementById('pub-demandes');
+  if (zoneDemandes) {
+    zoneDemandes.innerHTML = !demandes.length
+      ? '<div style="text-align:center;padding:20px;color:var(--gris-text)">Aucune demande en attente</div>'
+      : demandes.map(b => `<div class="pub-admin-card" style="border:1.5px solid rgba(212,146,30,.35)">
+          <div style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,${escapeHtml(b.couleur||'#1C2833')},${escapeHtml(b.couleur||'#1C2833')}CC);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px">${escapeHtml(b.ico||'📢')}</div>
+          <div class="pub-admin-info">
+            <div class="pub-admin-nom">${escapeHtml(b.annonceur)} <span class="pub-status" style="font-size:10px;margin-left:6px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:20px">⏳ En attente</span></div>
+            <div style="font-size:13px;color:var(--gris-text);margin:3px 0">"${escapeHtml(b.slogan)}"</div>
+            <div class="pub-admin-meta">
+              <span class="pub-admin-stat">Zone : ${escapeHtml(b.position)}</span>
+              <span class="pub-admin-stat">Du ${escapeHtml(b.debut)} au ${escapeHtml(b.fin)}</span>
+              <span class="pub-admin-stat">${fmtFCFA(b.budget||0)}</span>
+              <span class="pub-admin-stat">Paiement : ${escapeHtml(b.paiement||'—')}</span>
+              <span class="pub-admin-stat">Soumise le ${escapeHtml(b.dateSoumission||'—')}</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <button class="btn btn-sm" style="font-size:12px;padding:6px 12px;background:var(--vert);color:#fff;border:none" onclick="approuverCampagne(${b.id})">✅ Approuver</button>
+            <button class="btn btn-outline btn-sm" style="font-size:12px;padding:6px 12px;color:var(--rouge);border-color:var(--rouge)" onclick="refuserCampagne(${b.id})">❌ Refuser</button>
+          </div>
+        </div>`).join('');
+  }
+
+  // Liste bannières déjà décidées (actives, pausées ou refusées)
   const liste = document.getElementById('pub-liste');
   if (!liste) return;
-  if (!DAO._local.bannieres.length) { liste.innerHTML = '<div style="text-align:center;padding:24px;color:var(--gris-text)">Aucune bannière créée</div>'; return; }
-  liste.innerHTML = DAO._local.bannieres.map(b => {
+  if (!decidees.length) { liste.innerHTML = '<div style="text-align:center;padding:24px;color:var(--gris-text)">Aucune bannière créée</div>'; return; }
+  liste.innerHTML = decidees.map(b => {
     const ctr = b.impressions ? ((b.clics/b.impressions)*100).toFixed(1) : '0.0';
-    const statusClass = b.actif ? 'pub-status-active' : 'pub-status-paused';
-    const statusLabel = b.actif ? '● Active' : '◎ Pausée';
+    const statusClass = b.statut === 'refuse' ? 'pub-status-paused' : b.actif ? 'pub-status-active' : 'pub-status-paused';
+    const statusLabel = b.statut === 'refuse' ? '✕ Refusée' : b.actif ? '● Active' : '◎ Pausée';
     return `<div class="pub-admin-card">
-      <div style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,${b.couleur},${b.couleur}CC);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">${b.logo ? `<img src="${b.logo}" alt="logo" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:11px;font-weight:800;color:#fff;text-align:center;padding:2px">${(b.annonceur||'?').substring(0,3).toUpperCase()}</span>`}</div>
+      <div style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,${escapeHtml(b.couleur||'#1C2833')},${escapeHtml(b.couleur||'#1C2833')}CC);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">${b.logo ? `<img src="${b.logo}" alt="logo" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:11px;font-weight:800;color:#fff;text-align:center;padding:2px">${escapeHtml((b.annonceur||'?').substring(0,3).toUpperCase())}</span>`}</div>
       <div class="pub-admin-info">
-        <div class="pub-admin-nom">${b.annonceur} <span class="pub-status ${statusClass}" style="font-size:10px;margin-left:6px">${statusLabel}</span></div>
-        <div style="font-size:13px;color:var(--gris-text);margin:3px 0">"${b.slogan}"</div>
+        <div class="pub-admin-nom">${escapeHtml(b.annonceur)} <span class="pub-status ${statusClass}" style="font-size:10px;margin-left:6px">${statusLabel}</span></div>
+        <div style="font-size:13px;color:var(--gris-text);margin:3px 0">"${escapeHtml(b.slogan)}"</div>
         <div class="pub-admin-meta">
-          <span class="pub-admin-stat">Zone : ${b.position}</span>
-          <span class="pub-admin-stat">Du ${b.debut} au ${b.fin}</span>
+          <span class="pub-admin-stat">Zone : ${escapeHtml(b.position)}</span>
+          <span class="pub-admin-stat">Du ${escapeHtml(b.debut)} au ${escapeHtml(b.fin)}</span>
           <span class="pub-admin-stat">${(b.impressions||0).toLocaleString('fr-FR')} vues</span>
           <span class="pub-admin-stat">${b.clics||0} clics · CTR ${ctr}%</span>
           <span class="pub-admin-stat">${fmtFCFA(b.budget||0)}</span>
@@ -15634,12 +15692,44 @@ function renderAdminPub() {
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-        <button class="btn btn-sm" style="font-size:12px;padding:6px 12px;${b.actif?'background:var(--or);color:#fff;border:none':'background:var(--vert);color:#fff;border:none'}" onclick="toggleBanniere(${b.id})">${b.actif ? '⏸ Pauser' : '▶ Activer'}</button>
+        ${b.statut !== 'refuse' ? `<button class="btn btn-sm" style="font-size:12px;padding:6px 12px;${b.actif?'background:var(--or);color:#fff;border:none':'background:var(--vert);color:#fff;border:none'}" onclick="toggleBanniere(${b.id})">${b.actif ? '⏸ Pauser' : '▶ Activer'}</button>` : ''}
         <button class="btn btn-sm" style="font-size:12px;padding:6px 12px;background:var(--bleu);color:#fff;border:none" onclick="editBanniere(${b.id})">Modifier</button>
         <button class="btn btn-outline btn-sm" style="font-size:12px;padding:6px 12px;color:var(--rouge);border-color:var(--rouge)" onclick="supprimerBanniere(${b.id})">Supprimer</button>
       </div>
     </div>`
   }).join('');
+}
+
+async function approuverCampagne(id) {
+  const b = DAO._local.bannieres.find(x => x.id === id);
+  if (!b) return;
+  const avantStatut = b.statut, avantActif = b.actif;
+  b.statut = 'valide'; b.actif = true;
+  renderAdminPub(); renderBannieresSite();
+  const r = await DAO_PERSIST.banniereMaj(id, { statut: 'valide', actif: true });
+  if (r && r.error) {
+    b.statut = avantStatut; b.actif = avantActif;
+    renderAdminPub(); renderBannieresSite();
+    toast('Échec : validation non enregistrée', 'erreur');
+    return;
+  }
+  toast(`✅ Campagne "${b.annonceur}" approuvée et mise en ligne`);
+}
+
+async function refuserCampagne(id) {
+  const b = DAO._local.bannieres.find(x => x.id === id);
+  if (!b) return;
+  const avantStatut = b.statut;
+  b.statut = 'refuse';
+  renderAdminPub();
+  const r = await DAO_PERSIST.banniereMaj(id, { statut: 'refuse' });
+  if (r && r.error) {
+    b.statut = avantStatut;
+    renderAdminPub();
+    toast('Échec : refus non enregistré', 'erreur');
+    return;
+  }
+  toast(`❌ Campagne "${b.annonceur}" refusée`);
 }
 
 function editBanniere(id) {
@@ -15662,15 +15752,15 @@ function editBanniere(id) {
       <div style="display:flex;flex-direction:column;gap:14px">
         <div>
           <label style="font-size:13px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Annonceur *</label>
-          <input id="eb-annonceur" value="${b.annonceur||''}" placeholder="Nom de l'annonceur" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
+          <input id="eb-annonceur" value="${escapeHtml(b.annonceur||'')}" placeholder="Nom de l'annonceur" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
         </div>
         <div>
           <label style="font-size:13px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Slogan *</label>
-          <input id="eb-slogan" value="${(b.slogan||'').replace(/"/g,'&quot;')}" placeholder="Message publicitaire" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
+          <input id="eb-slogan" value="${escapeHtml(b.slogan||'')}" placeholder="Message publicitaire" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
         </div>
         <div>
           <label style="font-size:13px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Lien URL</label>
-          <input id="eb-lien" value="${b.lien||'#'}" placeholder="https://..." style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
+          <input id="eb-lien" value="${escapeHtml(b.lien||'#')}" placeholder="https://..." style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
@@ -15717,7 +15807,7 @@ function editBanniere(id) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
-function sauvegarderEditBanniere(id) {
+async function sauvegarderEditBanniere(id) {
   const b = DAO._local.bannieres.find(x => x.id === id);
   if (!b) return;
   const annonceur = document.getElementById('eb-annonceur').value.trim();
@@ -15726,6 +15816,7 @@ function sauvegarderEditBanniere(id) {
   const fin       = document.getElementById('eb-fin').value;
   if (!annonceur || !slogan || !debut || !fin) { toast('Champs obligatoires manquants', 'erreur'); return; }
   if (debut > fin) { toast('Date de fin antérieure au début', 'erreur'); return; }
+  const avant = { ...b };
   b.annonceur   = annonceur;
   b.slogan      = slogan;
   b.lien        = document.getElementById('eb-lien').value.trim() || '#';
@@ -15739,6 +15830,18 @@ function sauvegarderEditBanniere(id) {
   document.getElementById('modal-edit-banniere').remove();
   renderAdminPub();
   renderBannieresSite();
+  const r = await DAO_PERSIST.banniereMaj(id, {
+    annonceur: b.annonceur, slogan: b.slogan, lien: b.lien, couleur: b.couleur,
+    position: b.position, debut: b.debut, fin: b.fin, budget: b.budget,
+    impressions: b.impressions, clics: b.clics
+  });
+  if (r && r.error) {
+    Object.assign(b, avant);
+    renderAdminPub();
+    renderBannieresSite();
+    toast('Échec : modification non enregistrée', 'erreur');
+    return;
+  }
   toast(`Bannière "${annonceur}" mise à jour ✅`);
 }
 
@@ -15941,7 +16044,7 @@ async function creerBanniere() {
     id: DAO._local.bannieres.length + 1, annonceur, slogan, lien: lien || '#',
     couleur, position, debut, fin, budget,
     logo: pubLogoData, photos: [...pubPhotosData], video: pubVideoData, videoDuree: pubVideoDuree,
-    impressions: 0, clics: 0, actif: true
+    impressions: 0, clics: 0, actif: true, statut: 'valide'
   };
   DAO._local.bannieres.push(record);
   const r = await DAO_PERSIST.banniere(record);
@@ -20184,7 +20287,7 @@ function renderAdminFinancesComplet() {
         const revEst = impTotal ? Math.round(b.impressions/impTotal*b.budget) : 0;
         return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gris-mid)">
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--noir);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.annonceur}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--noir);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(b.annonceur)}</div>
             <div style="font-size:11px;color:var(--gris-text)">${(b.impressions||0).toLocaleString('fr-FR')} imp · ${b.clics||0} clics · CTR ${ctr}%</div>
             <div style="height:4px;border-radius:2px;background:var(--gris-mid);margin-top:5px;overflow:hidden"><div style="height:100%;border-radius:2px;background:var(--or);width:${pct}%"></div></div>
           </div>
