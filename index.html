@@ -2896,8 +2896,26 @@
       date: (row.created_at || '').slice(0, 10)
     };
     if (table === 'litiges') return {
-      id: row.id, annonceId: row.annonce_id, plaignantId: row.plaignant_id, motif: row.motif,
-      statut: row.statut, date: (row.created_at || '').slice(0, 10)
+      id: row.id, annonceId: row.annonce_id, vendeurId: row.plaignant_id,
+      annonce: row.annonce_titre, motif: row.motif, montant: Number(row.montant) || 0,
+      type: row.type, statut: row.statut, decision: row.decision || '',
+      date: (row.created_at || '').slice(0, 10)
+    };
+    if (table === 'abonnements') return {
+      id: row.id, userId: row.utilisateur_id, plan: row.plan, depuis: row.debut,
+      expire: row.fin, statut: row.statut, moyen: row.moyen, actif: row.actif
+    };
+    if (table === 'bannieres') return {
+      id: row.id, annonceur: row.annonceur, slogan: row.slogan, lien: row.lien,
+      couleur: row.couleur, position: row.position, debut: row.debut, fin: row.fin,
+      budget: Number(row.budget) || 0, impressions: row.impressions || 0,
+      clics: row.clics || 0, actif: row.actif
+    };
+    if (table === 'promos') return {
+      id: row.id, code: row.code, type: row.type, valeur: Number(row.valeur),
+      desc: row.desc_txt, maxUsages: row.max_usages, usages: row.usages,
+      expiry: row.expiry, actif: row.actif, banniereId: row.banniere_id,
+      annonceurId: row.annonceur_id, annonceId: row.annonce_id
     };
     if (table === 'avis') return {
       id: row.id, cibleId: row.cible_id, auteurId: row.auteur_id, note: row.note,
@@ -2968,12 +2986,14 @@
       if (r.error) console.error('[persist] avis', r.error);
     },
     async litige(record) {
-      if (MODE !== 'remote') return;
+      if (MODE !== 'remote') return { data: null, error: null };
       const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/litiges', {
-        annonce_id: record.annonceId, plaignant_id: record.plaignantId, motif: record.motif,
-        statut: record.statut
-      }, { Prefer: 'return=minimal' });
+        annonce_id: record.annonceId || null, plaignant_id: record.vendeurId,
+        annonce_titre: record.annonce, motif: record.motif, montant: record.montant,
+        type: record.type, statut: record.statut
+      }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] litige', r.error);
+      return r;
     },
     async abonnement(record) {
       if (MODE !== 'remote') return;
@@ -3005,8 +3025,15 @@
       return r;
     },
     async banniere(record) {
-      if (MODE !== 'remote') return { error: null };
-      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/bannieres', record, { Prefer: 'return=representation' });
+      if (MODE !== 'remote') return { data: null, error: null };
+      // Ne persiste que les colonnes réelles de la table — logo/photos/video du formulaire
+      // admin restent en mémoire locale (pas de bucket Storage branché pour ces médias).
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/bannieres', {
+        annonceur: record.annonceur, slogan: record.slogan, lien: record.lien,
+        couleur: record.couleur, position: record.position, debut: record.debut,
+        fin: record.fin, budget: record.budget, impressions: record.impressions || 0,
+        clics: record.clics || 0, actif: record.actif
+      }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] banniere', r.error);
       return r;
     },
@@ -3023,8 +3050,13 @@
       return r;
     },
     async promo(record) {
-      if (MODE !== 'remote') return { error: null };
-      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/promos', record, { Prefer: 'return=representation' });
+      if (MODE !== 'remote') return { data: null, error: null };
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/promos', {
+        code: record.code, type: record.type, valeur: record.valeur, desc_txt: record.desc,
+        max_usages: record.maxUsages, usages: record.usages || 0, expiry: record.expiry,
+        actif: record.actif, banniere_id: record.banniereId || null,
+        annonceur_id: record.annonceurId || null, annonce_id: record.annonceId || null
+      }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] promo', r.error);
       return r;
     },
@@ -13397,7 +13429,7 @@ function selectPromoType(el, type) {
   if (unitEl) unitEl.textContent = labels[type] || '';
 }
 
-function creerCodePromo() {
+async function creerCodePromo() {
   const code = document.getElementById('np-code').value.trim().toUpperCase();
   const valeur = parseFloat(document.getElementById('np-valeur').value) || 0;
   const maxUsages = parseInt(document.getElementById('np-max-usages').value) || 100;
@@ -13421,6 +13453,15 @@ function creerCodePromo() {
   };
   DAO._local.promos.unshift(nouveau);
   renderAdminPromos();
+  const r = await DAO_PERSIST.promo(nouveau);
+  if (r && r.error) {
+    const idx = DAO._local.promos.indexOf(nouveau);
+    if (idx >= 0) DAO._local.promos.splice(idx, 1);
+    renderAdminPromos();
+    toast('Échec : code non enregistré', 'erreur');
+    return;
+  }
+  if (r && r.data && r.data[0]) nouveau.id = r.data[0].id;
   // Reset form
   ['np-code','np-valeur','np-max-usages','np-expiry','np-desc'].forEach(id => {
     document.getElementById(id).value = '';
@@ -13431,14 +13472,34 @@ function creerCodePromo() {
   toast('Code ' + code + ' créé ✓');
 }
 
-function togglePromo(id) {
+async function togglePromo(id) {
   const p = DAO._local.promos.find(p => p.id === id);
-  if (p) { p.actif = !p.actif; renderAdminPromos(); toast(p.code + ' : ' + (p.actif ? 'activé' : 'désactivé')); }
+  if (!p) return;
+  p.actif = !p.actif;
+  renderAdminPromos();
+  const r = await DAO_PERSIST.promoMaj(id, { actif: p.actif });
+  if (r && r.error) {
+    p.actif = !p.actif;
+    renderAdminPromos();
+    toast('Échec : changement non enregistré', 'erreur');
+    return;
+  }
+  toast(p.code + ' : ' + (p.actif ? 'activé' : 'désactivé'));
 }
 
-function supprimerPromo(id) {
+async function supprimerPromo(id) {
   const idx = DAO._local.promos.findIndex(p => p.id === id);
-  if (idx !== -1) { const code = DAO._local.promos[idx].code; DAO._local.promos.splice(idx, 1); renderAdminPromos(); toast('Code ' + code + ' supprimé'); }
+  if (idx === -1) return;
+  const [retire] = DAO._local.promos.splice(idx, 1);
+  renderAdminPromos();
+  const r = await DAO_PERSIST.promoSuppression(id);
+  if (r && r.error) {
+    DAO._local.promos.splice(idx, 0, retire);
+    renderAdminPromos();
+    toast('Échec de la suppression (code restauré)', 'erreur');
+    return;
+  }
+  toast('Code ' + retire.code + ' supprimé');
 }
 
 function renderAdminPromos() {
@@ -15828,7 +15889,7 @@ function majPubPreview() {
   requestAnimationFrame(() => startSlideshow('preview', { photos: pubPhotosData, video: pubVideoData }));
 }
 
-function creerBanniere() {
+async function creerBanniere() {
   const annonceur = document.getElementById('pub-annonceur').value.trim();
   const slogan = document.getElementById('pub-slogan').value.trim();
   const lien = document.getElementById('pub-lien').value.trim();
@@ -15839,12 +15900,22 @@ function creerBanniere() {
   const budget = parseFloat(document.getElementById('pub-budget').value) || 0;
   if (!annonceur || !slogan || !debut || !fin) { toast('Annonceur, slogan, dates obligatoires', 'erreur'); return; }
   if (debut > fin) { toast('La date de fin doit être après le début', 'erreur'); return; }
-  DAO._local.bannieres.push({
+  const record = {
     id: DAO._local.bannieres.length + 1, annonceur, slogan, lien: lien || '#',
     couleur, position, debut, fin, budget,
     logo: pubLogoData, photos: [...pubPhotosData], video: pubVideoData, videoDuree: pubVideoDuree,
     impressions: 0, clics: 0, actif: true
-  });
+  };
+  DAO._local.bannieres.push(record);
+  const r = await DAO_PERSIST.banniere(record);
+  if (r && r.error) {
+    const idx = DAO._local.bannieres.indexOf(record);
+    if (idx >= 0) DAO._local.bannieres.splice(idx, 1);
+    renderAdminPub(); renderBannieresSite();
+    toast('Échec : bannière non enregistrée', 'erreur');
+    return;
+  }
+  if (r && r.data && r.data[0]) record.id = r.data[0].id;
   // Reset form
   ['pub-annonceur','pub-slogan','pub-lien','pub-debut','pub-fin'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
   document.getElementById('pub-couleur').value = '#0D5C35';
@@ -15866,23 +15937,36 @@ function creerBanniere() {
   toast(`Bannière "${annonceur}" publiée !`);
 }
 
-function toggleBanniere(id) {
+async function toggleBanniere(id) {
   const b = DAO._local.bannieres.find(x => x.id === id);
   if (!b) return;
   b.actif = !b.actif;
   renderAdminPub();
   renderBannieresSite();
+  const r = await DAO_PERSIST.banniereMaj(id, { actif: b.actif });
+  if (r && r.error) {
+    b.actif = !b.actif;
+    renderAdminPub(); renderBannieresSite();
+    toast('Échec : changement non enregistré', 'erreur');
+    return;
+  }
   toast(`Bannière ${b.actif ? 'activée ▶' : 'pausée ⏸'}`);
 }
 
-function supprimerBanniere(id) {
+async function supprimerBanniere(id) {
   const idx = DAO._local.bannieres.findIndex(x => x.id === id);
   if (idx < 0) return;
-  const nom = DAO._local.bannieres[idx].annonceur;
-  DAO._local.bannieres.splice(idx, 1);
+  const [retiree] = DAO._local.bannieres.splice(idx, 1);
   renderAdminPub();
   renderBannieresSite();
-  toast(`Bannière "${nom}" supprimée`);
+  const r = await DAO_PERSIST.banniereSuppression(id);
+  if (r && r.error) {
+    DAO._local.bannieres.splice(idx, 0, retiree);
+    renderAdminPub(); renderBannieresSite();
+    toast('Échec de la suppression (bannière restaurée)', 'erreur');
+    return;
+  }
+  toast(`Bannière "${retiree.annonceur}" supprimée`);
 }
 
 // ── Admin : onglet abonnements ──
@@ -15938,11 +16022,19 @@ function renderAdminAbonnements() {
   }).join('');
 }
 
-function resilierAbo(id) {
+async function resilierAbo(id) {
   const a = DAO._local.abonnements.find(x => x.id === id);
   if (!a || a.statut === 'résilié') return;
-  a.statut = 'résilié';
+  const avant = a.statut;
+  a.statut = 'résilié'; a.actif = false;
   renderAdminAbonnements();
+  const r = await DAO_PERSIST.abonnementMaj(id, { statut: 'résilié', actif: false });
+  if (r && r.error) {
+    a.statut = avant; a.actif = avant !== 'résilié';
+    renderAdminAbonnements();
+    toast('Échec : résiliation non enregistrée', 'erreur');
+    return;
+  }
   toast('Abonnement résilié');
 }
 
@@ -20139,21 +20231,32 @@ function renderLitigesTable() {
   }).join('');
 }
 
-function ouvrirDossierLitige() {
+async function ouvrirDossierLitige() {
   const type = document.getElementById('lit-type').value;
   const motif = document.getElementById('lit-motif').value.trim()||'—';
   const montant = parseInt(document.getElementById('lit-montant').value)||0;
   const selP = document.getElementById('lit-paiement');
   const annonce = selP?.options[selP.selectedIndex]?.text.split('—')[0].trim()||'—';
-  DAO._local.litiges.push({
+  const record = {
     id: DAO._local.litiges.length+1,
     date: new Date().toISOString().slice(0,10),
     type, vendeurId: SESSION?.id||1, annonce, montant, motif,
     statut: 'en cours', decision: ''
-  });
-  document.getElementById('lit-feedback').innerHTML = '<span style="color:#16A34A;font-weight:600">Dossier ouvert avec succès</span>';
+  };
+  DAO._local.litiges.push(record);
   renderLitigesTable();
   renderAdminLitiges();
+  const r = await DAO_PERSIST.litige(record);
+  if (r && r.error) {
+    const idx = DAO._local.litiges.indexOf(record);
+    if (idx >= 0) DAO._local.litiges.splice(idx, 1);
+    renderLitigesTable();
+    renderAdminLitiges();
+    document.getElementById('lit-feedback').innerHTML = '<span style="color:var(--rouge);font-weight:600">Erreur : dossier non enregistré, réessayez</span>';
+    return;
+  }
+  if (r && r.data && r.data[0]) record.id = r.data[0].id;
+  document.getElementById('lit-feedback').innerHTML = '<span style="color:#16A34A;font-weight:600">Dossier ouvert avec succès</span>';
 }
 
 function remboursementDirectAdmin() {
@@ -20167,13 +20270,22 @@ function resetFormLitAdmin() {
   document.getElementById('lit-feedback').innerHTML = '';
 }
 
-function resoudreLitige(id, decision) {
+async function resoudreLitige(id, decision) {
   const l = DAO._local.litiges.find(x => x.id === id);
   if (!l) return;
+  const avantStatut = l.statut, avantDecision = l.decision;
   l.statut = decision;
   l.decision = decision === 'résolu' ? 'Remboursement accordé par admin' : 'Demande refusée — motif insuffisant';
   renderLitigesTable();
   renderAdminLitiges();
+  const r = await DAO_PERSIST.litigeMaj(id, { statut: l.statut, decision: l.decision });
+  if (r && r.error) {
+    l.statut = avantStatut; l.decision = avantDecision;
+    renderLitigesTable();
+    renderAdminLitiges();
+    toast('Échec : décision non enregistrée', 'erreur');
+    return;
+  }
   toast(decision === 'résolu' ? '✅ Remboursement accordé' : '❌ Dossier refusé');
 }
 
