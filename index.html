@@ -2980,6 +2980,66 @@
       const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/abonnements', record, { Prefer: 'return=minimal' });
       if (r.error) console.error('[persist] abonnement', r.error);
     },
+    async annonceMaj(id, patch) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/annonces?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] annonce maj', r.error);
+      return r;
+    },
+    async annonceSuppression(id) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('DELETE', SUPABASE_URL + '/rest/v1/annonces?id=eq.' + encodeURIComponent(id));
+      if (r.error) console.error('[persist] annonce suppression', r.error);
+      return r;
+    },
+    async litigeMaj(id, patch) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/litiges?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] litige maj', r.error);
+      return r;
+    },
+    async abonnementMaj(id, patch) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/abonnements?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] abonnement maj', r.error);
+      return r;
+    },
+    async banniere(record) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/bannieres', record, { Prefer: 'return=representation' });
+      if (r.error) console.error('[persist] banniere', r.error);
+      return r;
+    },
+    async banniereMaj(id, patch) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/bannieres?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] banniere maj', r.error);
+      return r;
+    },
+    async banniereSuppression(id) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('DELETE', SUPABASE_URL + '/rest/v1/bannieres?id=eq.' + encodeURIComponent(id));
+      if (r.error) console.error('[persist] banniere suppression', r.error);
+      return r;
+    },
+    async promo(record) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/promos', record, { Prefer: 'return=representation' });
+      if (r.error) console.error('[persist] promo', r.error);
+      return r;
+    },
+    async promoMaj(id, patch) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/promos?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] promo maj', r.error);
+      return r;
+    },
+    async promoSuppression(id) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('DELETE', SUPABASE_URL + '/rest/v1/promos?id=eq.' + encodeURIComponent(id));
+      if (r.error) console.error('[persist] promo suppression', r.error);
+      return r;
+    },
   };
   window.DAO_PERSIST = DAO_PERSIST;
   window.bootstrapCache = bootstrapCache;
@@ -12492,21 +12552,35 @@ function envoyerMsg() {
 
 // ── adminTab is defined in the pub/abonnements module above ──
 
-function validerAnnonce(id) {
+async function validerAnnonce(id) {
   const a = DAO._local.annonces.find(x=>x.id===id);
-  if (a) { a.statut='en-ligne'; renderAdmin(); toast('Annonce validée et publiée'); }
+  if (!a) return;
+  const avant = a.statut;
+  a.statut='en-ligne'; renderAdmin();
+  const r = await DAO_PERSIST.annonceMaj(id, { statut: 'en-ligne' });
+  if (r && r.error) { a.statut = avant; renderAdmin(); toast('Échec de la validation (non enregistré)', 'erreur'); return; }
+  toast('Annonce validée et publiée');
 }
 
-function refuserAnnonce(id) {
+async function refuserAnnonce(id) {
   const a = DAO._local.annonces.find(x=>x.id===id);
-  if (a) { a.statut='refusée'; renderAdmin(); toast('Annonce refusée','erreur'); }
+  if (!a) return;
+  const avant = a.statut;
+  // La colonne Supabase n'accepte que 'attente' | 'en-ligne' | 'vendu' | 'refuse' (sans accent).
+  a.statut='refuse'; renderAdmin();
+  const r = await DAO_PERSIST.annonceMaj(id, { statut: 'refuse' });
+  if (r && r.error) { a.statut = avant; renderAdmin(); toast('Échec du refus (non enregistré)', 'erreur'); return; }
+  toast('Annonce refusée','erreur');
 }
 
-function adminSupprimerAnnonce(id) {
+async function adminSupprimerAnnonce(id) {
   if (!confirm('Supprimer cette annonce ?')) return;
   const idx = DAO._local.annonces.findIndex(a=>a.id===id);
-  if (idx>=0) DAO._local.annonces.splice(idx,1);
+  if (idx<0) return;
+  const [retiree] = DAO._local.annonces.splice(idx,1);
   renderAdmin();
+  const r = await DAO_PERSIST.annonceSuppression(id);
+  if (r && r.error) { DAO._local.annonces.splice(idx,0,retiree); renderAdmin(); toast('Échec de la suppression (annonce restaurée)', 'erreur'); return; }
   toast('Annonce supprimée');
 }
 
