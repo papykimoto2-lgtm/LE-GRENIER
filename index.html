@@ -2887,7 +2887,8 @@
     if (table === 'utilisateurs') return {
       id: row.id, authId: row.auth_id, prenom: row.prenom, nom: row.nom, email: row.email,
       tel: row.tel, ville: row.ville, role: row.role, note: Number(row.note) || 0,
-      nbAvis: row.nb_avis || 0, verifie: row.verifie, statut: row.statut || 'valide'
+      nbAvis: row.nb_avis || 0, verifie: row.verifie, statut: row.statut || 'valide',
+      entreprise: row.entreprise, secteur: row.secteur
     };
     if (table === 'paiements') return {
       id: row.id, vendeurId: row.vendeur_id, annonce: row.annonce_titre, valeur: Number(row.valeur),
@@ -7795,9 +7796,6 @@ const CGU_DATE    = '2026-05-16';
       <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--gris-text)">
         Pas encore partenaire ? <a href="#" onclick="goScreen('screen-register-annonceur')" style="color:var(--or);font-weight:600">Créer un compte annonceur</a>
       </div>
-      <div style="margin-top:10px;text-align:center">
-        <a href="#" onclick="seConnecterDemoAnn()" style="color:var(--gris-text);font-size:12px;text-decoration:underline">Demo annonceur</a>
-      </div>
     </div>
   </div>
 </div>
@@ -8620,7 +8618,7 @@ const CGU_DATE    = '2026-05-16';
             <option value="">Tous les statuts</option><option value="attente">En attente</option><option value="valide">Validés</option><option value="refuse">Refusés</option>
           </select>
           <select id="ins-filtre-role" onchange="renderAdminInscriptions()" style="padding:9px 14px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
-            <option value="">Tous les rôles</option><option value="utilisateur">Utilisateurs</option><option value="annonceur">Annonceurs</option><option value="livreur">Livreurs</option>
+            <option value="">Tous les rôles</option><option value="user">Utilisateurs</option><option value="annonceur">Annonceurs</option><option value="livreur">Livreurs</option>
           </select>
           <button onclick="insRafraichir()" style="padding:9px 16px;border:none;border-radius:var(--radius);background:var(--vert-pale);color:var(--vert);font-size:13px;font-weight:600;cursor:pointer">Actualiser</button>
         </div>
@@ -10045,6 +10043,10 @@ async function seConnecter() {
 function _routerApresConnexion(user) {
   if (user.role === 'admin') {
     goScreen('screen-admin');
+  } else if (user.role === 'annonceur') {
+    SESSION_ANN = user;
+    goScreen('screen-annonceur');
+    renderAnnTableau();
   } else if (user.role === 'livreur') {
     goScreen('screen-accueil');
     setTimeout(() => {
@@ -10584,12 +10586,6 @@ let ANN_CAMP_FILTRE = 'all';
 let NC_COULEUR_SEL = '#1C2833';
 let NC_POSITION_SEL = 'hero';
 
-// ── DB annonceurs (comptes séparés des utilisateurs) ──
-if (!DB.annonceurs) DB.annonceurs = [
-  {id:1, entreprise:'CFAO Motors CI', secteur:'Automobile', prenom:'Konan', nom:'Brou', email:'cfao@grenier.ci', tel:'+225 07 11 22 33', pass:'123456', actif:true},
-  {id:2, entreprise:'Nestlé CI', secteur:'Alimentation & Boissons', prenom:'Aminata', nom:'Koné', email:'nestle@grenier.ci', tel:'+225 05 33 44 55', pass:'123456', actif:true},
-];
-
 // ── Navigation ──
 function annTab(el, tabId) {
   document.querySelectorAll('.ann-nav-btn').forEach(b => b.classList.remove('actif'));
@@ -10602,33 +10598,26 @@ function annTab(el, tabId) {
   if (tabId === 'ann-facturation') renderAnnFacturation();
 }
 
-// ── Connexion annonceur ──
-function seConnecterAnnonceur() {
+// ── Connexion annonceur — un annonceur est un compte utilisateurs (role='annonceur')
+//    comme les autres : on relaie vers la vraie connexion Supabase Auth (seConnecter())
+//    plutôt que de revérifier un mot de passe en clair dans un tableau local séparé.
+async function seConnecterAnnonceur() {
   const email = (document.getElementById('ann-login-email').value || '').trim();
   const pass = document.getElementById('ann-login-pass').value;
-  const ann = DB.annonceurs.find(a => a.email === email);
-  if (!ann) { toast('Email annonceur introuvable', 'erreur'); return; }
-  if (ann.pass !== pass) { toast('Mot de passe incorrect', 'erreur'); return; }
-  SESSION_ANN = ann;
-  toast('Bienvenue, ' + ann.prenom + ' — ' + ann.entreprise + ' !');
-  goScreen('screen-annonceur');
-  renderAnnTableau();
-}
-
-function seConnecterDemoAnn() {
-  document.getElementById('ann-login-email').value = 'cfao@grenier.ci';
-  document.getElementById('ann-login-pass').value = '123456';
-  seConnecterAnnonceur();
+  if (!email || !pass) { toast('Email et mot de passe requis', 'erreur'); return; }
+  document.getElementById('login-email').value = email;
+  document.getElementById('login-pass').value = pass;
+  await seConnecter();
 }
 
 function deconnecterAnnonceur() {
-  SESSION_ANN = null;
-  toast('Déconnexion annonceur effectuée', 'info');
-  goScreen('screen-accueil');
+  seDeconnecter();
 }
 
-// ── Inscription annonceur ──
-function inscrireAnnonceur() {
+// ── Inscription annonceur — même circuit que sInscrire() : fiche en attente,
+//    validée par l'admin (panneau Inscriptions), compte Supabase Auth créé à
+//    l'approbation. Un annonceur est un utilisateurs comme les autres (role='annonceur').
+async function inscrireAnnonceur() {
   const entreprise = (document.getElementById('ann-reg-entreprise').value || '').trim();
   const secteur = (document.getElementById('ann-reg-secteur').value || '').trim();
   const prenom = (document.getElementById('ann-reg-prenom').value || '').trim();
@@ -10638,10 +10627,41 @@ function inscrireAnnonceur() {
   const pass = document.getElementById('ann-reg-pass').value;
   if (!entreprise || !secteur || !prenom || !email || !tel || !pass) { toast('Tous les champs obligatoires doivent être remplis', 'erreur'); return; }
   if (pass.length < 6) { toast('Mot de passe trop court (minimum 6 caractères)', 'erreur'); return; }
-  const existe = DB.annonceurs.find(a => a.email === email);
-  if (existe) { toast('Un compte existe déjà avec cet email', 'erreur'); return; }
-  const newAnn = { id: DB.annonceurs.length + 1, entreprise, secteur, prenom, nom, email, tel, pass, actif: false };
-  DB.annonceurs.push(newAnn);
+
+  const doublon = (window.DB_INSCRIPTIONS||[]).find(u=>u.email===email)
+               || DAO._local.utilisateurs.find(u=>u.email===email);
+  if (doublon) { toast('Un compte existe déjà avec cet email', 'erreur'); return; }
+
+  const newAnn = {
+    id: Date.now(), prenom, nom, email, tel, ville: '',
+    role: 'annonceur', statut: 'attente', entreprise, secteur,
+    dateInscription: new Date().toISOString().slice(0,10),
+    mdpTemp: null
+  };
+  if (!window.DB_INSCRIPTIONS) window.DB_INSCRIPTIONS = [];
+  window.DB_INSCRIPTIONS.unshift(newAnn);
+
+  if (typeof MODE !== 'undefined' && MODE === 'remote') {
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/utilisateurs', {
+      prenom, nom, email, tel, role: 'annonceur', statut: 'attente', entreprise, secteur
+    }, { Prefer: 'return=representation' });
+    if (r.error) {
+      const idx = window.DB_INSCRIPTIONS.indexOf(newAnn);
+      if (idx >= 0) window.DB_INSCRIPTIONS.splice(idx, 1);
+      toast('Échec de l\'inscription, réessayez', 'erreur');
+      return;
+    }
+    if (r.data && r.data[0]) newAnn._supabaseId = r.data[0].id;
+  }
+
+  const msgAdmin = encodeURIComponent(
+    'Nouvelle demande ANNONCEUR - Le Grenier CI\n\n'+
+    entreprise+' ('+secteur+')\n'+prenom+' '+nom+'\nEmail: '+email+'\nTel: '+tel+
+    '\n\nValidez dans le panneau Admin > Inscriptions.'
+  );
+  window.open('https://wa.me/'+(window._ADMIN_WA||'2250779181075')+'?text='+msgAdmin, '_blank');
+  if (typeof insMajKPI === 'function') insMajKPI();
+
   toast('Compte créé ! Validation sous 24h. Connectez-vous dès approbation.');
   goScreen('screen-login-annonceur');
 }
@@ -11059,6 +11079,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function seDeconnecter() {
   SESSION = null;
+  SESSION_ANN = null;
   GUEST_BANNERS_FERMEES.clear(); // réinitialiser les bannières fermées
   toast('Déconnexion effectuée','info');
   majToutesBannieres();
@@ -16692,7 +16713,8 @@ window._syncInscriptionsDepuisSupabase = function() {
       id: u.id, _supabaseId: u.id, prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel,
       ville: u.ville, role: u.role, statut: u.statut || 'valide',
       dateInscription: p.dateInscription || '', mdpTemp: p.mdpTemp || null,
-      entreprise: p.entreprise || null, dateValidation: p.dateValidation, validePar: p.validePar,
+      entreprise: u.entreprise || p.entreprise || null, secteur: u.secteur || p.secteur || null,
+      dateValidation: p.dateValidation, validePar: p.validePar,
       motifRefus: p.motifRefus, antiBotScore: p.antiBotScore,
       consentementCGU: p.consentementCGU, geo: p.geo
     };
@@ -16841,7 +16863,8 @@ window.insConfirmerValidation = async function() {
         DAO._local.utilisateurs.push({
           id: _insValiderUser._supabaseId, prenom: _insValiderUser.prenom, nom: _insValiderUser.nom,
           email: _insValiderUser.email, tel: _insValiderUser.tel, ville: _insValiderUser.ville,
-          role: 'user', statut: 'valide', note: 0, nbAvis: 0
+          role: _insValiderUser.role || 'user', statut: 'valide', note: 0, nbAvis: 0,
+          entreprise: _insValiderUser.entreprise, secteur: _insValiderUser.secteur
         });
       }
 
@@ -16886,7 +16909,8 @@ window.insConfirmerValidation = async function() {
       email: _insValiderUser.email,
       tel: _insValiderUser.tel,
       ville: _insValiderUser.ville,
-      role: 'user',
+      role: _insValiderUser.role || 'user',
+      entreprise: _insValiderUser.entreprise, secteur: _insValiderUser.secteur,
       mdpTemp: mdp,
       mdpChange: false,
       note: 0, nbAvis: 0
