@@ -3245,11 +3245,23 @@
         _xhr('GET', SUPABASE_URL + '/rest/v1/produits_magasin?select=*')
       ]);
       if (!rMag.error && Array.isArray(rMag.data) && typeof DB_SUPERMARCHES !== 'undefined') {
-        const mapped = rMag.data.map(row => Object.assign({}, row.data, { id: row.id, _supabaseId: row.id, statut: row.statut }));
+        // Les vraies colonnes SQL (nom/zone/tel/note/verifie/plan) priment toujours sur
+        // "data" — sinon un magasin dont "data" ne duplique pas tout (ex: seed SQL direct)
+        // se retrouve avec tel/nom undefined et casse smValiderCommande() (mag.tel.replace).
+        const mapped = rMag.data.map(row => Object.assign({}, row.data, {
+          id: row.id, _supabaseId: row.id, statut: row.statut,
+          nom: row.nom, zone: row.zone, quartier: row.quartier, tel: row.tel,
+          note: Number(row.note) || 0, verifie: !!row.verifie, plan: row.plan
+        }));
         DB_SUPERMARCHES.splice(0, DB_SUPERMARCHES.length, ...mapped);
       }
       if (!rProd.error && Array.isArray(rProd.data) && typeof DB_SM_PRODUITS !== 'undefined') {
-        const mapped = rProd.data.map(row => Object.assign({}, row.data, { id: row.id, magId: row.magasin_id, _supabaseId: row.id }));
+        const mapped = rProd.data.map(row => Object.assign({}, row.data, {
+          id: row.id, magId: row.magasin_id, _supabaseId: row.id,
+          nom: row.nom, cat: row.cat, prix: Number(row.prix) || 0,
+          ancienPrix: row.ancien_prix != null ? Number(row.ancien_prix) : null,
+          unite: row.unite, promo: !!row.promo
+        }));
         DB_SM_PRODUITS.splice(0, DB_SM_PRODUITS.length, ...mapped);
       }
     } catch (e) { console.error('[supermarches] chargement échoué', e); }
@@ -20936,7 +20948,10 @@ async function smValiderCommande() {
     if (!mag) continue;
     const items = articles.map(a=>`${a.qty}×${a.nom}`).join(', ');
     const msg = `🏪 *Nouvelle commande — Mon Super Marché (Le Grenier CI)*\n📋 Réf: *${ref}*\n👤 ${nom} · ${tel}\n🛒 ${items}\n📍 ${SM_MODE_LIVR==='livraison'?'Livraison → '+addr:'🏪 Retrait en magasin'}\n💰 Total: ${total.toLocaleString('fr-FR')} FCFA · 💳 ${SM_PAY_MODE.toUpperCase()}\n\nConfirmez svp ! 🙏`;
-    window.open(`https://wa.me/${mag.tel.replace(/[\s+\-]/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');
+    // Un magasin sans tel connu ne doit pas planter la boucle et bloquer les autres
+    // magasins du panier (et surtout pas empêcher l'enregistrement de la commande).
+    if (mag.tel) window.open(`https://wa.me/${mag.tel.replace(/[\s+\-]/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');
+    else console.warn('[commande sm] pas de numéro WhatsApp pour', mag.nom||magId);
 
     if (typeof window.persisterCommandeMagasin === 'function' && mag._supabaseId) {
       const magSous = articles.reduce((s,a)=>s+a.prix*a.qty,0);
