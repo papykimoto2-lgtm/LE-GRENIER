@@ -3290,6 +3290,23 @@
     return true;
   };
 
+  // Commande Super Marché — une ligne par magasin (le panier peut couvrir
+  // plusieurs boutiques). sous_total/frais_livraison sont envoyés, mais le
+  // trigger SQL calculer_commission_commande_sm() recalcule total/commission
+  // côté serveur et ignore toute valeur de commission envoyée par le client.
+  window.persisterCommandeMagasin = async function(cmd) {
+    if (MODE !== 'remote') return { ok: true, local: true };
+    if (!SESSION || !SESSION.id) return { ok: false, error: 'non_connecte' };
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/commandes_magasin', {
+      ref: cmd.ref, magasin_id: cmd.magasinId, client_id: SESSION.id,
+      client_nom: cmd.clientNom, client_tel: cmd.clientTel,
+      mode: cmd.mode, paiement: cmd.paiement, adresse: cmd.adresse,
+      articles: cmd.articles, sous_total: cmd.sousTotal, frais_livraison: cmd.frais
+    }, { Prefer: 'return=representation' });
+    if (r.error || !r.data || !r.data[0]) { console.error('[persist] commande magasin', r.error); return { ok: false, error: r.error }; }
+    return { ok: true, data: r.data[0] };
+  };
+
   console.log(`[DAO] Mode: ${MODE} — ${MODE === 'local' ? 'données en mémoire' : 'connecté à Supabase'}`);
   </script>
 </head>
@@ -20883,7 +20900,7 @@ function smSelPay(el, mode) {
   SM_PAY_MODE = mode;
 }
 
-function smValiderCommande() {
+async function smValiderCommande() {
   if (!SM_PANIER.length) { toast('Votre panier est vide','erreur'); return; }
   if (SM_MODE_LIVR==='livraison') {
     const nom = document.getElementById('sm-addr-nom')?.value.trim();
@@ -20896,20 +20913,34 @@ function smValiderCommande() {
   const total = sous+frais;
   const ref = 'SMC-'+Date.now().toString().slice(-5);
 
-  // Grouper par magasin pour notifications WA
+  // Grouper par magasin — une commande WhatsApp + une ligne commandes_magasin par boutique
   const byMag = {};
-  SM_PANIER.forEach(({produit:p,qty}) => { if(!byMag[p.magId]) byMag[p.magId]=[]; byMag[p.magId].push(`${qty}×${p.nom}`); });
+  SM_PANIER.forEach(({produit:p,qty}) => {
+    if(!byMag[p.magId]) byMag[p.magId]=[];
+    byMag[p.magId].push({nom:p.nom, ico:p.ico, prix:p.prix, qty});
+  });
   const nom = document.getElementById('sm-addr-nom')?.value||SESSION?.prenom+' '+SESSION?.nom||'Client';
   const tel = document.getElementById('sm-addr-tel')?.value||SESSION?.tel||'';
   const addr = document.getElementById('sm-addr-adresse')?.value||'Retrait en magasin';
 
-  Object.entries(byMag).forEach(([magId, articles]) => {
+  let echecPersistance = false;
+  for (const [magId, articles] of Object.entries(byMag)) {
     const mag = DB_SUPERMARCHES.find(m => m.id===parseInt(magId));
-    if (!mag) return;
-    const items = articles.join(', ');
+    if (!mag) continue;
+    const items = articles.map(a=>`${a.qty}×${a.nom}`).join(', ');
     const msg = `🏪 *Nouvelle commande — Mon Super Marché (Le Grenier CI)*\n📋 Réf: *${ref}*\n👤 ${nom} · ${tel}\n🛒 ${items}\n📍 ${SM_MODE_LIVR==='livraison'?'Livraison → '+addr:'🏪 Retrait en magasin'}\n💰 Total: ${total.toLocaleString('fr-FR')} FCFA · 💳 ${SM_PAY_MODE.toUpperCase()}\n\nConfirmez svp ! 🙏`;
     window.open(`https://wa.me/${mag.tel.replace(/[\s+\-]/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');
-  });
+
+    if (typeof window.persisterCommandeMagasin === 'function' && mag._supabaseId) {
+      const magSous = articles.reduce((s,a)=>s+a.prix*a.qty,0);
+      const r = await window.persisterCommandeMagasin({
+        ref, magasinId: mag._supabaseId, clientNom: nom, clientTel: tel,
+        mode: SM_MODE_LIVR, paiement: SM_PAY_MODE, adresse: addr,
+        articles, sousTotal: magSous, frais
+      });
+      if (!r.ok && !r.local) { echecPersistance = true; console.error('[commande sm] persistance échouée pour', mag.nom, r.error); }
+    }
+  }
 
   SM_COMMANDES.unshift({ref, mode:SM_MODE_LIVR, paiement:SM_PAY_MODE,
     articles:[...SM_PANIER.map(({produit:p,qty})=>({nom:p.nom,ico:p.ico,prix:p.prix,qty}))],
@@ -20920,7 +20951,11 @@ function smValiderCommande() {
 
   SM_PANIER=[];
   smMajPanierFab();
-  toast(`✅ Commande ${ref} confirmée ! WhatsApp envoyé au(x) magasin(s).`);
+  if (echecPersistance) {
+    toast(`⚠️ Commande ${ref} envoyée par WhatsApp mais non enregistrée côté serveur — contactez l'admin`,'erreur');
+  } else {
+    toast(`✅ Commande ${ref} confirmée ! WhatsApp envoyé au(x) magasin(s).`);
+  }
   smTab('sm-commandes');
   smRenderCommandes();
 }
@@ -21047,6 +21082,18 @@ function smePinLoad() {
 function smePinCheck(pin) {
   return SME_PIN_STORED && pin === SME_PIN_STORED;
 }
+// Restaure l'id réel du magasin Supabase (fixé à la candidature) — sans ça
+// SME_MAG_ID reste sur le placeholder démo 9999 et rien ne persiste jamais.
+function smeMagIdLoad() {
+  try {
+    const raw = localStorage.getItem('sme_magasin_id');
+    if (raw) SME_MAG_ID = parseInt(raw, 10) || 9999;
+  } catch(e) {}
+}
+function smeMagIdSave(id) {
+  try { localStorage.setItem('sme_magasin_id', String(id)); } catch(e) {}
+  SME_MAG_ID = id;
+}
 
 // ── PAVÉ NUMÉRIQUE ─────────────────────────────────────
 function smePinKey(digit) {
@@ -21077,6 +21124,7 @@ function smeUpdateDots() {
 function smePinValidate() {
   // Si aucun PIN n'est enregistré, inviter à s'inscrire
   smePinLoad();
+  smeMagIdLoad();
   if (!SME_PIN_STORED) {
     document.getElementById('sme-lock-msg').textContent = 'Aucun PIN défini. Inscrivez votre magasin d\'abord.';
     SME_PIN_ENTERED = '';
@@ -21144,6 +21192,7 @@ function smeShowLock() {
 // ── INIT ────────────────────────────────────────────────
 function smeInit() {
   smePinLoad();
+  smeMagIdLoad();
   if (SME_UNLOCKED) {
     smeShowDashboard();
   } else {
@@ -21440,12 +21489,16 @@ function smPreviewBanner(input) {
   reader.readAsDataURL(file);
 }
 
-function smSoumettreCandidature() {
+async function smSoumettreCandidature() {
   const nom = document.getElementById('sm-reg-nom')?.value.trim();
   const resp = document.getElementById('sm-reg-responsable')?.value.trim();
   const tel = document.getElementById('sm-reg-tel')?.value.trim();
   const adresse = document.getElementById('sm-reg-adresse')?.value.trim();
   if (!nom||!resp||!tel||!adresse) { toast('Remplissez les champs obligatoires *','erreur'); return; }
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && (!SESSION || !SESSION.id)) {
+    toast('Connectez-vous avec votre compte avant de soumettre une candidature magasin','erreur');
+    return;
+  }
   const type = document.getElementById('sm-reg-type')?.value;
   const zone = document.getElementById('sm-reg-zone')?.value;
   const email = document.getElementById('sm-reg-email')?.value.trim();
@@ -21465,15 +21518,21 @@ function smSoumettreCandidature() {
     + '📅 ' + new Date().toLocaleDateString('fr-FR');
   window.open('https://wa.me/' + waAdmin + '?text=' + encodeURIComponent(msg), '_blank');
 
-  // Persistance Supabase — statut attente, à valider manuellement (pas de doublon WhatsApp perdu)
+  // Persistance Supabase — statut attente, à valider manuellement.
+  // SME_MAG_ID doit être fixé sur l'id réel retourné, sinon toute la gestion
+  // produits qui suit (smeAjouterProduit) reste bloquée sur le placeholder démo.
   if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof _xhr === 'function') {
-    _xhr('POST', SUPABASE_URL + '/rest/v1/magasins', {
-      vendeur_id: (typeof SESSION !== 'undefined' && SESSION) ? SESSION.id : null,
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/magasins', {
+      vendeur_id: SESSION.id,
       nom, zone, quartier: adresse, tel, plan: SM_PLAN_SEL, statut: 'attente',
       data: { responsable: resp, email, type, desc, hasBanner }
-    }, { Prefer: 'return=minimal' }).then(r => {
-      if (r.error) console.error('[persist] candidature magasin', r.error);
-    });
+    }, { Prefer: 'return=representation' });
+    if (r.error || !r.data || !r.data[0]) {
+      console.error('[persist] candidature magasin', r.error);
+      toast('⚠️ Message WhatsApp envoyé mais l\'enregistrement a échoué — contactez l\'admin','erreur');
+    } else {
+      smeMagIdSave(r.data[0].id);
+    }
   }
   // Enregistrer le PIN
   const pin1 = document.getElementById('sm-reg-pin')?.value;
