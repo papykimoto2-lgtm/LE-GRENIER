@@ -814,6 +814,10 @@
 
     /* ── Navigation ── */
     nav{padding:0 14px;height:56px}
+    /* Le <img> du logo garde un height:176px inline (voir HTML) hérité du
+       gabarit desktop — sans ce plafond il déborde du bandeau nav réduit à
+       56px sur mobile et recouvre le contenu affiché juste en dessous. */
+    .nav-logo img{max-height:40px}
     .nav-logo{font-size:21px}
     .nav-logo::before{width:24px;height:24px}
     .nav-actions .btn{padding:8px 13px;font-size:13px}
