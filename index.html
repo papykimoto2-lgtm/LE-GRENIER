@@ -2430,12 +2430,18 @@
         try { data = x.responseText ? JSON.parse(x.responseText) : null; } catch (e) {}
         if (x.status >= 200 && x.status < 300) { resolve({ data, error: null, status: x.status }); return; }
         // Jeton de session expiré/invalide : PostgREST renvoie 401 même si la lecture est publique.
-        // On efface le jeton périmé et on retente une fois en anonyme au lieu d'échouer silencieusement.
+        // On efface le jeton périmé. Pour une lecture (GET), on retente une fois en anonyme au
+        // lieu d'échouer silencieusement. Pour une écriture (POST/PATCH/...), on remonte l'erreur
+        // telle quelle : retenter en anonyme pourrait soit échouer de façon peu claire, soit —
+        // si une policy RLS l'autorisait — persister l'action sous une identité différente de
+        // l'admin réellement connecté.
         if (x.status === 401 && storedToken && !_retried) {
           localStorage.removeItem('lg_sb_access_token');
           localStorage.removeItem('lg_sb_refresh_token');
-          resolve(_xhr(method, url, body, headers, true));
-          return;
+          if (method === 'GET') {
+            resolve(_xhr(method, url, body, headers, true));
+            return;
+          }
         }
         resolve({ data: null, error: { message: (data && (data.message || data.msg)) || x.statusText, status: x.status }, status: x.status });
       };
@@ -16317,23 +16323,41 @@ if (!window.DB_INSCRIPTIONS) {
 // Recharge les inscriptions depuis Supabase (bouton Actualiser / ouverture de l'onglet) —
 // avant, ces deux actions se contentaient de re-rendre le tableau déjà en mémoire, donc une
 // inscription arrivée après le chargement initial de la page n'apparaissait jamais.
+// Ne recharge que la table utilisateurs (pas tout bootstrapCache) et ne touche pas au mode local.
 window.insRafraichir = async function() {
-  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof bootstrapCache === 'function') {
-    await bootstrapCache();
+  if (typeof MODE === 'undefined' || MODE !== 'remote') {
+    if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
+    return;
   }
-  if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
-  else if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/utilisateurs?select=*');
+    if (!r.error && typeof CACHE !== 'undefined') {
+      CACHE.utilisateurs = (r.data || []).map(row => _mapRowToFront('utilisateurs', row));
+    }
+  } catch (e) { console.warn('[insRafraichir]', e); }
+  window._syncInscriptionsDepuisSupabase();
 };
 
 // Synchronise DB_INSCRIPTIONS depuis les données réelles Supabase (appelé après bootstrapCache)
 window._syncInscriptionsDepuisSupabase = function() {
   if (typeof MODE === 'undefined' || MODE !== 'remote') return;
   if (typeof CACHE === 'undefined') return;
-  window.DB_INSCRIPTIONS = CACHE.utilisateurs.map(u => ({
-    id: u.id, _supabaseId: u.id, prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel,
-    ville: u.ville, role: u.role, statut: u.statut || 'valide',
-    dateInscription: '', mdpTemp: null, entreprise: null
-  }));
+  // Fusionne avec les fiches déjà en mémoire pour ne pas perdre les champs qui n'existent
+  // que côté client (mdpTemp affiché après validation, motif de refus, etc.) : ces champs
+  // ne sont pas renvoyés par Supabase et seraient sinon effacés à chaque rafraîchissement.
+  const precedent = {};
+  (window.DB_INSCRIPTIONS || []).forEach(u => { precedent[u.id] = u; });
+  window.DB_INSCRIPTIONS = CACHE.utilisateurs.map(u => {
+    const p = precedent[u.id] || {};
+    return {
+      id: u.id, _supabaseId: u.id, prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel,
+      ville: u.ville, role: u.role, statut: u.statut || 'valide',
+      dateInscription: p.dateInscription || '', mdpTemp: p.mdpTemp || null,
+      entreprise: p.entreprise || null, dateValidation: p.dateValidation, validePar: p.validePar,
+      motifRefus: p.motifRefus, antiBotScore: p.antiBotScore,
+      consentementCGU: p.consentementCGU, geo: p.geo
+    };
+  });
   if (typeof insMajKPI === 'function') insMajKPI();
   if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
 };
