@@ -14161,18 +14161,27 @@ function ouvrirContact(config) {
   // config: { nom, tel, sub, avatar, avatarBg, avatarColor, type, context }
   CS = { numeroRevele: false, ...config };
 
-  document.getElementById('cs-nom').textContent = CS.nom || '—';
-  document.getElementById('cs-sub').textContent = CS.sub || '';
+  // La sheet affiche désormais directement cs-name/cs-meta/cs-tel (plus de
+  // masquage/révélation du numéro dans le HTML actuel) — auparavant cette
+  // fonction ciblait cs-nom/cs-sub/cs-num-display/cs-num-btn, qui n'existent
+  // plus du tout : elle levait un TypeError avant même d'ouvrir la sheet,
+  // cassant silencieusement TOUS les boutons "Contacter" de l'app.
+  const nomEl = document.getElementById('cs-name');
+  const metaEl = document.getElementById('cs-meta');
+  const telEl = document.getElementById('cs-tel');
+  if (nomEl) nomEl.textContent = CS.nom || '—';
+  if (metaEl) metaEl.textContent = CS.sub || '';
+  if (telEl) telEl.textContent = CS.tel || '—';
 
   const av = document.getElementById('cs-avatar');
-  av.textContent = CS.avatar || (CS.nom ? CS.nom.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '?');
-  av.style.background = CS.avatarBg || 'var(--vert-pale)';
-  av.style.color = CS.avatarColor || 'var(--vert)';
+  if (av) {
+    av.textContent = CS.avatar || (CS.nom ? CS.nom.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '?');
+    av.style.background = CS.avatarBg || 'var(--vert-pale)';
+    av.style.color = CS.avatarColor || 'var(--vert)';
+  }
 
-  // Masquer le numéro par défaut
-  document.getElementById('cs-num-display').textContent = masquerNumero(CS.tel);
-  document.getElementById('cs-num-btn').textContent = 'Afficher →';
-  CS.numeroRevele = false;
+  const msgEl = document.getElementById('cs-msg-text');
+  if (msgEl) msgEl.value = CS.context || (CS.nom ? `Bonjour ${CS.nom.split(' ')[0]}, j'ai trouvé votre profil sur Le Grenier. Je souhaite vous contacter. Merci !` : '');
 
   document.getElementById('contact-overlay').classList.add('open');
   document.getElementById('contact-sheet').classList.add('open');
@@ -14183,26 +14192,6 @@ function fermerContact() {
   document.getElementById('contact-sheet').classList.remove('open');
 }
 
-function masquerNumero(tel) {
-  if (!tel) return '—';
-  const clean = tel.replace(/\s/g,'');
-  // Affiche les 4 premiers et masque le reste: +225 07 •• •• •• ••
-  const prefix = clean.slice(0, 7); // ex: +225 07
-  return prefix.replace('+225','🇨🇮') + ' •• •• •• ••';
-}
-
-function revelerNumero() {
-  if (!CS.tel) return;
-  if (!CS.numeroRevele) {
-    document.getElementById('cs-num-display').textContent = CS.tel;
-    document.getElementById('cs-num-btn').textContent = 'Copier';
-    CS.numeroRevele = true;
-    toast('📞 Numéro affiché', 'info');
-  } else {
-    csCopierNumero();
-  }
-}
-
 function csAppeler() {
   if (!CS.tel) { toast('Numéro non disponible', 'erreur'); return; }
   const telClean = CS.tel.replace(/\s/g,'');
@@ -14211,19 +14200,24 @@ function csAppeler() {
   fermerContact();
 }
 
+// Le message envoyé reprend maintenant le contenu réel du textarea
+// cs-msg-text (modifiable par l'utilisateur avant envoi) au lieu d'ignorer
+// silencieusement ses modifications et de toujours renvoyer CS.context.
 function csWhatsApp() {
   if (!CS.tel) { toast('Numéro non disponible', 'erreur'); return; }
   const telClean = formaterTelWhatsApp(CS.tel);
-  const msg = encodeURIComponent(CS.context || `Bonjour ${CS.nom.split(' ')[0]}, j'ai trouvé votre profil sur Le Grenier. Je souhaite vous contacter. Merci !`);
-  window.open(`https://wa.me/${telClean}?text=${msg}`, '_blank');
+  const msgEl = document.getElementById('cs-msg-text');
+  const texte = (msgEl && msgEl.value.trim()) || CS.context || `Bonjour ${CS.nom.split(' ')[0]}, j'ai trouvé votre profil sur Le Grenier. Je souhaite vous contacter. Merci !`;
+  window.open(`https://wa.me/${telClean}?text=${encodeURIComponent(texte)}`, '_blank');
   fermerContact();
 }
 
 function csSMS() {
   if (!CS.tel) { toast('Numéro non disponible', 'erreur'); return; }
   const telClean = CS.tel.replace(/\s/g,'');
-  const msg = encodeURIComponent(CS.context || `Bonjour, j'ai trouvé votre profil sur Le Grenier.`);
-  window.location.href = `sms:${telClean}?body=${msg}`;
+  const msgEl = document.getElementById('cs-msg-text');
+  const texte = (msgEl && msgEl.value.trim()) || CS.context || `Bonjour, j'ai trouvé votre profil sur Le Grenier.`;
+  window.location.href = `sms:${telClean}?body=${encodeURIComponent(texte)}`;
   fermerContact();
 }
 
@@ -21035,6 +21029,21 @@ function smOuvrirMagasin(magId) {
     mag.categories.map(c=>'<button class="sm-cat-btn" data-cat="'+c+'" data-mag="'+magId+'" onclick="smModalFiltrecatById(this)">'+c+'</button>').join('');
   smModalRendreProduits('', magId);
   document.getElementById('modal-sm-magasin').classList.add('open');
+}
+
+// Bouton ℹ️ des cartes magasin — appelait une fonction jamais définie
+// (ReferenceError silencieux au clic). Affiche un aperçu rapide contact
+// (Appel/WhatsApp/SMS) sans ouvrir le catalogue complet de la boutique.
+function smInfoMagasin(magId) {
+  const mag = DB_SUPERMARCHES.find(m => m.id === magId);
+  if (!mag) return;
+  ouvrirContact({
+    nom: mag.nom,
+    tel: mag.tel,
+    sub: `${mag.ico||'🏪'} ${mag.zone||''}${mag.badge?' · '+mag.badge:''}`,
+    avatarBg: 'var(--sm-pale)', avatarColor: 'var(--sm)',
+    context: `Bonjour, j'ai vu votre boutique "${mag.nom}" sur Le Grenier. J'aimerais avoir plus d'informations.`
+  });
 }
 
 function smModalFiltrecat(btn, cat, magId) {
