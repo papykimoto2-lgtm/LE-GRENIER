@@ -3183,6 +3183,34 @@
     }
     return sid;
   }
+
+  // Pays approximatif via le fuseau horaire du navigateur — aucune permission,
+  // aucun appel réseau externe (pas de géolocalisation IP côté serveur).
+  const _TZ_PAYS = {
+    'Africa/Abidjan':'🇨🇮 Côte d\'Ivoire','Africa/Dakar':'🇸🇳 Sénégal','Africa/Bamako':'🇲🇱 Mali',
+    'Africa/Accra':'🇬🇭 Ghana','Africa/Lagos':'🇳🇬 Nigeria','Africa/Lome':'🇹🇬 Togo',
+    'Africa/Porto-Novo':'🇧🇯 Bénin','Africa/Ouagadougou':'🇧🇫 Burkina Faso','Africa/Conakry':'🇬🇳 Guinée',
+    'Africa/Casablanca':'🇲🇦 Maroc','Africa/El_Aaiun':'🇲🇦 Maroc','Africa/Tunis':'🇹🇳 Tunisie',
+    'Africa/Algiers':'🇩🇿 Algérie','Africa/Douala':'🇨🇲 Cameroun','Africa/Kinshasa':'🇨🇩 RD Congo',
+    'Africa/Nairobi':'🇰🇪 Kenya','Africa/Cairo':'🇪🇬 Égypte','Africa/Johannesburg':'🇿🇦 Afrique du Sud',
+    'Europe/Paris':'🇫🇷 France','Europe/Brussels':'🇧🇪 Belgique','Europe/London':'🇬🇧 Royaume-Uni',
+    'Europe/Madrid':'🇪🇸 Espagne','Europe/Berlin':'🇩🇪 Allemagne','Europe/Rome':'🇮🇹 Italie',
+    'Europe/Zurich':'🇨🇭 Suisse','Europe/Lisbon':'🇵🇹 Portugal',
+    'America/New_York':'🇺🇸 États-Unis','America/Chicago':'🇺🇸 États-Unis','America/Los_Angeles':'🇺🇸 États-Unis',
+    'America/Toronto':'🇨🇦 Canada','America/Montreal':'🇨🇦 Canada',
+    'Asia/Dubai':'🇦🇪 Émirats arabes unis','Asia/Shanghai':'🇨🇳 Chine',
+  };
+  function _detecterPays() {
+    try { return _TZ_PAYS[Intl.DateTimeFormat().resolvedOptions().timeZone] || '🌍 Autre / non identifié'; }
+    catch (e) { return '🌍 Autre / non identifié'; }
+  }
+  function _detecterAppareil() {
+    const ua = navigator.userAgent || '';
+    if (/iPad|Android(?!.*Mobile)|Tablet/i.test(ua)) return 'Tablette';
+    if (/Mobi|Android|iPhone|iPod/i.test(ua)) return 'Mobile';
+    return 'Ordinateur';
+  }
+
   window.enregistrerVisite = function(page) {
     if (MODE !== 'remote') return;
     const sid = _getSessionVisiteId();
@@ -3191,14 +3219,45 @@
     const now = Date.now();
     if (last && now - Number(last) < 30 * 60 * 1000) return; // 1 entrée / page / 30min / session
     sessionStorage.setItem(key, String(now));
+    const premierePageDeCetOnglet = !sessionStorage.getItem('lg_visit_row_id');
     _xhr('POST', SUPABASE_URL + '/rest/v1/visites', {
       session_id: sid, page: page || 'accueil',
       referrer: document.referrer || null,
-      user_agent: navigator.userAgent.slice(0, 200)
-    }, { Prefer: 'return=minimal' }).then(r => {
-      if (r.error) console.error('[visites] échec tracking', r.error);
+      user_agent: navigator.userAgent.slice(0, 200),
+      pays: _detecterPays(), appareil: _detecterAppareil()
+    }, { Prefer: 'return=representation' }).then(r => {
+      if (r.error) { console.error('[visites] échec tracking', r.error); return; }
+      // Mémorise la 1ère ligne de cet onglet pour y accrocher la durée de visite au départ.
+      if (premierePageDeCetOnglet && r.data && r.data[0]) {
+        sessionStorage.setItem('lg_visit_row_id', r.data[0].id);
+        sessionStorage.setItem('lg_visit_start_ts', String(now));
+      }
     });
   };
+
+  // Durée de visite : recalculée et renvoyée à chaque mise en arrière-plan de
+  // l'onglet (fetch keepalive — survit à la fermeture, contrairement à XHR
+  // async classique). Se redéclenche à chaque retour en arrière-plan, donc la
+  // dernière valeur avant fermeture réelle est la plus proche de la durée totale.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden' || typeof MODE === 'undefined' || MODE !== 'remote') return;
+    const rowId = sessionStorage.getItem('lg_visit_row_id');
+    const startTs = sessionStorage.getItem('lg_visit_start_ts');
+    if (!rowId || !startTs) return;
+    const duree = Math.round((Date.now() - Number(startTs)) / 1000);
+    if (duree < 1 || duree > 6 * 3600) return; // ignore les valeurs aberrantes (horloge, veille prolongée)
+    try {
+      fetch(SUPABASE_URL + '/rest/v1/visites?id=eq.' + encodeURIComponent(rowId), {
+        method: 'PATCH', keepalive: true,
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: 'Bearer ' + (localStorage.getItem('lg_sb_access_token') || SUPABASE_ANON_KEY),
+          'Content-Type': 'application/json', Prefer: 'return=minimal'
+        },
+        body: JSON.stringify({ duree_secondes: duree })
+      }).catch(() => {});
+    } catch (e) {}
+  });
 
   // ══════════════════════════════════════════════════════════════
   //  LIVRAISONS — chargement + persistance réels (hors CACHE générique,
@@ -9622,7 +9681,7 @@ async function renderAdminVisibilite() {
   zone.innerHTML = `<div class="admin-section" style="text-align:center;padding:40px;color:var(--gris-text)">Chargement…</div>`;
 
   const token = (typeof _supa !== 'undefined') ? _supa.auth.getAccessToken() : null;
-  const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/visites?select=session_id,page,referrer,created_at&order=created_at.desc&limit=500',
+  const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/visites?select=session_id,page,referrer,pays,appareil,duree_secondes,created_at&order=created_at.desc&limit=500',
     null, token ? { Authorization: 'Bearer ' + token } : {});
 
   if (r.error) {
@@ -9641,82 +9700,114 @@ async function renderAdminVisibilite() {
   const visiteursUniques = new Set(visites.map(v => v.session_id)).size;
   const visiteursUniques7j = new Set(visites7j.map(v => v.session_id)).size;
 
-  // Répartition par jour (14 derniers jours) pour le graphique en barres
+  // ── Durée moyenne de visite ──
+  const durees = visites.map(v => v.duree_secondes).filter(d => d != null && d > 0);
+  const dureeMoyenne = durees.length ? Math.round(durees.reduce((a,b)=>a+b,0) / durees.length) : null;
+  const fmtDuree = sec => { if (sec == null) return '—'; const m = Math.floor(sec/60), s = sec%60; return m > 0 ? `${m}m ${s}s` : `${s}s`; };
+
+  // ── Pages par visite / taux de rebond — une "visite" = même visiteur, même jour ──
+  const visiteGroups = {};
+  visites.forEach(v => { const k = v.session_id + '_' + v.created_at.slice(0,10); visiteGroups[k] = (visiteGroups[k]||0) + 1; });
+  const nbVisitesDistinct = Object.keys(visiteGroups).length;
+  const pagesParVisite = nbVisitesDistinct ? (visites.length / nbVisitesDistinct).toFixed(1) : '—';
+  const visitesMonoPage = Object.values(visiteGroups).filter(c => c === 1).length;
+  const tauxRebond = nbVisitesDistinct ? Math.round((visitesMonoPage / nbVisitesDistinct) * 100) : 0;
+
+  // ── Série 14 jours ──
   const jours = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000);
     const key = d.toISOString().slice(0, 10);
-    const count = visites.filter(v => v.created_at.slice(0, 10) === key).length;
-    jours.push({ label: d.toLocaleDateString('fr-CI', { day: '2-digit', month: '2-digit' }), count });
+    jours.push({ label: key, value: visites.filter(v => v.created_at.slice(0, 10) === key).length });
   }
-  const maxJour = Math.max(1, ...jours.map(j => j.count));
 
-  // Pages les plus visitées
+  // ── Pages les plus visitées ──
   const parPage = {};
   visites30j.forEach(v => { const p = v.page || 'accueil'; parPage[p] = (parPage[p] || 0) + 1; });
-  const topPages = Object.entries(parPage).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const maxPage = Math.max(1, ...topPages.map(p => p[1]));
+  const topPages = Object.entries(parPage).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([label,value])=>({label,value}));
+
+  // ── Pays ──
+  const parPays = {};
+  visites.forEach(v => { const p = v.pays || '🌍 Non identifié'; parPays[p] = (parPays[p]||0) + 1; });
+  const paysTries = Object.entries(parPays).sort((a,b)=>b[1]-a[1]);
+  const paysColors = ['#1A7A48','#1A5FBF','#B8791A','#7C3A8A'];
+  const paysSegments = paysTries.slice(0,4).map(([label,value],i) => ({label, value, color: paysColors[i]}));
+  const autresPaysTotal = paysTries.slice(4).reduce((s,[,c])=>s+c,0);
+  if (autresPaysTotal > 0) paysSegments.push({label:'Autres pays', value: autresPaysTotal, color:'#9C978C'});
+
+  // ── Appareils ──
+  const parAppareil = {};
+  visites.forEach(v => { const a = v.appareil || 'Inconnu'; parAppareil[a] = (parAppareil[a]||0) + 1; });
+  const appareilList = Object.entries(parAppareil).sort((a,b)=>b[1]-a[1]).map(([label,value])=>({label,value}));
+
+  const paysTotal = paysSegments.reduce((a,b)=>a+b.value,0);
 
   zone.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
-      <div class="admin-section" style="text-align:center;padding:16px">
-        <div style="font-size:24px;margin-bottom:4px">👁️</div>
-        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre)">${visites.length}</div>
-        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Visites (500 dern.)</div>
+    <div class="stats-kpi-row">
+      <div class="stat-tile"><span class="stat-tile-ico">👁️</span>
+        <div class="stat-tile-label">Visites (500 dern.)</div>
+        <div class="stat-tile-val">${visites.length}</div>
+        <div class="stat-tile-delta flat">${visitesAuj.length} aujourd'hui</div>
       </div>
-      <div class="admin-section" style="text-align:center;padding:16px">
-        <div style="font-size:24px;margin-bottom:4px">👤</div>
-        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre);color:var(--vert)">${visiteursUniques}</div>
-        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Visiteurs uniques</div>
+      <div class="stat-tile"><span class="stat-tile-ico">👤</span>
+        <div class="stat-tile-label">Visiteurs uniques</div>
+        <div class="stat-tile-val">${visiteursUniques}</div>
+        <div class="stat-tile-delta flat">${visiteursUniques7j} sur 7 jours</div>
       </div>
-      <div class="admin-section" style="text-align:center;padding:16px">
-        <div style="font-size:24px;margin-bottom:4px">📅</div>
-        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre);color:var(--bleu)">${visitesAuj.length}</div>
-        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Aujourd'hui</div>
+      <div class="stat-tile"><span class="stat-tile-ico">⏱️</span>
+        <div class="stat-tile-label">Durée moyenne</div>
+        <div class="stat-tile-val">${fmtDuree(dureeMoyenne)}</div>
+        <div class="stat-tile-delta flat">${durees.length} mesure${durees.length>1?'s':''}</div>
       </div>
-      <div class="admin-section" style="text-align:center;padding:16px">
-        <div style="font-size:24px;margin-bottom:4px">📈</div>
-        <div style="font-size:28px;font-weight:700;font-family:var(--font-titre);color:var(--or)">${visiteursUniques7j}</div>
-        <div style="font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em">Uniques (7j)</div>
+      <div class="stat-tile"><span class="stat-tile-ico">📄</span>
+        <div class="stat-tile-label">Pages / visite</div>
+        <div class="stat-tile-val">${pagesParVisite}</div>
+        <div class="stat-tile-delta ${tauxRebond>60?'down':'flat'}">${tauxRebond}% à 1 page (rebond)</div>
       </div>
     </div>
 
     <div class="admin-section">
-      <div class="admin-section-titre">Fréquentation — 14 derniers jours</div>
-      <div style="display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:10px">
-        ${jours.map(j => `
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px" title="${j.label} : ${j.count} visite(s)">
-            <div style="width:100%;background:linear-gradient(180deg,var(--vert-vif),var(--vert));border-radius:4px 4px 0 0;height:${Math.max(3, (j.count / maxJour) * 100)}px;transition:height .3s"></div>
-            <div style="font-size:9px;color:var(--gris-text);white-space:nowrap">${j.label}</div>
-          </div>`).join('')}
+      <div class="admin-section-titre">📈 Fréquentation — 14 derniers jours</div>
+      <div class="chart-wrap">${jours.some(j=>j.value>0) ? chartArea(jours, {color:'#1A5FBF'}) : '<div class="chart-empty">Aucune visite sur cette période</div>'}</div>
+    </div>
+
+    <div class="stats-grid-2">
+      <div class="admin-section">
+        <div class="admin-section-titre">🌍 Visites par pays</div>
+        <div class="chart-wrap" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+          ${paysSegments.length ? chartDonut(paysSegments) : ''}
+          <div style="flex:1;min-width:160px">
+            ${paysSegments.length ? '<div class="chart-legend" style="flex-direction:column;gap:8px;margin-top:0">' + paysSegments.map(seg => {
+              const pct = Math.round(seg.value/paysTotal*100);
+              return `<div class="chart-legend-item"><span class="chart-legend-dot" style="background:${seg.color}"></span>${escapeHtml(seg.label)} <strong style="color:var(--noir);margin-left:auto">${pct}%</strong></div>`;
+            }).join('') + '</div>' : '<div class="chart-empty">Aucune donnée</div>'}
+          </div>
+        </div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-titre">📱 Appareils</div>
+        ${appareilList.length ? chartBarList(appareilList, {color:'#1A5FBF', unit:' visite(s)'}) : '<div class="chart-empty">Aucune donnée</div>'}
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+    <div class="stats-grid-2">
       <div class="admin-section">
         <div class="admin-section-titre">Pages les plus visitées (30j)</div>
-        ${topPages.length ? topPages.map(([page, count]) => `
-          <div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-              <span>${escapeHtml(page)}</span><span style="font-weight:700">${count}</span>
-            </div>
-            <div style="background:var(--gris-clair);border-radius:6px;height:8px;overflow:hidden">
-              <div style="width:${(count / maxPage) * 100}%;background:var(--vert);height:100%"></div>
-            </div>
-          </div>`).join('') : '<div style="color:var(--gris-text);font-size:13px">Aucune donnée</div>'}
+        ${topPages.length ? chartBarList(topPages, {color:'#1A7A48', unit:' vue(s)'}) : '<div class="chart-empty">Aucune donnée</div>'}
       </div>
-
       <div class="admin-section">
         <div class="admin-section-titre">Historique récent</div>
         <div class="table-wrap-scroll" style="max-height:340px;overflow-y:auto">
           <table class="table">
-            <thead><tr><th>Date</th><th>Page</th><th>Provenance</th></tr></thead>
+            <thead><tr><th>Date</th><th>Page</th><th>Pays</th><th>Appareil</th><th>Durée</th></tr></thead>
             <tbody>
               ${visites.slice(0, 60).map(v => `
                 <tr>
                   <td style="font-size:12px;white-space:nowrap">${new Date(v.created_at).toLocaleString('fr-CI', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
                   <td style="font-size:12px">${escapeHtml(v.page || 'accueil')}</td>
-                  <td style="font-size:12px;color:var(--gris-text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.referrer ? escapeHtml(v.referrer) : 'Direct'}</td>
+                  <td style="font-size:12px;white-space:nowrap">${escapeHtml(v.pays || '—')}</td>
+                  <td style="font-size:12px">${escapeHtml(v.appareil || '—')}</td>
+                  <td style="font-size:12px">${fmtDuree(v.duree_secondes)}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -9724,6 +9815,7 @@ async function renderAdminVisibilite() {
       </div>
     </div>
   `;
+  _initChartTooltips(zone);
 }
 
 function sauvegarderAdminTarifs() {
