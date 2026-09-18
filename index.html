@@ -11480,7 +11480,7 @@ function selInvitePay(btn, mode) {
   btn.style.background = '#FFF5F5';
 }
 
-function validerCommandeInvite() {
+async function validerCommandeInvite() {
   const nom     = document.getElementById('invite-nom').value.trim();
   const tel     = document.getElementById('invite-tel').value.trim();
   const adresse = document.getElementById('invite-adresse').value.trim();
@@ -11507,8 +11507,18 @@ function validerCommandeInvite() {
     date: new Date().toISOString().slice(0,10),
     article: _inviteArticle?.titre || null
   };
+  // La commande invité (sans session) était acceptée sans jamais vérifier
+  // l'enregistrement côté serveur : l'écran "Commande confirmée !" et les
+  // messages WhatsApp partaient même quand la ligne n'existait nulle part,
+  // laissant le client attendre un livreur qui ne recevrait jamais rien.
+  if (typeof persisterLivraison === 'function') {
+    const enregistre = await persisterLivraison(nouvelleLivraison1);
+    if (!enregistre && typeof MODE !== 'undefined' && MODE === 'remote') {
+      toast('⚠️ Échec de l\'enregistrement de la commande, réessayez', 'erreur');
+      return;
+    }
+  }
   DISPATCH_COMMANDES.unshift(nouvelleLivraison1);
-  if (typeof persisterLivraison === 'function') persisterLivraison(nouvelleLivraison1);
 
   // WA livreur
   if (livreur) {
@@ -14529,7 +14539,22 @@ function publierOffreBoulot() {
   const metier = document.getElementById('bc-metier').value;
   const tel = document.getElementById('bc-tel').value.trim();
   if (!titre||!metier||!tel) { toast('Remplissez tous les champs obligatoires','erreur'); return; }
+  const urgence = document.getElementById('bc-urgence')?.value || 'normal';
+  const zone = document.getElementById('bc-zone')?.value || '';
+  const budget = parseInt(document.getElementById('bc-budget')?.value) || 0;
+  const desc = document.getElementById('bc-desc')?.value.trim() || '';
+  const newDemande = {
+    titre, metier, urgence, zone, budget, desc, tel,
+    demandeurId: SESSION?.id || null,
+    demandeur: SESSION ? SESSION.prenom + ' ' + SESSION.nom : 'Anonyme',
+    date: new Date().toISOString().slice(0,10)
+  };
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('demandes_boulot', newDemande, {
+    titre: newDemande.titre, metier: newDemande.metier, urgence: newDemande.urgence, zone: newDemande.zone, tel: newDemande.tel
+  });
   toast(`Offre "${titre}" publiée ! Les prestataires disponibles seront notifiés.`);
+  ['bc-titre','bc-budget','bc-desc','bc-tel'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const metierSel = document.getElementById('bc-metier'); if (metierSel) metierSel.selectedIndex = 0;
   retourBoulots();
 }
 
@@ -14955,7 +14980,19 @@ function soumettreDemandeeColis() {
   if (!SESSION) {
     toast('💡 Créez un compte pour suivre vos envois dans "Mes colis"', 'info');
   }
+  const adresse = document.getElementById('colis-adresse')?.value.trim() || '';
+  const instructions = document.getElementById('colis-instructions')?.value.trim() || '';
+  const valeur = parseFloat(document.getElementById('colis-valeur')?.value) || 0;
   const num = 'LG-2025-' + Math.floor(1000+Math.random()*9000);
+  const newDemande = {
+    numeroSuivi: num, dep, arr, poids, type,
+    expediteurNom: expNom, destinataireNom: destNom, destinataireTel: destTel,
+    adresse, instructions, valeur,
+    date: new Date().toISOString().slice(0,10)
+  };
+  if (typeof persisterModuleVertical === 'function') persisterModuleVertical('demandes_colis', newDemande, {
+    numero_suivi: num, dep, arr, poids, type, tel: destTel
+  });
   toast(`✅ Demande envoyée ! Numéro de suivi : ${num}`);
   // Reset
   ['colis-dep','colis-arr','colis-type'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
@@ -17506,6 +17543,27 @@ function renderAdminFinances() {
 const _publierAnnonceHybrid = publierAnnonce;
 publierAnnonce = function() {
   if (!SESSION) { goScreen('screen-login'); return; }
+
+  // L'écran Dépôt a 3 sections (objet / service / campagne pub) selon le type
+  // choisi, mais ne lit ici que les champs de la section "objet" — publier
+  // depuis les 2 autres sections ignorait silencieusement tarif/zone/budget/
+  // dates et publiait une annonce vide ou rejetait à tort le formulaire.
+  // Ces 2 modes redirigent vers leur écran dédié, déjà fonctionnel.
+  const sService = document.getElementById('depot-section-service');
+  const sAnnonceur = document.getElementById('depot-section-annonceur');
+  if (sAnnonceur && sAnnonceur.style.display !== 'none') {
+    toast('📢 Les campagnes publicitaires se créent depuis le Portail Annonceur');
+    goScreen('screen-annonceur');
+    return;
+  }
+  if (sService && sService.style.display !== 'none') {
+    const tabId = document.getElementById('depot-type')?.value;
+    const navTab = tabId && document.querySelector(`.nav-tab[onclick*="${tabId}"]`);
+    toast('👉 Ce type d\'offre se publie depuis son propre écran');
+    goScreen('screen-accueil');
+    if (navTab) switchMainTab(navTab, tabId);
+    return;
+  }
 
   // 1. Vérifier quota plan
   const check = peutPublier(SESSION.id);
