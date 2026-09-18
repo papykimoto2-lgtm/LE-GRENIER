@@ -674,6 +674,11 @@
       padding-bottom:72px /* 58px barre + 14px marge */
     }
     #screen-accueil footer{margin-bottom:58px}
+    /* Le toast (bottom:20px) était lui aussi ignoré par ce correctif : il
+       s'affichait par-dessus la barre fixe (58px + zone sécurisée), rendant
+       les messages de confirmation/erreur (ex: "Publier mon don") difficiles
+       à remarquer, voire imperceptibles selon l'appareil. */
+    .toast{bottom:calc(58px + 20px + env(safe-area-inset-bottom,0px))}
   }
 
   /* ─── ÉCRAN INFO / FORMATION ─── */
