@@ -2424,6 +2424,7 @@
   .cour-stand-tag{font-size:12px;color:var(--gris-text);line-height:1.4;margin-top:4px;max-width:92%}
   .cour-stand-fleche{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:50%;background:var(--gris-clair);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--gris-text);transition:var(--transition)}
   .cour-stand:hover .cour-stand-fleche{background:var(--sc1);color:#fff;transform:rotate(45deg)}
+  .cour-stand-pop{position:absolute;top:14px;left:14px;font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;letter-spacing:.02em;box-shadow:0 2px 8px rgba(220,38,38,.35);z-index:2}
 
   /* Stand phare — Marché */
   .cour-stand-phare{grid-column:span 4;grid-row:span 2;padding:24px 26px 22px;justify-content:flex-end}
@@ -13230,6 +13231,72 @@ function filtrerLocalite() {
   appliquerFiltres();
 }
 
+// ─── HERO : accueil personnalisé selon connexion ───
+function personnaliserHero() {
+  const badge = document.querySelector('#tab-marche .hero-badge');
+  const h1 = document.querySelector('#tab-marche .hero-left h1');
+  if (!badge || !h1) return;
+  if (SESSION) {
+    badge.textContent = '👋 Bon retour, ' + (SESSION.prenom || 'vous') + ' !';
+    h1.innerHTML = 'Que cherchez-vous<br><em>aujourd\'hui ?</em>';
+  } else {
+    badge.textContent = '🇨🇮 Marketplace Côte d\'Ivoire';
+    h1.innerHTML = 'Achetez &amp; vendez<br><em>près de chez vous</em>';
+  }
+}
+
+// ─── LA COUR DU GRENIER : disponibilités en direct + rayons tendance ───
+function renderCourGrille() {
+  const grille = document.getElementById('cour-grille');
+  if (!grille) return;
+  const compteurEl = document.querySelector('.cour-compteur strong');
+  if (compteurEl) compteurEl.textContent = grille.querySelectorAll('.cour-stand').length;
+
+  const dispo = (arr) => Array.isArray(arr) ? arr.length : 0;
+  const counts = {
+    'tab-marche': DAO._local.annonces.filter(a => a.statut === 'en-ligne').length,
+    'tab-boulots': dispo(typeof DB_BOULOTS !== 'undefined' ? DB_BOULOTS : null),
+    'tab-nounou': dispo(typeof DB_NOUNOU !== 'undefined' ? DB_NOUNOU : null),
+    'tab-colis': dispo(typeof DB_TRAJETS !== 'undefined' ? DB_TRAJETS : null),
+    'tab-auto': dispo(typeof DB_VOITURES !== 'undefined' ? DB_VOITURES : null) + dispo(typeof DB_LOCATIONS !== 'undefined' ? DB_LOCATIONS : null),
+    'tab-dons': dispo(typeof DB_DONS !== 'undefined' ? DB_DONS : null),
+    'tab-beaute': dispo(typeof DB_SALONS !== 'undefined' ? DB_SALONS : null) + dispo(typeof DB_ARTISTES !== 'undefined' ? DB_ARTISTES : null),
+    'tab-logement': dispo(typeof DB_LOGEMENTS !== 'undefined' ? DB_LOGEMENTS : null),
+    'tab-resto': dispo(typeof DB_RESTOS !== 'undefined' ? DB_RESTOS : null),
+    'tab-livraison': typeof DB_LIVREURS !== 'undefined' ? DB_LIVREURS.filter(l => l.dispo).length : 0,
+    'tab-supermarche': dispo(typeof DB_SUPERMARCHES !== 'undefined' ? DB_SUPERMARCHES : null),
+  };
+
+  grille.querySelectorAll('.cour-stand').forEach(btn => {
+    const m = (btn.getAttribute('onclick') || '').match(/allerVersModule\('([^']+)'\)/);
+    if (!m) return;
+    const tabId = m[1];
+    const n = counts[tabId];
+    const tagEl = btn.querySelector('.cour-stand-tag');
+    if (tagEl && n != null) {
+      if (!tagEl.dataset.base) tagEl.dataset.base = tagEl.textContent;
+      tagEl.textContent = tagEl.dataset.base + (n > 0 ? ` · ${n} dispo` : '');
+    }
+    const oldPop = btn.querySelector('.cour-stand-pop');
+    if (oldPop) oldPop.remove();
+  });
+
+  // Badge "Populaire" sur les 2 rayons les mieux fournis (le Marché est déjà mis en avant)
+  Object.entries(counts)
+    .filter(([id, n]) => id !== 'tab-marche' && n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .forEach(([tabId]) => {
+      const btn = grille.querySelector(`.cour-stand[onclick*="${tabId}"]`);
+      if (btn) {
+        const badge = document.createElement('span');
+        badge.className = 'cour-stand-pop';
+        badge.textContent = '🔥 Populaire';
+        btn.appendChild(badge);
+      }
+    });
+}
+
 // ─── HERO : TOP 3 ANNONCES ───
 function renderHeroTop() {
   const grid = document.getElementById('hero-top-grid');
@@ -14181,6 +14248,7 @@ function fermerGuestBanner(key) {
 function majToutesBannieres() {
   // Appelé après connexion/déconnexion pour mettre à jour toutes les bannières visibles
   Object.keys(TAB_TO_BANNER).forEach(tabId => majBanniereGuest(tabId));
+  if (typeof personnaliserHero === 'function') personnaliserHero();
 }
 
 // Mapping tab → niveau
@@ -20018,6 +20086,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderBoulots();
   renderBannieresSite();
   renderHeroTop(); // Re-render après pub pour garantir l'affichage des top cards
+  personnaliserHero();
+  renderCourGrille();
   // ── Bannière guest : onglet marché actif par défaut ──
   majBanniereGuest('tab-marche');
   appliquerFiltres(); // Charger les annonces au démarrage
@@ -23231,6 +23301,8 @@ async function idbRestaurerDonnees() {
   // 5. Rafraîchir l'affichage avec les nouvelles données
   if (typeof appliquerFiltres === 'function') appliquerFiltres();
   if (typeof renderHeroTop === 'function') renderHeroTop();
+  if (typeof renderCourGrille === 'function') renderCourGrille();
+  if (typeof personnaliserHero === 'function') personnaliserHero();
 
   console.log('[IDB] Restauration terminée');
 }
