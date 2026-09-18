@@ -827,6 +827,14 @@
     .nav-tabs{display:none}
     .nav-tab{padding:13px 14px;font-size:12px}
 
+    /* La bannière pub de la nav est fixée à height:160px (voir règle desktop
+       ligne ~130) alors que .pub-zone-nav n'a pas de hauteur propre et suit
+       simplement son contenu : sur le bandeau nav réduit à 56px, elle débordait
+       par-dessus le contenu affiché juste en dessous (même bug que le logo
+       ci-dessus). Pas de format compact qui reste lisible dans 56px — les
+       autres emplacements pub (hero, par onglet) restent visibles sur mobile. */
+    .pub-zone-nav{display:none}
+
     /* ── Hero ── */
     .hero{padding:0 16px}
     .hero-inner{grid-template-columns:1fr;gap:12px;padding:20px 0 18px}
