@@ -8849,7 +8849,7 @@ const CGU_DATE    = '2026-05-16';
         <div class="avatar" id="modal-avatar">?</div>
         <div>
           <div style="font-weight:600;font-size:14px" id="modal-vendeur"></div>
-          <div style="font-size:12px;color:var(--gris-text)">Membre vérifié ✓ · <span id="modal-note">⭐ 4.8</span></div>
+          <div style="font-size:12px;color:var(--gris-text)"><span id="modal-verifie" style="display:none;color:var(--vert)">Membre vérifié ✓ · </span><span id="modal-note">⭐ 4.8</span></div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -11314,6 +11314,8 @@ function ouvrirAnnonce(id) {
     document.getElementById('modal-vendeur').textContent = vendeur.prenom+' '+vendeur.nom;
     document.getElementById('modal-avatar').textContent = vendeur.prenom[0]+vendeur.nom[0];
     document.getElementById('modal-note').textContent = `⭐ ${vendeur.note||'Nouveau'}`;
+    const verifEl = document.getElementById('modal-verifie');
+    if (verifEl) verifEl.style.display = vendeur.verifie ? 'inline' : 'none';
   }
   document.getElementById('modal-annonce').classList.add('open');
 }
@@ -11890,6 +11892,18 @@ function payTraiter() {
       DAO._local.annonces.push(nouvelleAnnonce);
       const rAnnonce = await DAO_PERSIST.annonce(nouvelleAnnonce);
       if (rAnnonce && !rAnnonce.error && rAnnonce.data && rAnnonce.data[0]) nouvelleAnnonce.id = rAnnonce.data[0].id;
+      // Notifier l'admin — sans ça une annonce en attente de modération peut rester
+      // invisible indéfiniment (aucun autre signal ne prévient qu'elle existe).
+      if (nouvelleAnnonce.statut === 'attente') {
+        const msgAdminAnnonce = encodeURIComponent(
+          'Nouvelle annonce à modérer - Le Grenier CI\n\n'+
+          nouvelleAnnonce.titre+' ('+nouvelleAnnonce.cat+')\n'+
+          fmtFCFA(nouvelleAnnonce.valeur)+' · '+nouvelleAnnonce.ville+'\n'+
+          'Vendeur : '+(SESSION?.prenom||'')+' '+(SESSION?.nom||'')+
+          '\n\nValidez dans le panneau Admin > Annonces.'
+        );
+        window.open('https://wa.me/'+(window._ADMIN_WA||'2250779181075')+'?text='+msgAdminAnnonce, '_blank');
+      }
       const nouveauPaiement = {
         id:         DAO._local.paiements.length + 1,
         date:       new Date().toISOString().slice(0,10),
@@ -11917,6 +11931,7 @@ function payTraiter() {
       appliquerFiltres(); // Rafraîchir la grille
       // ── Routing automatique : bouton "Voir mon annonce" ──
       const btnVoir = document.getElementById('pay-btn-voir-annonce');
+      const enAttenteModeration = nouvelleAnnonce.statut === 'attente';
       if (btnVoir) {
         btnVoir.style.display = 'inline-flex';
         btnVoir.onclick = () => {
@@ -11924,7 +11939,9 @@ function payTraiter() {
           goScreen('screen-accueil');
           const navTab = document.querySelector(`.nav-tab[onclick*="${targetTab}"]`);
           if (navTab) switchMainTab(navTab, targetTab);
-          toast('✅ Annonce publiée ! Retrouvez-la dans l\'onglet correspondant.', 'succes');
+          toast(enAttenteModeration
+            ? '⏳ Annonce enregistrée, en attente de validation par un admin avant d\'être visible.'
+            : '✅ Annonce publiée ! Retrouvez-la dans l\'onglet correspondant.', 'succes');
         };
       }
     }
