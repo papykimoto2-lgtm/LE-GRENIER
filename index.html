@@ -8194,7 +8194,7 @@ const CGU_DATE    = '2026-05-16';
               <div style="border:2px dashed var(--gris-mid);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;background:#fff;transition:var(--transition)" onclick="document.getElementById('pub-logo-input').click()" id="pub-logo-drop" ondragover="event.preventDefault();this.style.borderColor='var(--vert)'" ondragleave="this.style.borderColor=''" ondrop="pubDropLogo(event)">
                 <div id="pub-logo-preview" style="display:none;margin-bottom:8px"><img id="pub-logo-img" src="" alt="logo" style="width:56px;height:56px;border-radius:10px;object-fit:cover;margin:0 auto;display:block"></div>
                 <div id="pub-logo-placeholder" style="font-size:24px;margin-bottom:4px">🏢</div>
-                <div style="font-size:11px;color:var(--gris-text)">Cliquer ou glisser<br>JPG / PNG / WebP</div>
+                <div style="font-size:11px;color:var(--gris-text)">Cliquer ou glisser<br>JPG / PNG / WebP — max 5 Mo</div>
                 <input type="file" id="pub-logo-input" accept="image/*" style="display:none" onchange="pubChargerLogo(this)">
               </div>
               <div style="font-size:10px;color:var(--gris-text);margin-top:4px;text-align:center">Gratuit · affiché dans la bannière</div>
@@ -8206,7 +8206,7 @@ const CGU_DATE    = '2026-05-16';
               <div style="border:2px dashed var(--gris-mid);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;background:#fff;transition:var(--transition)" onclick="document.getElementById('pub-photos-input').click()" id="pub-photos-drop">
                 <div id="pub-photos-thumbs" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px"></div>
                 <div id="pub-photos-placeholder" style="font-size:24px;margin-bottom:4px">🖼️</div>
-                <div style="font-size:11px;color:var(--gris-text)">Cliquer pour ajouter des photos</div>
+                <div style="font-size:11px;color:var(--gris-text)">Cliquer pour ajouter des photos<br>max 5 Mo/photo · recommandé 728×90 ou 300×250 px</div>
                 <input type="file" id="pub-photos-input" accept="image/*" multiple style="display:none" onchange="pubChargerPhotos(this)">
               </div>
               <div id="pub-photos-tarif" style="font-size:11px;color:var(--or);font-weight:700;margin-top:4px;text-align:center"></div>
@@ -8218,7 +8218,7 @@ const CGU_DATE    = '2026-05-16';
               <div style="border:2px dashed var(--gris-mid);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;background:#fff;transition:var(--transition)" onclick="document.getElementById('pub-video-input').click()" id="pub-video-drop">
                 <div id="pub-video-preview" style="display:none;margin-bottom:6px"><video id="pub-video-el" style="width:100%;max-height:70px;border-radius:8px;object-fit:cover" muted></video></div>
                 <div id="pub-video-placeholder" style="font-size:24px;margin-bottom:4px">🎬</div>
-                <div style="font-size:11px;color:var(--gris-text)">MP4 / MOV · max 60 secondes</div>
+                <div style="font-size:11px;color:var(--gris-text)">MP4 / MOV / WebM · max 60 sec · max 30 Mo</div>
                 <input type="file" id="pub-video-input" accept="video/*" style="display:none" onchange="pubChargerVideo(this)">
               </div>
               <div id="pub-video-tarif" style="font-size:11px;color:var(--or);font-weight:700;margin-top:4px;text-align:center"></div>
@@ -16090,6 +16090,7 @@ function majBudgetAuto() {
 function pubChargerLogo(input) {
   const file = input.files[0];
   if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('Logo trop lourd (max 5 Mo)', 'erreur'); input.value=''; return; }
   const reader = new FileReader();
   reader.onload = e => {
     pubLogoData = e.target.result;
@@ -16119,6 +16120,12 @@ function pubChargerPhotos(input) {
   document.getElementById('pub-photos-placeholder').style.display = files.length ? 'none' : 'block';
   let loaded = 0;
   files.forEach((file, i) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast(`${file.name} dépasse 5 Mo — ignorée`, 'erreur');
+      loaded++;
+      if (loaded === files.length) { majBudgetAuto(); majPubPreview(); }
+      return;
+    }
     const reader = new FileReader();
     reader.onload = e => {
       pubPhotosData[i] = e.target.result;
@@ -16142,6 +16149,14 @@ function pubChargerPhotos(input) {
 function pubChargerVideo(input) {
   const file = input.files[0];
   if (!file) return;
+  // Aucune limite de taille/format n'existait ici — contrairement à
+  // ncLoadVid() ailleurs dans l'app — alors que le fichier entier est
+  // ensuite converti en base64 et gardé en mémoire (+33% de taille),
+  // avec un vrai risque de payload trop lourd pour Supabase ou de tab
+  // qui plante sur une vidéo de plusieurs centaines de Mo.
+  const formatsAcceptes = ['video/mp4','video/webm','video/quicktime'];
+  if (!formatsAcceptes.includes(file.type)) { toast('Format vidéo non supporté (MP4, WEBM, MOV uniquement)', 'erreur'); input.value=''; return; }
+  if (file.size > 30 * 1024 * 1024) { toast('Vidéo trop lourde (max 30 Mo)', 'erreur'); input.value=''; return; }
   const url = URL.createObjectURL(file);
   const vid = document.getElementById('pub-video-el');
   vid.src = url;
