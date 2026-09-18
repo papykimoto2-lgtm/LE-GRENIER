@@ -2611,6 +2611,19 @@
     }[c]));
   };
 
+  // Normalise un numéro pour wa.me — WhatsApp exige uniquement des chiffres,
+  // indicatif pays inclus, jamais le "0" de tronc local. Un simple retrait
+  // des espaces/"+" (l'ancienne méthode utilisée un peu partout) ne suffit
+  // pas : "07 01 02 03 04" devient "0701020304", qui n'est PAS un numéro
+  // WhatsApp valide (il lui manque l'indicatif 225 et il garde le 0 en trop).
+  window.formaterTelWhatsApp = function formaterTelWhatsApp(tel) {
+    if (!tel) return '';
+    let d = String(tel).replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, '');
+    if (/^0\d{9}$/.test(d)) return '225' + d.slice(1);        // local CI : 0XXXXXXXXX -> 225XXXXXXXXX
+    if (/^2250\d{9}$/.test(d)) return '225' + d.slice(4);      // 225 + 0 en trop -> retiré
+    return d;                                                   // déjà international (CI ou autre pays)
+  };
+
   // ══════════════════════════════════════════════════════════════
   //  COUCHE D'ACCÈS AUX DONNÉES
   //  Toutes les fonctions retournent des Promises.
@@ -11446,16 +11459,16 @@ function validerCommandeInvite() {
       ? `🍽️ Commande : ${(_inviteArticle._items||[]).map(p=>`${p.qty}×${p.nom}`).join(', ')}`
       : `📦 ${_inviteArticle?.titre||'Colis'}`;
     const msgL = `🛵 *Nouvelle commande Le Grenier !*\n👤 Client : ${nom} (${tel})\n${descColis}\n🚀 Départ : ${depFinal}\n🏁 Arrivée : ${adresse}\n💰 Frais : ${fmtFCFA(frais)} · Réf : ${ref}\n💳 ${_invitePayMode.toUpperCase()}`;
-    window.open(`https://wa.me/${livreur.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msgL)}`,'_blank');
+    window.open(`https://wa.me/${formaterTelWhatsApp(livreur.tel)}?text=${encodeURIComponent(msgL)}`,'_blank');
     // Si commande resto : notifier aussi le restaurant
     if (isResto && _inviteArticle._restoTel) {
       const msgR = `🍽️ *Nouvelle commande Le Grenier !*\n👤 ${nom} (${tel})\n${descColis}\n🛵 Livré par : ${livreur.nom}\n🏁 Livraison : ${adresse}\n💰 Total : ${fmtFCFA((_inviteArticle.valeur||0)+frais)} · Réf : ${ref}`;
-      window.open(`https://wa.me/${_inviteArticle._restoTel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msgR)}`,'_blank');
+      window.open(`https://wa.me/${formaterTelWhatsApp(_inviteArticle._restoTel)}?text=${encodeURIComponent(msgR)}`,'_blank');
     }
   }
   // WA client
   const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreur?.nom||"En cours d'assignation"}\n📍 ${depFinal} → ${adresse}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*\n\nMerci ${nom} ! 🙏`;
-  window.open(`https://wa.me/${tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msgC)}`,'_blank');
+  window.open(`https://wa.me/${formaterTelWhatsApp(tel)}?text=${encodeURIComponent(msgC)}`,'_blank');
 
   toast(`🛵 Commande ${ref} enregistrée ! Ref envoyée sur WhatsApp.`);
 
@@ -14183,7 +14196,7 @@ function csAppeler() {
 
 function csWhatsApp() {
   if (!CS.tel) { toast('Numéro non disponible', 'erreur'); return; }
-  const telClean = CS.tel.replace(/[\s+]/g,'');
+  const telClean = formaterTelWhatsApp(CS.tel);
   const msg = encodeURIComponent(CS.context || `Bonjour ${CS.nom.split(' ')[0]}, j'ai trouvé votre profil sur Le Grenier. Je souhaite vous contacter. Merci !`);
   window.open(`https://wa.me/${telClean}?text=${msg}`, '_blank');
   fermerContact();
@@ -14611,7 +14624,7 @@ function ouvrirNounou(id) {
       </div>
       <div style="display:flex;gap:10px">
         <a href="tel:${p.tel}" style="flex:1;background:linear-gradient(135deg,#7C3A8A,#A855B5);color:#fff;border:none;border-radius:var(--radius);padding:12px;font-size:14px;font-weight:600;cursor:pointer;text-align:center;display:block">Appeler</a>
-        <a href="https://wa.me/${p.tel.replace(/[^0-9]/g,'')}" target="_blank" style="flex:1;background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;border:none;border-radius:var(--radius);padding:12px;font-size:14px;font-weight:600;cursor:pointer;text-align:center;display:block">WhatsApp</a>
+        <a href="https://wa.me/${formaterTelWhatsApp(p.tel)}" target="_blank" style="flex:1;background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;border:none;border-radius:var(--radius);padding:12px;font-size:14px;font-weight:600;cursor:pointer;text-align:center;display:block">WhatsApp</a>
       </div>
     </div>
   `);
@@ -15544,7 +15557,7 @@ function reserverDon(id) {
   const d = DB_DONS.find(x => x.id === id);
   if (!d) return;
   const msg = encodeURIComponent(`Bonjour ${d.donneur.split(' ')[0]}, j'ai vu votre don "${d.titre}" sur Le Grenier. Est-il encore disponible ? Je suis intéressé(e). Merci !`);
-  window.open(`https://wa.me/${d.tel.replace(/[\s+]/g,'')}?text=${msg}`, '_blank');
+  window.open(`https://wa.me/${formaterTelWhatsApp(d.tel)}?text=${msg}`, '_blank');
   toast(`Message envoyé à ${d.donneur} 🎁`);
 }
 
@@ -16579,7 +16592,7 @@ window.sauvegarderProfilAdmin = function() {
   p.virementActif = chk('ap-virement-actif');
 
   // Sync numero admin WhatsApp global (utilisé par notifications inscriptions)
-  window._ADMIN_WA = p.tel.replace(/[\s]/g, '');
+  window._ADMIN_WA = formaterTelWhatsApp(p.tel);
 
   // Sync user admin dans DAO
   const adminUser = DAO._local.utilisateurs.find(u => u.role === 'admin');
@@ -16989,7 +17002,7 @@ window.insConfirmerValidation = async function() {
         });
       }
 
-      const tel=_insValiderUser.tel.replace(/[\s+]/g,'');
+      const tel=formaterTelWhatsApp(_insValiderUser.tel);
       const msg=encodeURIComponent(
         'Bienvenue sur Le Grenier CI !\n\n'+
         'Bonjour '+_insValiderUser.prenom+',\n\n'+
@@ -17038,7 +17051,7 @@ window.insConfirmerValidation = async function() {
     });
   }
 
-  const tel=_insValiderUser.tel.replace(/[\s+]/g,'');
+  const tel=formaterTelWhatsApp(_insValiderUser.tel);
   const msg=encodeURIComponent(
     'Bienvenue sur Le Grenier CI !\n\n'+
     'Bonjour '+_insValiderUser.prenom+',\n\n'+
@@ -17074,7 +17087,7 @@ window.insConfirmerRefus = function() {
   if(!motif){ toast('Choisissez un motif de refus','erreur'); return; }
   _insRefuserUser.statut='refuse';
   _insRefuserUser.motifRefus=motif;
-  const tel=_insRefuserUser.tel.replace(/[\s+]/g,'');
+  const tel=formaterTelWhatsApp(_insRefuserUser.tel);
   const msg=encodeURIComponent(
     'Le Grenier CI - Inscription\n\n'+
     'Bonjour '+_insRefuserUser.prenom+',\n\n'+
@@ -17094,7 +17107,7 @@ window.insConfirmerRefus = function() {
 window.insRenvoyerMDP = function(userId) {
   const u=window.DB_INSCRIPTIONS.find(x=>x.id===userId);
   if(!u||!u.mdpTemp){ toast('Aucun MDP disponible','erreur'); return; }
-  const tel=u.tel.replace(/[\s+]/g,'');
+  const tel=formaterTelWhatsApp(u.tel);
   const msg=encodeURIComponent('Rappel MDP - Le Grenier CI\n\nBonjour '+u.prenom+',\n\nVotre mot de passe temporaire : '+u.mdpTemp+'\n\nConnectez-vous sur https://legrenier.ci\n\n- L equipe Le Grenier CI');
   window.open('https://wa.me/'+tel+'?text='+msg,'_blank');
   toast('MDP renvoye a '+u.prenom);
@@ -17103,7 +17116,7 @@ window.insRenvoyerMDP = function(userId) {
 window.insNotifierWA = function(userId) {
   const u=window.DB_INSCRIPTIONS.find(x=>x.id===userId);
   if(!u) return;
-  const tel=u.tel.replace(/[\s+]/g,'');
+  const tel=formaterTelWhatsApp(u.tel);
   const msg=encodeURIComponent('Bonjour '+u.prenom+',\n\nNous avons bien recu votre demande d inscription sur Le Grenier CI.\nNotre equipe va l examiner et revenir vers vous sous 24h.\n\n- L equipe Le Grenier CI');
   window.open('https://wa.me/'+tel+'?text='+msg,'_blank');
   toast('Message envoye a '+u.prenom);
@@ -17753,7 +17766,7 @@ function confirmerRDV() {
   // Simuler WhatsApp de confirmation
   const msg = `Bonjour ${RDV_STATE.salon.nom}, j'ai réservé via Le Grenier pour un(e) ${RDV_STATE.service.nom} le ${RDV_STATE.date} à ${RDV_STATE.heure}. Je m'appelle ${nom} (${tel}). Merci !`;
   setTimeout(() => {
-    window.open(`https://wa.me/${RDV_STATE.salon.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(`https://wa.me/${formaterTelWhatsApp(RDV_STATE.salon.tel)}?text=${encodeURIComponent(msg)}`, '_blank');
   }, 800);
 }
 
@@ -18130,7 +18143,7 @@ function confirmerLogRes() {
   // WhatsApp au proprio
   setTimeout(() => {
     const msg = `Bonjour, j'ai réservé votre "${l.nom}" via Le Grenier pour le ${s} au ${e} (${nbNuits} nuits). Je suis ${nom} (${tel}). Merci de confirmer !`;
-    window.open(`https://wa.me/${l.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(`https://wa.me/${formaterTelWhatsApp(l.tel)}?text=${encodeURIComponent(msg)}`, '_blank');
   }, 800);
 }
 
@@ -18439,7 +18452,7 @@ function commanderEnLigne(livrer) {
     majPanierUI();
     fermerMenu();
     const msg = `Bonjour, j'ai commandé via Le Grenier : ${items.map(p=>`${p.qty}x ${p.nom}`).join(', ')} — ${livrer?'Livraison à domicile':'À emporter'}. Réf: ${ref}. Total: ${fmtFCFA(totalFinal)}`;
-    window.open(`https://wa.me/${RESTO_COURANT.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(`https://wa.me/${formaterTelWhatsApp(RESTO_COURANT.tel)}?text=${encodeURIComponent(msg)}`, '_blank');
     toast(`🛵 Commande envoyée ! Réf: ${ref}`);
   });
 }
@@ -18487,7 +18500,7 @@ function confirmerResaTable() {
   MES_RESA_RESTO.unshift({id:MES_RESA_RESTO.length+1, restoNom:RESTO_COURANT.nom, date, heure, nb, statut:'confirmé', ref, client:nom, tel});
   fermerResaTable();
   const msg = `Bonjour ${RESTO_COURANT.nom}, je réserve une table pour ${nb} personne(s) le ${date} à ${heure} via Le Grenier. Nom: ${nom} (${tel}). Réf: ${ref}`;
-  window.open(`https://wa.me/${RESTO_COURANT.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+  window.open(`https://wa.me/${formaterTelWhatsApp(RESTO_COURANT.tel)}?text=${encodeURIComponent(msg)}`, '_blank');
   toast(`✅ Table réservée ! Réf: ${ref}`);
 }
 
@@ -18677,7 +18690,7 @@ function renderAdminLivraisons() {
 }
 function adminLivrWA(ref, client, tel) {
   const msg = `Bonjour ${client}, c'est l'équipe Le Grenier CI. Votre livraison *${ref}* est en cours. Avez-vous des questions ?`;
-  window.open(`https://wa.me/${tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+  window.open(`https://wa.me/${formaterTelWhatsApp(tel)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 function adminLivrSuivi(ref) {
   goScreen('screen-accueil');
@@ -18706,7 +18719,7 @@ async function adminAssignerLivreur(ref) {
     }
   }
   toast(`✅ ${ref} assignée à ${livreur.nom}`);
-  window.open(`https://wa.me/${livreur.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent('🛵 *Commande assignée !*\n🔖 '+ref+'\n🚀 '+cmd.dep+' → '+cmd.arr+'\n💰 '+fmtFCFA(cmd.montant||0))}`, '_blank');
+  window.open(`https://wa.me/${formaterTelWhatsApp(livreur.tel)}?text=${encodeURIComponent('🛵 *Commande assignée !*\n🔖 '+ref+'\n🚀 '+cmd.dep+' → '+cmd.arr+'\n💰 '+fmtFCFA(cmd.montant||0))}`, '_blank');
 }
 
 // ══════════════════════════════════════════════
@@ -18883,7 +18896,7 @@ async function dispPrendreEnCharge(id) {
     `📡 *Suivez votre livraison* : Onglet Livraison > Suivi, entrez le code *${cmd.ref}*\n\n` +
     `Merci de votre confiance ! 🙏`
   );
-  const tel = cmd.tel.replace(/\s/g, '').replace('+', '');
+  const tel = formaterTelWhatsApp(cmd.tel);
   window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
 }
 
@@ -18900,7 +18913,7 @@ function dispNotifierWA(id) {
     `🛵 Livreur : ${livreur}\n\n` +
     `Votre colis arrive bientôt. Restez disponible à l'adresse de livraison. Merci ! 🙏`
   );
-  const tel = cmd.tel.replace(/\s/g,'').replace('+','');
+  const tel = formaterTelWhatsApp(cmd.tel);
   window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
 }
 
@@ -18932,7 +18945,7 @@ function dispNotifierClientLivre(cmd) {
     `📍 Livré à : ${cmd.arr}\n\n` +
     `Merci pour votre confiance. N'hésitez pas à laisser un avis sur la plateforme. 🙏`
   );
-  const tel = cmd.tel.replace(/\s/g,'').replace('+','');
+  const tel = formaterTelWhatsApp(cmd.tel);
   window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
 }
 
@@ -19101,10 +19114,10 @@ function commanderLivraison() {
       const msgL = estAchat
         ? `🛍️ *Nouvel achat + livraison — Le Grenier !*\n🛒 À acheter : ${articleDesc}\n💵 Budget article : ${fmtFCFA(articleBudget)} (à récupérer chez le client)\n📍 ${dep ? dep+' → ' : ''}${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 Frais de service : ${fmtFCFA(tarif)} · Réf: ${ref}`
         : `🛵 *Nouvelle commande Le Grenier !*\n📦 ${desc||'Colis'}\n🚀 ${dep} → ${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 ${fmtFCFA(tarif)} · Réf: ${ref}`;
-      window.open(`https://wa.me/${livreurChoisi.tel.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msgL)}`, '_blank');
+      window.open(`https://wa.me/${formaterTelWhatsApp(livreurChoisi.tel)}?text=${encodeURIComponent(msgL)}`, '_blank');
     }
     const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreurChoisi?.nom||"En cours d'assignation"}\n📍 ${dep ? dep+' → ' : ''}${arr}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*`;
-    window.open(`https://wa.me/${telExp.replace(/[\s+]/g,'')}?text=${encodeURIComponent(msgC)}`, '_blank');
+    window.open(`https://wa.me/${formaterTelWhatsApp(telExp)}?text=${encodeURIComponent(msgC)}`, '_blank');
     toast(`🛵 Commande ${ref} enregistrée !`);
     renderLivrHistorique(); LIVR_SELECTIONNE_ID = null;
   });
@@ -19234,7 +19247,7 @@ function suivreLivraison() {
 function appelLivreur() {
   if (!window._livreurCourantTel) return;
   const msg = encodeURIComponent(`Bonjour ${window._livreurCourantNom?.split(' ')[0]||''}, je vous contacte via Le Grenier pour ma livraison en cours. Merci !`);
-  window.open(`https://wa.me/${window._livreurCourantTel.replace(/[\s+]/g,'')}?text=${msg}`, '_blank');
+  window.open(`https://wa.me/${formaterTelWhatsApp(window._livreurCourantTel)}?text=${msg}`, '_blank');
 }
 
 function renderLivrHistorique() {
@@ -21139,7 +21152,7 @@ async function smValiderCommande() {
     const msg = `🏪 *Nouvelle commande — Mon Super Marché (Le Grenier CI)*\n📋 Réf: *${ref}*\n👤 ${nom} · ${tel}\n🛒 ${items}\n📍 ${SM_MODE_LIVR==='livraison'?'Livraison → '+addr:'🏪 Retrait en magasin'}\n💰 Total: ${total.toLocaleString('fr-FR')} FCFA · 💳 ${SM_PAY_MODE.toUpperCase()}\n\nConfirmez svp ! 🙏`;
     // Un magasin sans tel connu ne doit pas planter la boucle et bloquer les autres
     // magasins du panier (et surtout pas empêcher l'enregistrement de la commande).
-    if (mag.tel) window.open(`https://wa.me/${mag.tel.replace(/[\s+\-]/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');
+    if (mag.tel) window.open(`https://wa.me/${formaterTelWhatsApp(mag.tel)}?text=${encodeURIComponent(msg)}`,'_blank');
     else console.warn('[commande sm] pas de numéro WhatsApp pour', mag.nom||magId);
 
     if (typeof window.persisterCommandeMagasin === 'function' && mag._supabaseId) {
