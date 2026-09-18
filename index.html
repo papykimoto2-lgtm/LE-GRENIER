@@ -2363,7 +2363,8 @@
   .livreur-card{background:#fff;border-radius:var(--radius-lg);border:1px solid rgba(220,38,38,.12);padding:16px;box-shadow:0 2px 8px rgba(220,38,38,.06);transition:var(--transition)}
   .livreur-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(220,38,38,.12)}
   .livreur-header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-  .livreur-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#FEF2F2,#FECACA);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px solid rgba(220,38,38,.15);flex-shrink:0;font-weight:700;color:#DC2626}
+  .livreur-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#FEF2F2,#FECACA);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px solid rgba(220,38,38,.15);flex-shrink:0;font-weight:700;color:#DC2626;overflow:hidden}
+  .livreur-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
   .livreur-nom{font-weight:700;font-size:14px;color:var(--noir)}
   .livreur-type{font-size:11px;font-weight:600;color:#DC2626;margin-top:1px}
   .livreur-dispo{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700}
@@ -3166,6 +3167,16 @@
       if (r.error) console.error('[persist] promo suppression', r.error);
       return r;
     },
+    async livreur(record) {
+      if (MODE !== 'remote') return { data: null, error: null };
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/livreurs', {
+        utilisateur_id: record.userId, nom: record.nom, type: record.type, zone: record.zone,
+        dispo: record.dispo, note: record.note, nb_livraisons: record.nbLivr,
+        tel: record.tel, tarif: record.tarif, delai: record.delai, photo: record.photo || null
+      }, { Prefer: 'return=representation' });
+      if (r.error) console.error('[persist] livreur', r.error);
+      return r;
+    },
   };
   window.DAO_PERSIST = DAO_PERSIST;
   window.bootstrapCache = bootstrapCache;
@@ -3275,7 +3286,7 @@
           initiales: (l.nom || '??').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
           type: l.type, ico: {moto:'🛵',tricycle:'🛺',cargo:'🚚',camionnette:'🚐'}[l.type] || '📦',
           zone: l.zone, dispo: l.dispo, note: Number(l.note) || 5, nbLivr: l.nb_livraisons || 0,
-          tel: l.tel, tarif: Number(l.tarif) || 0, delai: l.delai
+          tel: l.tel, tarif: Number(l.tarif) || 0, delai: l.delai, photo: l.photo || null
         }));
         DB_LIVREURS.splice(0, DB_LIVREURS.length, ...mapped);
       }
@@ -5985,9 +5996,12 @@
           <button style="background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;border:none;padding:0 22px;font-size:14px;font-weight:700;cursor:pointer" onclick="suivreLivraison()">Suivre</button>
         </div>
         <div id="livr-suivi-result" style="display:none;background:#fff;border-radius:var(--radius-lg);border:1.5px solid rgba(220,38,38,.2);overflow:hidden;box-shadow:0 4px 20px rgba(220,38,38,.08)">
-          <div style="background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;padding:16px 20px">
-            <div style="font-size:12px;opacity:.8;font-weight:600;margin-bottom:2px">N° de livraison</div>
-            <div style="font-family:monospace;font-size:20px;font-weight:800;letter-spacing:.1em" id="livr-suivi-ref">—</div>
+          <div style="background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:14px">
+            <div id="livr-suivi-avatar" style="width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;border:2px solid rgba(255,255,255,.4)">🛵</div>
+            <div>
+              <div style="font-size:12px;opacity:.8;font-weight:600;margin-bottom:2px">N° de livraison</div>
+              <div style="font-family:monospace;font-size:20px;font-weight:800;letter-spacing:.1em" id="livr-suivi-ref">—</div>
+            </div>
           </div>
           <div style="padding:18px 20px">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:13px">
@@ -6095,6 +6109,27 @@
           </div>
           <div class="form-group"><label>Disponibilités</label>
             <select id="livr-reg-dispo"><option>Temps plein (7j/7)</option><option>Matin seulement (6h–13h)</option><option>Soir seulement (13h–22h)</option><option>Week-end seulement</option><option>Flexible</option></select>
+          </div>
+          <div class="form-group">
+            <label>Votre photo (visage bien visible) *</label>
+            <div style="font-size:12px;color:var(--gris-text);margin:-2px 0 8px">Elle sera montrée aux clients pour qu'ils vous identifient facilement à la livraison.</div>
+            <input type="file" id="livr-reg-photo-input" accept="image/*" capture="user" style="display:none" onchange="livrChargerPhoto(this)">
+            <div id="livr-reg-photo-zone" onclick="document.getElementById('livr-reg-photo-input').click()" style="display:flex;align-items:center;gap:12px;border:2px dashed rgba(220,38,38,.3);border-radius:var(--radius);padding:14px;cursor:pointer;background:#FEF2F2">
+              <div style="width:52px;height:52px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:1.5px solid rgba(220,38,38,.2)">📷</div>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#7F1D1D">Ajouter ma photo</div>
+                <div style="font-size:11px;color:var(--gris-text)">JPG/PNG, max 8 Mo</div>
+              </div>
+            </div>
+            <div id="livr-reg-photo-preview" style="display:none;align-items:center;gap:12px;border:1.5px solid rgba(220,38,38,.2);border-radius:var(--radius);padding:14px;background:#fff">
+              <img src="" alt="Aperçu" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #DC2626">
+              <div style="flex:1;min-width:0">
+                <div class="livr-reg-photo-status" style="font-size:12px;font-weight:700;color:#0D5C35">✅ Prête</div>
+                <div style="font-size:11px;color:var(--gris-text)">Visible par les clients lors de la livraison</div>
+              </div>
+              <button type="button" onclick="livrSupprimerPhoto()" style="background:none;border:none;color:#DC2626;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Changer</button>
+            </div>
+            <div id="livr-reg-photo-manquante" style="display:none;color:#DC2626;font-size:12px;font-weight:600;margin-top:6px">⚠️ Photo obligatoire pour rejoindre les livreurs</div>
           </div>
           <div style="background:#FEF2F2;border-radius:var(--radius);padding:12px;font-size:12px;color:#991B1B;border:1px solid rgba(220,38,38,.15);margin-bottom:14px">
             📋 Documents requis à l'inscription : CNI · Permis de conduire · Carte grise · Attestation d'assurance
@@ -19297,12 +19332,12 @@ function inscrireResto() {
 // ══════════════════════════════════════════
 
 const DB_LIVREURS = [
-  {id:1,userId:13,nom:'Kofi Moto Express',initiales:'KM',type:'Moto',ico:'🛵',zone:'Cocody / Plateau',dispo:true,note:4.9,nbLivr:1240,tel:'+225 07 11 22 33',tarif:1000,delai:'15–25 min'},
-  {id:2,userId:4,nom:'Adjoua Tricycle CI',initiales:'AT',type:'Tricycle',ico:'🛺',zone:'Yopougon / Adjamé / Abobo',dispo:true,note:4.7,nbLivr:560,tel:'+225 05 22 33 44',tarif:1500,delai:'20–35 min'},
-  {id:3,userId:5,nom:'Cargo Pro Abidjan',initiales:'CP',type:'Cargo',ico:'🚚',zone:'Tout Abidjan',dispo:false,note:4.8,nbLivr:320,tel:'+225 01 33 44 55',tarif:5000,delai:'1h–3h'},
-  {id:4,userId:3,nom:'Sékou Flash Moto',initiales:'SF',type:'Moto',ico:'🛵',zone:'Marcory / Koumassi / Treichville',dispo:true,note:4.9,nbLivr:890,tel:'+225 07 44 55 66',tarif:1000,delai:'10–20 min'},
-  {id:5,userId:7,nom:'Camionnette Express CI',initiales:'CE',type:'Camionnette',ico:'🚐',zone:'Grand Abidjan',dispo:true,note:4.6,nbLivr:145,tel:'+225 05 55 66 77',tarif:8000,delai:'30 min–2h'},
-  {id:6,userId:15,nom:'Ibrahim Moto Rapide',initiales:'IR',type:'Moto',ico:'🛵',zone:'Abobo / Anyama',dispo:true,note:4.8,nbLivr:670,tel:'+225 01 66 77 88',tarif:800,delai:'15–30 min'},
+  {id:1,userId:13,nom:'Kofi Moto Express',initiales:'KM',type:'Moto',ico:'🛵',zone:'Cocody / Plateau',dispo:true,note:4.9,nbLivr:1240,tel:'+225 07 11 22 33',tarif:1000,delai:'15–25 min',photo:'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&h=200&fit=crop&crop=face'},
+  {id:2,userId:4,nom:'Adjoua Tricycle CI',initiales:'AT',type:'Tricycle',ico:'🛺',zone:'Yopougon / Adjamé / Abobo',dispo:true,note:4.7,nbLivr:560,tel:'+225 05 22 33 44',tarif:1500,delai:'20–35 min',photo:'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face'},
+  {id:3,userId:5,nom:'Cargo Pro Abidjan',initiales:'CP',type:'Cargo',ico:'🚚',zone:'Tout Abidjan',dispo:false,note:4.8,nbLivr:320,tel:'+225 01 33 44 55',tarif:5000,delai:'1h–3h',photo:'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face'},
+  {id:4,userId:3,nom:'Sékou Flash Moto',initiales:'SF',type:'Moto',ico:'🛵',zone:'Marcory / Koumassi / Treichville',dispo:true,note:4.9,nbLivr:890,tel:'+225 07 44 55 66',tarif:1000,delai:'10–20 min',photo:'https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=200&h=200&fit=crop&crop=face'},
+  {id:5,userId:7,nom:'Camionnette Express CI',initiales:'CE',type:'Camionnette',ico:'🚐',zone:'Grand Abidjan',dispo:true,note:4.6,nbLivr:145,tel:'+225 05 55 66 77',tarif:8000,delai:'30 min–2h',photo:'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face'},
+  {id:6,userId:15,nom:'Ibrahim Moto Rapide',initiales:'IR',type:'Moto',ico:'🛵',zone:'Abobo / Anyama',dispo:true,note:4.8,nbLivr:670,tel:'+225 01 66 77 88',tarif:800,delai:'15–30 min',photo:'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face'},
 ];
 
 const LIVR_TARIFS = {
@@ -19767,7 +19802,7 @@ function renderLivreursChoix() {
   grid.innerHTML = tries.map((l, i) => {
     const sel = LIVR_SELECTIONNE_ID === l.id;
     return `<div onclick="selectionnerLivreur(${l.id})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);border:2px solid ${sel?'#DC2626':'var(--gris-mid)'};background:${sel?'#FFF5F5':'#fff'};cursor:pointer;transition:.15s">
-      <div style="font-size:22px;flex-shrink:0">${l.ico}</div>
+      <div style="width:38px;height:38px;border-radius:50%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--livr-pale,#FEF2F2)">${l.photo ? `<img src="${l.photo}" alt="${escapeHtml(l.nom)}" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">` : l.ico}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:13px">${medals[i]||''} ${l.nom} ${!l.dispo?'<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px;margin-left:4px">En livraison</span>':''}</div>
         <div style="font-size:11px;color:var(--gris-text)">⭐ ${l.note} · ${l.nbLivr} livraisons · ⏱ ${l.delai}</div>
@@ -19858,7 +19893,7 @@ function renderLivreurs() {
   grid.innerHTML = DB_LIVREURS.map(l => `
     <div class="livreur-card">
       <div class="livreur-header">
-        <div class="livreur-avatar">${l.ico}</div>
+        <div class="livreur-avatar">${l.photo ? `<img src="${l.photo}" alt="${escapeHtml(l.nom)}" loading="lazy" onerror="this.remove()">` : l.ico}</div>
         <div style="flex:1;min-width:0">
           <div class="livreur-nom">${l.nom}</div>
           <div class="livreur-type">${l.type} · ${l.zone}</div>
@@ -19913,6 +19948,14 @@ const DISP_ETAPES = {
   ],
 };
 
+function majLivrSuiviAvatar(photo, ico) {
+  const av = document.getElementById('livr-suivi-avatar');
+  if (!av) return;
+  av.innerHTML = photo
+    ? `<img src="${photo}" alt="Livreur" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.textContent='${ico||'🛵'}'">`
+    : (ico || '🛵');
+}
+
 function suivreLivraison() {
   const q = document.getElementById('livr-suivi-input').value.trim().toUpperCase();
   const result = document.getElementById('livr-suivi-result');
@@ -19928,6 +19971,7 @@ function suivreLivraison() {
     document.getElementById('livr-suivi-ref').textContent     = q;
     document.getElementById('livr-suivi-livreur').textContent = livreur.nom || 'En attente d\'assignation';
     document.getElementById('livr-suivi-vehicle').textContent = livreur.ico ? `${livreur.ico} ${livreur.type}` : '—';
+    majLivrSuiviAvatar(livreur.photo, livreur.ico);
     document.getElementById('livr-suivi-dep').textContent     = cmd.dep;
     let etaTexte = cmd.statut === 'livré' ? 'Livré ✅' : (livreur.delai || 'À confirmer');
     if (cmd.tourneeId && cmd.statut === 'en livraison') {
@@ -19962,6 +20006,7 @@ function suivreLivraison() {
   document.getElementById('livr-suivi-ref').textContent     = q;
   document.getElementById('livr-suivi-livreur').textContent = livr.livreur;
   document.getElementById('livr-suivi-vehicle').textContent = livr.vehicle;
+  majLivrSuiviAvatar(livr.photo, null);
   document.getElementById('livr-suivi-dep').textContent     = livr.dep;
   document.getElementById('livr-suivi-eta').textContent     = livr.eta;
   document.getElementById('livr-suivi-steps').innerHTML     = livr.etapes.map(e => `
@@ -20014,13 +20059,80 @@ async function livrAccepterContrOffre(livraisonId) {
   await livrRafraichirHistorique();
 }
 
-function inscrireLivreur() {
+// ── Photo d'identification du livreur (obligatoire à l'inscription) ──
+let LIVR_REG_PHOTO = null; // { src, file, uploading, erreur, uploaded }
+
+function livrChargerPhoto(input) {
+  const f = input.files[0];
+  if (!f) return;
+  if (f.size > 8*1024*1024) { toast('Photo trop grande (max 8 Mo)', 'erreur'); return; }
+  if (!f.type.startsWith('image/')) { toast('Format non supporté', 'erreur'); return; }
+  if (LIVR_REG_PHOTO && LIVR_REG_PHOTO.src && LIVR_REG_PHOTO.src.startsWith('blob:')) URL.revokeObjectURL(LIVR_REG_PHOTO.src);
+  LIVR_REG_PHOTO = { src: URL.createObjectURL(f), file: f, uploading: true };
+  majLivrPhotoPreview();
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+    const path = `${SESSION?.id || 'anon'}/${Date.now()}-${Math.random().toString(36).slice(2,8)}-${f.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+    DAO.uploadPhoto(f, path, 'livreurs-photos').then(r => {
+      if (!LIVR_REG_PHOTO || LIVR_REG_PHOTO.file !== f) return; // photo changée entre-temps
+      LIVR_REG_PHOTO.uploading = false;
+      if (r.error || !r.data) {
+        LIVR_REG_PHOTO.erreur = true;
+        toast('⚠️ Échec de l\'envoi de la photo', 'erreur');
+      } else {
+        LIVR_REG_PHOTO.src = r.data.publicUrl;
+        LIVR_REG_PHOTO.uploaded = true;
+      }
+      majLivrPhotoPreview();
+    });
+  } else {
+    LIVR_REG_PHOTO.uploading = false;
+  }
+  input.value = '';
+}
+
+function livrSupprimerPhoto() {
+  if (LIVR_REG_PHOTO && LIVR_REG_PHOTO.src && LIVR_REG_PHOTO.src.startsWith('blob:')) URL.revokeObjectURL(LIVR_REG_PHOTO.src);
+  LIVR_REG_PHOTO = null;
+  majLivrPhotoPreview();
+}
+
+function majLivrPhotoPreview() {
+  const zone = document.getElementById('livr-reg-photo-zone');
+  const preview = document.getElementById('livr-reg-photo-preview');
+  const manquante = document.getElementById('livr-reg-photo-manquante');
+  if (!zone || !preview) return;
+  if (!LIVR_REG_PHOTO) {
+    zone.style.display = 'flex';
+    preview.style.display = 'none';
+    return;
+  }
+  zone.style.display = 'none';
+  preview.style.display = 'flex';
+  if (manquante) manquante.style.display = 'none';
+  const img = preview.querySelector('img');
+  if (img) img.src = LIVR_REG_PHOTO.src;
+  const badge = preview.querySelector('.livr-reg-photo-status');
+  if (badge) {
+    badge.textContent = LIVR_REG_PHOTO.uploading ? '⏳ Envoi en cours…' : (LIVR_REG_PHOTO.erreur ? '⚠️ Échec de l\'envoi' : '✅ Prête');
+    badge.style.color = LIVR_REG_PHOTO.erreur ? '#DC2626' : (LIVR_REG_PHOTO.uploading ? '#B8791A' : '#0D5C35');
+  }
+}
+
+async function inscrireLivreur() {
   if (!SESSION) { goScreen('screen-login'); return; }
   const nom = document.getElementById('livr-reg-nom').value.trim();
   const tel = document.getElementById('livr-reg-tel').value.trim() || SESSION.tel;
   const vehicle = document.getElementById('livr-reg-vehicle')?.value || 'Moto (jusqu\'à 15 kg)';
   const dispo = document.getElementById('livr-reg-dispo')?.value || 'Flexible';
   if (!nom||!tel) { toast('Nom et téléphone obligatoires', 'erreur'); return; }
+  if (!LIVR_REG_PHOTO) {
+    const m = document.getElementById('livr-reg-photo-manquante');
+    if (m) m.style.display = 'block';
+    toast('Ajoutez votre photo pour vous identifier auprès des clients', 'erreur');
+    return;
+  }
+  if (LIVR_REG_PHOTO.uploading) { toast('⏳ Envoi de la photo en cours, patientez…', 'erreur'); return; }
+  if (LIVR_REG_PHOTO.erreur) { toast('⚠️ La photo n\'a pas pu être envoyée — réessayez', 'erreur'); return; }
   const typeMap = {'Moto (jusqu\'à 15 kg)':'Moto','Tricycle (15–100 kg)':'Tricycle','Camionnette (jusqu\'à 500 kg)':'Camionnette','Camion cargo (500 kg+)':'Cargo'};
   const icoMap = {'Moto':'🛵','Tricycle':'🛺','Camionnette':'🚐','Cargo':'🚚'};
   const tarifMap = {'Moto':1000,'Tricycle':1500,'Camionnette':8000,'Cargo':15000};
@@ -20034,15 +20146,25 @@ function inscrireLivreur() {
     id: DB_LIVREURS.length+1, userId: SESSION.id,
     nom: SESSION.prenom + ' ' + SESSION.nom,
     initiales: (SESSION.prenom[0]||'?') + (SESSION.nom[0]||'?'),
-    type, ico: icoMap[type]||'🛵',
+    type, ico: icoMap[type]||'🛵', photo: LIVR_REG_PHOTO.src,
     zone: zones.join(' / ') || 'Abidjan',
     dispo: true, note: 0, nbLivr: 0,
     tel, tarif: tarifMap[type]||1000,
     delai: type==='Moto'?'15–25 min':type==='Tricycle'?'20–35 min':'1h–3h'
   };
   DB_LIVREURS.push(newL);
+  const r = await DAO_PERSIST.livreur(newL);
+  if (r && r.error) {
+    const idx = DB_LIVREURS.indexOf(newL);
+    if (idx >= 0) DB_LIVREURS.splice(idx, 1);
+    renderLivreurs();
+    toast('Échec : inscription non enregistrée, réessayez', 'erreur');
+    return;
+  }
+  if (r && r.data && r.data[0]) newL.id = r.data[0].id;
   toast(`🛵 Candidature de "${SESSION.prenom}" acceptée ! Vous apparaissez dans la liste des livreurs. ✅`);
   ['livr-reg-nom','livr-reg-tel'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  livrSupprimerPhoto();
   renderLivreurs();
   livrTab('livr-livreurs');
 }
