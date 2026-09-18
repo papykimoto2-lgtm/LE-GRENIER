@@ -11480,7 +11480,7 @@ function selInvitePay(btn, mode) {
   btn.style.background = '#FFF5F5';
 }
 
-function validerCommandeInvite() {
+async function validerCommandeInvite() {
   const nom     = document.getElementById('invite-nom').value.trim();
   const tel     = document.getElementById('invite-tel').value.trim();
   const adresse = document.getElementById('invite-adresse').value.trim();
@@ -11507,8 +11507,18 @@ function validerCommandeInvite() {
     date: new Date().toISOString().slice(0,10),
     article: _inviteArticle?.titre || null
   };
+  // La commande invité (sans session) était acceptée sans jamais vérifier
+  // l'enregistrement côté serveur : l'écran "Commande confirmée !" et les
+  // messages WhatsApp partaient même quand la ligne n'existait nulle part,
+  // laissant le client attendre un livreur qui ne recevrait jamais rien.
+  if (typeof persisterLivraison === 'function') {
+    const enregistre = await persisterLivraison(nouvelleLivraison1);
+    if (!enregistre && typeof MODE !== 'undefined' && MODE === 'remote') {
+      toast('⚠️ Échec de l\'enregistrement de la commande, réessayez', 'erreur');
+      return;
+    }
+  }
   DISPATCH_COMMANDES.unshift(nouvelleLivraison1);
-  if (typeof persisterLivraison === 'function') persisterLivraison(nouvelleLivraison1);
 
   // WA livreur
   if (livreur) {
