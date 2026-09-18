@@ -2533,15 +2533,13 @@
       from(bucket) {
         return {
           async upload(path, file, opts) {
-            const b64 = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = e => resolve(e.target.result.split(',')[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
-            const bin = atob(b64);
-            const bytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            // Envoie le File/Blob directement au XHR — pas de FileReader→base64→atob
+            // en JS. L'ancienne version faisait un aller-retour base64 PUIS
+            // décodait octet par octet dans une boucle for synchrone : sur une
+            // vidéo de 100+ Mo, ça gelait l'onglet plusieurs secondes et
+            // triplait la mémoire utilisée (fichier + base64 + tableau d'octets).
+            // Les navigateurs envoient un File/Blob nativement, en flux, sans
+            // jamais le charger entièrement en mémoire côté JS.
             const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
             const r = await new Promise((resolve) => {
               const x = new XMLHttpRequest();
@@ -2549,9 +2547,12 @@
               x.setRequestHeader('apikey', SUPABASE_ANON_KEY);
               x.setRequestHeader('Authorization', 'Bearer ' + (localStorage.getItem('lg_sb_access_token') || SUPABASE_ANON_KEY));
               x.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+              if (opts && opts.onProgress && x.upload) {
+                x.upload.onprogress = (ev) => { if (ev.lengthComputable) opts.onProgress(ev.loaded / ev.total); };
+              }
               x.onload = () => resolve({ data: x.status < 300 ? { path } : null, error: x.status >= 300 ? { message: x.statusText } : null });
               x.onerror = () => resolve({ data: null, error: { message: 'Erreur réseau upload' } });
-              x.send(bytes);
+              x.send(file);
             });
             return r;
           },
@@ -2856,20 +2857,23 @@
         .subscribe();
     },
 
-    // ── STORAGE — upload photo annonce ──────────────────────────
-    async uploadPhoto(file, path) {
+    // ── STORAGE — upload média (photo annonce, logo/photo/vidéo de campagne) ──
+    // bucket : 'annonces-photos' (photos, défaut) ou 'campagnes-videos'.
+    async uploadPhoto(file, path, bucket, onProgress) {
       await initSupabase();
+      bucket = bucket || 'annonces-photos';
       if (MODE === 'local') {
-        // En local, convertir en base64 data URL
+        // En local (démo hors-ligne), convertir en base64 data URL — pas de
+        // vrai backend à contacter, donc pas de souci de taille de payload.
         return new Promise(resolve => {
           const reader = new FileReader();
           reader.onload = e => resolve({ data: { publicUrl: e.target.result }, error: null });
           reader.readAsDataURL(file);
         });
       }
-      const { data, error } = await _supa.storage.from('annonces-photos').upload(path, file, { upsert: true });
+      const { data, error } = await _supa.storage.from(bucket).upload(path, file, { upsert: true, onProgress });
       if (error) return { data: null, error };
-      const { data: { publicUrl } } = _supa.storage.from('annonces-photos').getPublicUrl(path);
+      const { data: { publicUrl } } = _supa.storage.from(bucket).getPublicUrl(path);
       return { data: { publicUrl }, error: null };
     }
   };
@@ -7689,7 +7693,7 @@ const CGU_DATE    = '2026-05-16';
               ondrop="ncDropImg(event)">
               <div style="font-size:30px;margin-bottom:6px">🖼️</div>
               <div style="font-weight:700;font-size:13px;color:var(--noir)">Glissez votre bannière ici ou cliquez</div>
-              <div style="font-size:11px;color:var(--gris-text);margin-top:4px">JPG · PNG · WEBP · GIF — max 5 Mo · recommandé : 728×90 ou 300×250 px</div>
+              <div style="font-size:11px;color:var(--gris-text);margin-top:4px">JPG · PNG · WEBP · GIF — max 50 Mo · recommandé : 728×90 ou 300×250 px</div>
             </div>
             <input type="file" id="nc-img-input" accept="image/*" multiple style="display:none" onchange="ncLoadImgs(this.files)">
             <div id="nc-img-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div>
@@ -7705,7 +7709,7 @@ const CGU_DATE    = '2026-05-16';
               ondrop="ncDropVid(event)">
               <div style="font-size:30px;margin-bottom:6px">🎬</div>
               <div style="font-weight:700;font-size:13px;color:var(--noir)">Glissez votre vidéo ici ou cliquez</div>
-              <div style="font-size:11px;color:var(--gris-text);margin-top:4px">MP4 · MOV · WEBM — max 30 Mo · durée max 30 sec recommandée</div>
+              <div style="font-size:11px;color:var(--gris-text);margin-top:4px">MP4 · MOV · WEBM — max 150 Mo · durée max 30 sec recommandée</div>
             </div>
             <input type="file" id="nc-vid-input" accept="video/mp4,video/webm,video/quicktime" style="display:none" onchange="ncLoadVid(this.files[0])">
             <div id="nc-vid-preview" style="margin-top:10px;display:none">
@@ -8194,7 +8198,7 @@ const CGU_DATE    = '2026-05-16';
               <div style="border:2px dashed var(--gris-mid);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;background:#fff;transition:var(--transition)" onclick="document.getElementById('pub-logo-input').click()" id="pub-logo-drop" ondragover="event.preventDefault();this.style.borderColor='var(--vert)'" ondragleave="this.style.borderColor=''" ondrop="pubDropLogo(event)">
                 <div id="pub-logo-preview" style="display:none;margin-bottom:8px"><img id="pub-logo-img" src="" alt="logo" style="width:56px;height:56px;border-radius:10px;object-fit:cover;margin:0 auto;display:block"></div>
                 <div id="pub-logo-placeholder" style="font-size:24px;margin-bottom:4px">🏢</div>
-                <div style="font-size:11px;color:var(--gris-text)">Cliquer ou glisser<br>JPG / PNG / WebP — max 5 Mo</div>
+                <div style="font-size:11px;color:var(--gris-text)">Cliquer ou glisser<br>JPG / PNG / WebP — max 50 Mo</div>
                 <input type="file" id="pub-logo-input" accept="image/*" style="display:none" onchange="pubChargerLogo(this)">
               </div>
               <div style="font-size:10px;color:var(--gris-text);margin-top:4px;text-align:center">Gratuit · affiché dans la bannière</div>
@@ -8206,7 +8210,7 @@ const CGU_DATE    = '2026-05-16';
               <div style="border:2px dashed var(--gris-mid);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;background:#fff;transition:var(--transition)" onclick="document.getElementById('pub-photos-input').click()" id="pub-photos-drop">
                 <div id="pub-photos-thumbs" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px"></div>
                 <div id="pub-photos-placeholder" style="font-size:24px;margin-bottom:4px">🖼️</div>
-                <div style="font-size:11px;color:var(--gris-text)">Cliquer pour ajouter des photos<br>max 5 Mo/photo · recommandé 728×90 ou 300×250 px</div>
+                <div style="font-size:11px;color:var(--gris-text)">Cliquer pour ajouter des photos<br>max 50 Mo/photo · recommandé 728×90 ou 300×250 px</div>
                 <input type="file" id="pub-photos-input" accept="image/*" multiple style="display:none" onchange="pubChargerPhotos(this)">
               </div>
               <div id="pub-photos-tarif" style="font-size:11px;color:var(--or);font-weight:700;margin-top:4px;text-align:center"></div>
@@ -8218,7 +8222,7 @@ const CGU_DATE    = '2026-05-16';
               <div style="border:2px dashed var(--gris-mid);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;background:#fff;transition:var(--transition)" onclick="document.getElementById('pub-video-input').click()" id="pub-video-drop">
                 <div id="pub-video-preview" style="display:none;margin-bottom:6px"><video id="pub-video-el" style="width:100%;max-height:70px;border-radius:8px;object-fit:cover" muted></video></div>
                 <div id="pub-video-placeholder" style="font-size:24px;margin-bottom:4px">🎬</div>
-                <div style="font-size:11px;color:var(--gris-text)">MP4 / MOV / WebM · max 60 sec · max 30 Mo</div>
+                <div style="font-size:11px;color:var(--gris-text)">MP4 / MOV / WebM · max 60 sec · max 150 Mo</div>
                 <input type="file" id="pub-video-input" accept="video/*" style="display:none" onchange="pubChargerVideo(this)">
               </div>
               <div id="pub-video-tarif" style="font-size:11px;color:var(--or);font-weight:700;margin-top:4px;text-align:center"></div>
@@ -10969,6 +10973,8 @@ function majAnnPreview() {
 
 // ── CRÉAS MÉDIA — fonctions ──────────────────────────────────────
 window._ncFirstImgSrc = null;
+window._ncImages = [];   // { src, uploading, erreur } — une entrée par image créa
+window._ncVidState = null; // { src, uploading, erreur }
 
 function ncMediaTab(tab) {
   const imgZone = document.getElementById('nc-media-img-zone');
@@ -10991,44 +10997,60 @@ function ncMediaTab(tab) {
 function ncLoadImgs(files) {
   const grid = document.getElementById('nc-img-grid');
   if (!grid || !files.length) return;
-  Array.from(files).forEach((file, idx) => {
-    if (!file.type.startsWith('image/')) return;
-    if (file.size > 5 * 1024 * 1024) { toast('Image trop lourde (max 5 Mo) : ' + file.name, 'erreur'); return; }
-    const reader = new FileReader();
-    reader.onload = e => {
-      const src = e.target.result;
-      if (idx === 0 && !window._ncFirstImgSrc) {
-        window._ncFirstImgSrc = src;
+  Array.from(files).forEach((file) => {
+    if (!file.type.startsWith('image/')) { toast(`${file.name} n'est pas une image`, 'erreur'); return; }
+    if (file.size > 50 * 1024 * 1024) { toast('Image trop lourde (max 50 Mo) : ' + file.name, 'erreur'); return; }
+    const entry = { src: URL.createObjectURL(file), uploading: true, erreur: false };
+    window._ncImages.push(entry);
+    if (!window._ncFirstImgSrc) {
+      window._ncFirstImgSrc = entry.src;
+      majAnnPreview();
+    }
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;display:inline-block';
+    const img = document.createElement('img');
+    img.src = entry.src;
+    img.style.cssText = 'width:100px;height:68px;object-fit:cover;border-radius:8px;border:2px solid var(--or);cursor:pointer';
+    img.title = 'Cliquer pour définir comme principale';
+    img.onclick = () => {
+      window._ncFirstImgSrc = entry.src;
+      majAnnPreview();
+      grid.querySelectorAll('img').forEach(i => i.style.borderColor = 'var(--gris-mid)');
+      img.style.borderColor = 'var(--or)';
+    };
+    const del = document.createElement('button');
+    del.textContent = '✕';
+    del.style.cssText = 'position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:var(--rouge);color:#fff;border:none;font-size:10px;cursor:pointer;line-height:18px;padding:0;display:flex;align-items:center;justify-content:center';
+    del.onclick = () => {
+      wrap.remove();
+      const i = window._ncImages.indexOf(entry);
+      if (i >= 0) window._ncImages.splice(i, 1);
+      if (window._ncFirstImgSrc === entry.src) {
+        const remaining = grid.querySelector('img');
+        window._ncFirstImgSrc = remaining ? remaining.src : null;
         majAnnPreview();
       }
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'position:relative;display:inline-block';
-      const img = document.createElement('img');
-      img.src = src;
-      img.style.cssText = 'width:100px;height:68px;object-fit:cover;border-radius:8px;border:2px solid var(--or);cursor:pointer';
-      img.title = 'Cliquer pour définir comme principale';
-      img.onclick = () => {
-        window._ncFirstImgSrc = src;
-        majAnnPreview();
-        grid.querySelectorAll('img').forEach(i => i.style.borderColor = 'var(--gris-mid)');
-        img.style.borderColor = 'var(--or)';
-      };
-      const del = document.createElement('button');
-      del.textContent = '✕';
-      del.style.cssText = 'position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:var(--rouge);color:#fff;border:none;font-size:10px;cursor:pointer;line-height:18px;padding:0;display:flex;align-items:center;justify-content:center';
-      del.onclick = () => {
-        wrap.remove();
-        if (window._ncFirstImgSrc === src) {
-          const remaining = grid.querySelector('img');
-          window._ncFirstImgSrc = remaining ? remaining.src : null;
-          majAnnPreview();
-        }
-      };
-      wrap.appendChild(img); wrap.appendChild(del);
-      grid.appendChild(wrap);
-      grid.style.display = 'flex';
     };
-    reader.readAsDataURL(file);
+    wrap.appendChild(img); wrap.appendChild(del);
+    grid.appendChild(wrap);
+    grid.style.display = 'flex';
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+      const path = `campagnes/${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(file, path).then(r => {
+        entry.uploading = false;
+        if (r.error || !r.data) {
+          entry.erreur = true;
+          toast(`⚠️ Échec de l'envoi de ${file.name}`, 'erreur');
+        } else {
+          const wasFirst = window._ncFirstImgSrc === entry.src;
+          entry.src = r.data.publicUrl;
+          img.src = entry.src;
+          if (wasFirst) { window._ncFirstImgSrc = entry.src; majAnnPreview(); }
+        }
+      });
+    } else {
+      entry.uploading = false;
+    }
   });
 }
 
@@ -11043,15 +11065,34 @@ function ncLoadVid(file) {
   if (!file) return;
   const allowed = ['video/mp4','video/webm','video/quicktime'];
   if (!allowed.includes(file.type)) { toast('Format vidéo non supporté (MP4, WEBM, MOV uniquement)', 'erreur'); return; }
-  if (file.size > 30 * 1024 * 1024) { toast('Vidéo trop lourde (max 30 Mo)', 'erreur'); return; }
+  if (file.size > 150 * 1024 * 1024) { toast('Vidéo trop lourde (max 150 Mo)', 'erreur'); return; }
   const url = URL.createObjectURL(file);
   const player = document.getElementById('nc-vid-player');
   const preview = document.getElementById('nc-vid-preview');
   const meta = document.getElementById('nc-vid-meta');
   if (player) { player.src = url; player.load(); }
   if (preview) preview.style.display = '';
-  if (meta) meta.textContent = `📄 ${file.name} — ${(file.size/1024/1024).toFixed(1)} Mo`;
+  if (meta) meta.textContent = `📄 ${file.name} — ${(file.size/1024/1024).toFixed(1)} Mo — envoi…`;
   window._ncVidFile = file;
+  const state = { src: url, uploading: true, erreur: false };
+  window._ncVidState = state;
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+    DAO.uploadPhoto(file, path, 'campagnes-videos').then(r => {
+      if (window._ncVidState !== state) return; // vidéo remplacée/effacée entretemps
+      state.uploading = false;
+      if (r.error || !r.data) {
+        state.erreur = true;
+        toast(`⚠️ Échec de l'envoi de la vidéo`, 'erreur');
+        if (meta) meta.textContent = `📄 ${file.name} — ${(file.size/1024/1024).toFixed(1)} Mo — ❌ échec envoi`;
+      } else {
+        state.src = r.data.publicUrl;
+        if (meta) meta.textContent = `📄 ${file.name} — ${(file.size/1024/1024).toFixed(1)} Mo`;
+      }
+    });
+  } else {
+    state.uploading = false;
+  }
 }
 
 function ncDropVid(e) {
@@ -11069,6 +11110,7 @@ function ncClearVid() {
   if (preview) preview.style.display = 'none';
   if (input) input.value = '';
   window._ncVidFile = null;
+  window._ncVidState = null;
 }
 // ── FIN CRÉAS MÉDIA ──────────────────────────────────────────────
 
@@ -11119,6 +11161,14 @@ async function soumettreNouvelleCampagne() {
   if (debut > fin) { toast('La date de fin doit être après la date de début', 'erreur'); return; }
   const paySelected = document.querySelector('[name="ann-pay"]:checked');
   if (!paySelected) { toast('Choisissez un mode de paiement', 'erreur'); return; }
+  if (window._ncImages.some(i => i.uploading) || (window._ncVidState && window._ncVidState.uploading)) {
+    toast('⏳ Envoi des médias en cours, patientez…', 'erreur');
+    return;
+  }
+  if (window._ncImages.some(i => i.erreur) || (window._ncVidState && window._ncVidState.erreur)) {
+    toast('⚠️ Un média n\'a pas pu être envoyé — retirez-le ou réessayez', 'erreur');
+    return;
+  }
 
   // Créer la demande (en attente validation admin) — une vraie ligne bannieres, pas juste
   // un objet local : avant ce correctif, DB.demandesCampagnes n'était jamais persisté nulle
@@ -11132,6 +11182,9 @@ async function soumettreNouvelleCampagne() {
     ico: (document.getElementById('nc-ico') || {}).value || '📢',
     position: NC_POSITION_SEL,
     debut, fin, budget,
+    logo: window._ncFirstImgSrc || null,
+    photos: window._ncImages.map(i => i.src),
+    video: window._ncVidState ? window._ncVidState.src : null,
     impressions: 0, clics: 0,
     statut: 'attente', actif: false,
     paiement: paySelected.value,
@@ -11159,6 +11212,9 @@ async function soumettreNouvelleCampagne() {
   NC_COULEUR_SEL = '#1C2833'; NC_POSITION_SEL = 'hero';
   document.querySelectorAll('.ann-pos-btn').forEach((b, i) => { b.classList.toggle('sel', i === 0); });
   document.querySelectorAll('.ann-color-swatch').forEach((s, i) => { s.classList.toggle('sel', i === 0); });
+  window._ncImages = []; window._ncFirstImgSrc = null;
+  const ncGrid = document.getElementById('nc-img-grid'); if (ncGrid) { ncGrid.innerHTML = ''; ncGrid.style.display = 'none'; }
+  ncClearVid();
   majAnnPreview();
 
   // Aller sur tableau de bord
@@ -11287,7 +11343,7 @@ function ouvrirAnnonce(id) {
   if (photos.length) {
     const fallback = a.emoji || '📦';
     // Photo principale
-    imgEl.innerHTML = `<img src="${photos[0]}" alt="${escapeHtml(a.titre)}" style="width:100%;height:100%;object-fit:cover" data-fb="${fallback}" onerror="this.parentNode.innerHTML='<div style=font-size:72px;text-align:center>'+this.dataset.fb+'</div>">
+    imgEl.innerHTML = `<img src="${photos[0]}" alt="${escapeHtml(a.titre)}" style="width:100%;height:100%;object-fit:cover" data-fb="${fallback}" onerror="this.parentNode.innerHTML='<div style=font-size:72px;text-align:center>'+this.dataset.fb+'</div>'">
       <div style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,.5);color:#fff;font-size:11px;padding:4px 10px;border-radius:12px;backdrop-filter:blur(4px)">Agrandir</div>`;
     imgEl.style.padding = '0';
     // Miniatures si plusieurs photos
@@ -12083,22 +12139,40 @@ let PV_IDX = 0;        // index courant dans le photo viewer
 let PV_PHOTOS = [];    // photos affichées dans le viewer
 
 // ── Upload ──
+// La prévisualisation utilise un blob URL local (instantané, quasi gratuit en
+// mémoire quelle que soit la taille du fichier) au lieu de convertir le
+// fichier entier en base64 — indispensable pour supporter des photos
+// jusqu'à 50 Mo sans geler l'onglet. L'envoi réel vers le stockage Supabase
+// se fait en tâche de fond ; DEPOT_PHOTOS[i].src bascule vers l'URL hébergée
+// une fois l'upload terminé (voir aussi publierAnnonce/payTraiter qui
+// attendent la fin de tous les envois avant de publier).
 function ajouterPhotos(files) {
   if (!files || !files.length) return;
   const restant = 5 - DEPOT_PHOTOS.length;
   if (restant <= 0) { toast('Maximum 5 photos atteint', 'erreur'); return; }
   const toLoad = Array.from(files).slice(0, restant);
-  let loaded = 0;
   toLoad.forEach(f => {
-    if (f.size > 5 * 1024 * 1024) { toast(`${f.name} dépasse 5 Mo`, 'erreur'); loaded++; if(loaded===toLoad.length) majPhotosGrid(); return; }
-    if (!f.type.startsWith('image/')) { toast(`${f.name} n'est pas une image`, 'erreur'); loaded++; if(loaded===toLoad.length) majPhotosGrid(); return; }
-    const r = new FileReader();
-    r.onload = e => {
-      DEPOT_PHOTOS.push({ src: e.target.result, file: f, nom: f.name });
-      loaded++;
-      if (loaded === toLoad.length) majPhotosGrid();
-    };
-    r.readAsDataURL(f);
+    if (f.size > 50 * 1024 * 1024) { toast(`${f.name} dépasse 50 Mo`, 'erreur'); return; }
+    if (!f.type.startsWith('image/')) { toast(`${f.name} n'est pas une image`, 'erreur'); return; }
+    const photo = { src: URL.createObjectURL(f), file: f, nom: f.name, uploading: true };
+    DEPOT_PHOTOS.push(photo);
+    majPhotosGrid();
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+      const path = `${SESSION?.id || 'anon'}/${Date.now()}-${Math.random().toString(36).slice(2,8)}-${f.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(f, path).then(r => {
+        photo.uploading = false;
+        if (r.error || !r.data) {
+          photo.erreur = true;
+          toast(`⚠️ Échec de l'envoi de ${f.name}`, 'erreur');
+        } else {
+          photo.src = r.data.publicUrl;
+          photo.uploaded = true;
+        }
+        majPhotosGrid();
+      });
+    } else {
+      photo.uploading = false;
+    }
   });
   // Reset input pour permettre re-sélection
   document.getElementById('depot-photos').value = '';
@@ -12111,7 +12185,8 @@ function dropPhotos(e) {
 }
 
 function supprimerPhoto(idx) {
-  DEPOT_PHOTOS.splice(idx, 1);
+  const [removed] = DEPOT_PHOTOS.splice(idx, 1);
+  if (removed && removed.src && removed.src.startsWith('blob:')) URL.revokeObjectURL(removed.src);
   majPhotosGrid();
 }
 
@@ -12150,6 +12225,8 @@ function majPhotosGrid() {
         <button class="photo-delete" onclick="event.stopPropagation();supprimerPhoto(${i})" title="Supprimer">✕</button>
       </div>
       ${i===0 ? '<div class="badge-principale">⭐ Principale</div>' : ''}
+      ${p.uploading ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">⏳ Envoi…</div>' : ''}
+      ${p.erreur ? '<div style="position:absolute;bottom:0;left:0;right:0;background:#DC2626;color:#fff;font-size:10px;font-weight:700;text-align:center;padding:2px">Échec envoi</div>' : ''}
     </div>`).join('');
 }
 
@@ -12228,6 +12305,8 @@ function publierAnnonce() {
     toast('Ajoutez au moins 1 photo de l\'objet', 'erreur');
     return;
   }
+  if (DEPOT_PHOTOS.some(p => p.uploading)) { toast('⏳ Envoi des photos en cours, patientez…', 'erreur'); return; }
+  if (DEPOT_PHOTOS.some(p => p.erreur)) { toast('⚠️ Une photo n\'a pas pu être envoyée — retirez-la ou réessayez', 'erreur'); return; }
   const planUser = getPlanUser(SESSION?.id);
   const tauxComm = planUser ? planUser.limites.commission : CFG.comm_taux_gratuit;
   let commission = Math.round(valeur * tauxComm / 100);
@@ -16042,9 +16121,15 @@ async function sauvegarderEditBanniere(id) {
 }
 
 // ── Variables globales médias bannière ──
-let pubLogoData = null;      // base64 logo
-let pubPhotosData = [];      // tableau base64 photos
-let pubVideoData = null;     // base64 video
+let pubLogoData = null;      // URL du logo (blob: pendant l'envoi, puis URL Storage)
+let pubLogoUploading = false;
+let pubLogoErreur = false;
+let pubPhotosData = [];      // tableau d'URLs photos (blob: pendant l'envoi, puis URL Storage)
+let pubPhotosUploading = []; // aligné par index sur pubPhotosData
+let pubPhotosErreur = [];    // aligné par index sur pubPhotosData
+let pubVideoData = null;     // URL de la vidéo (blob: pendant l'envoi, puis URL Storage)
+let pubVideoUploading = false;
+let pubVideoErreur = false;
 let pubVideoDuree = 0;       // durée en secondes
 
 const TARIF_BASE_JOUR = 8000; // FCFA par jour de diffusion
@@ -16090,16 +16175,31 @@ function majBudgetAuto() {
 function pubChargerLogo(input) {
   const file = input.files[0];
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { toast('Logo trop lourd (max 5 Mo)', 'erreur'); input.value=''; return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    pubLogoData = e.target.result;
-    document.getElementById('pub-logo-img').src = pubLogoData;
-    document.getElementById('pub-logo-preview').style.display = 'block';
-    document.getElementById('pub-logo-placeholder').style.display = 'none';
-    majPubPreview();
-  };
-  reader.readAsDataURL(file);
+  if (file.size > 50 * 1024 * 1024) { toast('Logo trop lourd (max 50 Mo)', 'erreur'); input.value=''; return; }
+  if (!file.type.startsWith('image/')) { toast('Le logo doit être une image', 'erreur'); input.value=''; return; }
+  pubLogoData = URL.createObjectURL(file);
+  pubLogoUploading = true;
+  pubLogoErreur = false;
+  document.getElementById('pub-logo-img').src = pubLogoData;
+  document.getElementById('pub-logo-preview').style.display = 'block';
+  document.getElementById('pub-logo-placeholder').style.display = 'none';
+  majPubPreview();
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+    const path = `logos/${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+    DAO.uploadPhoto(file, path).then(r => {
+      pubLogoUploading = false;
+      if (r.error || !r.data) {
+        pubLogoErreur = true;
+        toast(`⚠️ Échec de l'envoi du logo`, 'erreur');
+      } else {
+        pubLogoData = r.data.publicUrl;
+        document.getElementById('pub-logo-img').src = pubLogoData;
+      }
+      majPubPreview();
+    });
+  } else {
+    pubLogoUploading = false;
+  }
 }
 
 function pubDropLogo(e) {
@@ -16115,49 +16215,60 @@ function pubDropLogo(e) {
 function pubChargerPhotos(input) {
   const files = Array.from(input.files).slice(0,5);
   pubPhotosData = [];
+  pubPhotosUploading = [];
+  pubPhotosErreur = [];
   const thumbs = document.getElementById('pub-photos-thumbs');
   thumbs.innerHTML = '';
   document.getElementById('pub-photos-placeholder').style.display = files.length ? 'none' : 'block';
-  let loaded = 0;
   files.forEach((file, i) => {
-    if (file.size > 5 * 1024 * 1024) {
-      toast(`${file.name} dépasse 5 Mo — ignorée`, 'erreur');
-      loaded++;
-      if (loaded === files.length) { majBudgetAuto(); majPubPreview(); }
+    if (file.size > 50 * 1024 * 1024) {
+      toast(`${file.name} dépasse 50 Mo — ignorée`, 'erreur');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = e => {
-      pubPhotosData[i] = e.target.result;
-      const img = document.createElement('img');
-      img.src = e.target.result;
-      img.style.cssText = 'width:40px;height:40px;object-fit:cover;border-radius:6px;border:1.5px solid var(--gris-mid)';
-      thumbs.appendChild(img);
-      loaded++;
-      if (loaded === files.length) {
-        const med = tarifMedias();
-        const tarif = document.getElementById('pub-photos-tarif');
-        if (tarif) tarif.textContent = files.length ? `+${fmtFCFA(files.length===1?15000:files.length<=3?25000:35000)} · ${files.length} photo${files.length>1?'s':''}` : '';
-        majBudgetAuto();
+    if (!file.type.startsWith('image/')) {
+      toast(`${file.name} n'est pas une image — ignorée`, 'erreur');
+      return;
+    }
+    pubPhotosData[i] = URL.createObjectURL(file);
+    pubPhotosUploading[i] = true;
+    pubPhotosErreur[i] = false;
+    const img = document.createElement('img');
+    img.src = pubPhotosData[i];
+    img.style.cssText = 'width:40px;height:40px;object-fit:cover;border-radius:6px;border:1.5px solid var(--gris-mid)';
+    thumbs.appendChild(img);
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+      const path = `campagnes/${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(file, path).then(r => {
+        pubPhotosUploading[i] = false;
+        if (r.error || !r.data) {
+          pubPhotosErreur[i] = true;
+          toast(`⚠️ Échec de l'envoi de ${file.name}`, 'erreur');
+        } else {
+          pubPhotosData[i] = r.data.publicUrl;
+          img.src = pubPhotosData[i];
+        }
         majPubPreview();
-      }
-    };
-    reader.readAsDataURL(file);
+      });
+    } else {
+      pubPhotosUploading[i] = false;
+    }
   });
+  const tarif = document.getElementById('pub-photos-tarif');
+  if (tarif) tarif.textContent = files.length ? `+${fmtFCFA(files.length===1?15000:files.length<=3?25000:35000)} · ${files.length} photo${files.length>1?'s':''}` : '';
+  majBudgetAuto();
+  majPubPreview();
 }
 
 function pubChargerVideo(input) {
   const file = input.files[0];
   if (!file) return;
-  // Aucune limite de taille/format n'existait ici — contrairement à
-  // ncLoadVid() ailleurs dans l'app — alors que le fichier entier est
-  // ensuite converti en base64 et gardé en mémoire (+33% de taille),
-  // avec un vrai risque de payload trop lourd pour Supabase ou de tab
-  // qui plante sur une vidéo de plusieurs centaines de Mo.
   const formatsAcceptes = ['video/mp4','video/webm','video/quicktime'];
   if (!formatsAcceptes.includes(file.type)) { toast('Format vidéo non supporté (MP4, WEBM, MOV uniquement)', 'erreur'); input.value=''; return; }
-  if (file.size > 30 * 1024 * 1024) { toast('Vidéo trop lourde (max 30 Mo)', 'erreur'); input.value=''; return; }
+  if (file.size > 150 * 1024 * 1024) { toast('Vidéo trop lourde (max 150 Mo)', 'erreur'); input.value=''; return; }
   const url = URL.createObjectURL(file);
+  pubVideoData = url;
+  pubVideoUploading = true;
+  pubVideoErreur = false;
   const vid = document.getElementById('pub-video-el');
   vid.src = url;
   vid.onloadedmetadata = () => {
@@ -16171,10 +16282,24 @@ function pubChargerVideo(input) {
     const t = document.getElementById('pub-video-tarif');
     const tarif = pubVideoDuree<=15?40000:pubVideoDuree<=30?70000:100000;
     if (t) t.textContent = `+${fmtFCFA(tarif)} · ${Math.round(pubVideoDuree)}s`;
-    const reader = new FileReader();
-    reader.onload = e => { pubVideoData = e.target.result; majPubPreview(); };
-    reader.readAsDataURL(file);
     majBudgetAuto();
+    majPubPreview();
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(file, path, 'campagnes-videos').then(r => {
+        pubVideoUploading = false;
+        if (r.error || !r.data) {
+          pubVideoErreur = true;
+          toast(`⚠️ Échec de l'envoi de la vidéo`, 'erreur');
+        } else {
+          pubVideoData = r.data.publicUrl;
+          vid.src = pubVideoData;
+        }
+        majPubPreview();
+      });
+    } else {
+      pubVideoUploading = false;
+    }
   };
 }
 
@@ -16251,6 +16376,14 @@ async function creerBanniere() {
   const budget = parseFloat(document.getElementById('pub-budget').value) || 0;
   if (!annonceur || !slogan || !debut || !fin) { toast('Annonceur, slogan, dates obligatoires', 'erreur'); return; }
   if (debut > fin) { toast('La date de fin doit être après le début', 'erreur'); return; }
+  if (pubLogoUploading || pubPhotosUploading.some(u => u) || pubVideoUploading) {
+    toast('⏳ Envoi des médias en cours, patientez…', 'erreur');
+    return;
+  }
+  if (pubLogoErreur || pubPhotosErreur.some(e => e) || pubVideoErreur) {
+    toast('⚠️ Un média n\'a pas pu être envoyé — retirez-le ou réessayez', 'erreur');
+    return;
+  }
   const record = {
     id: DAO._local.bannieres.length + 1, annonceur, slogan, lien: lien || '#',
     couleur, position, debut, fin, budget,
@@ -16272,7 +16405,9 @@ async function creerBanniere() {
   document.getElementById('pub-couleur').value = '#0D5C35';
   document.getElementById('pub-budget').value = '';
   // Reset médias
-  pubLogoData = null; pubPhotosData = []; pubVideoData = null; pubVideoDuree = 0;
+  pubLogoData = null; pubLogoUploading = false; pubLogoErreur = false;
+  pubPhotosData = []; pubPhotosUploading = []; pubPhotosErreur = [];
+  pubVideoData = null; pubVideoUploading = false; pubVideoErreur = false; pubVideoDuree = 0;
   document.getElementById('pub-logo-preview').style.display='none';
   document.getElementById('pub-logo-placeholder').style.display='block';
   document.getElementById('pub-photos-thumbs').innerHTML='';
@@ -17394,6 +17529,14 @@ publierAnnonce = function() {
   const ville = document.getElementById('depot-ville').value;
   if (!titre||!cat||!etat||!valeur||!desc||!ville) { toast('Tous les champs obligatoires sont requis','erreur'); return; }
   if (valeur<CFG.comm_valeur_min) { toast('Valeur minimale : '+CFG.comm_valeur_min.toLocaleString()+' FCFA','erreur'); return; }
+  if (!DEPOT_PHOTOS.length) {
+    const m = document.getElementById('photos-manquante');
+    if (m) m.style.display = 'block';
+    toast('Ajoutez au moins 1 photo de l\'objet', 'erreur');
+    return;
+  }
+  if (DEPOT_PHOTOS.some(p => p.uploading)) { toast('⏳ Envoi des photos en cours, patientez…', 'erreur'); return; }
+  if (DEPOT_PHOTOS.some(p => p.erreur)) { toast('⚠️ Une photo n\'a pas pu être envoyée — retirez-la ou réessayez', 'erreur'); return; }
   const commission = calcCommissionPlan(valeur, SESSION.id);
   const plan = getPlanUser(SESSION.id);
   const tauxLabel = `${plan.limites.commission}% (plan ${plan.nom})`;
