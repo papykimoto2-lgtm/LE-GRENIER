@@ -17819,9 +17819,61 @@ function renderStatsStrategiques() {
 
   el.innerHTML = kpis +
     '<div class="stats-grid-2">' + revenuChart + donutChart + '</div>' +
-    '<div class="stats-grid-2b">' + catChart + villesChart + '</div>';
+    '<div class="stats-grid-2b">' + catChart + villesChart + '</div>' +
+    '<div id="admin-stats-trafic-resume"></div>';
 
   _initChartTooltips(el);
+  chargerTraficResumeDashboard();
+}
+
+// Résumé trafic (pays / appareils) sur le tableau de bord — reprend les
+// mêmes données que l'onglet Visibilité, mais en aperçu compact avec un
+// raccourci vers la vue complète. Chargé à part (appel réseau propre)
+// pour ne pas bloquer le rendu synchrone du reste du dashboard.
+async function chargerTraficResumeDashboard() {
+  const el = document.getElementById('admin-stats-trafic-resume');
+  if (!el) return;
+  if (typeof MODE === 'undefined' || MODE !== 'remote') { el.innerHTML = ''; return; }
+  const token = (typeof _supa !== 'undefined') ? _supa.auth.getAccessToken() : null;
+  const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/visites?select=pays,appareil&order=created_at.desc&limit=500',
+    null, token ? { Authorization: 'Bearer ' + token } : {});
+  const zone = document.getElementById('admin-stats-trafic-resume');
+  if (!zone || r.error) return;
+  const visites = r.data || [];
+  if (!visites.length) { zone.innerHTML = ''; return; }
+
+  const parPays = {};
+  visites.forEach(v => { const p = v.pays || '🌍 Non identifié'; parPays[p] = (parPays[p]||0) + 1; });
+  const paysTries = Object.entries(parPays).sort((a,b)=>b[1]-a[1]);
+  const paysColors = ['#1A7A48','#1A5FBF','#B8791A','#7C3A8A'];
+  const paysSegments = paysTries.slice(0,4).map(([label,value],i) => ({label, value, color: paysColors[i]}));
+  const autresPaysTotal = paysTries.slice(4).reduce((s,[,c])=>s+c,0);
+  if (autresPaysTotal > 0) paysSegments.push({label:'Autres pays', value: autresPaysTotal, color:'#9C978C'});
+  const paysTotal = paysSegments.reduce((a,b)=>a+b.value,0);
+
+  const parAppareil = {};
+  visites.forEach(v => { const a = v.appareil || 'Inconnu'; parAppareil[a] = (parAppareil[a]||0) + 1; });
+  const appareilList = Object.entries(parAppareil).sort((a,b)=>b[1]-a[1]).map(([label,value])=>({label,value}));
+
+  zone.innerHTML = `<div class="stats-grid-2b">
+    <div class="admin-section">
+      <div class="admin-section-titre">🌍 Trafic par pays</div>
+      <div class="chart-wrap" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+        ${paysSegments.length ? chartDonut(paysSegments) : ''}
+        <div style="flex:1;min-width:140px">
+          ${paysSegments.length ? '<div class="chart-legend" style="flex-direction:column;gap:8px;margin-top:0">' + paysSegments.map(seg =>
+            `<div class="chart-legend-item"><span class="chart-legend-dot" style="background:${seg.color}"></span>${escapeHtml(seg.label)} <strong style="color:var(--noir);margin-left:auto">${Math.round(seg.value/paysTotal*100)}%</strong></div>`
+          ).join('') + '</div>' : '<div class="chart-empty">Aucune donnée</div>'}
+        </div>
+      </div>
+    </div>
+    <div class="admin-section">
+      <div class="admin-section-titre">📱 Appareils</div>
+      ${appareilList.length ? chartBarList(appareilList, {color:'#1A5FBF', unit:' visite(s)'}) : '<div class="chart-empty">Aucune donnée</div>'}
+      <button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="adminTab(document.querySelector('[onclick*=admin-visibilite]'),'admin-visibilite')">Voir tout le trafic →</button>
+    </div>
+  </div>`;
+  _initChartTooltips(zone);
 }
 
 // ── Dashboard financier admin ──
