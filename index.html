@@ -437,6 +437,39 @@
   .kpi{background:#fff;border-radius:var(--radius-lg);padding:20px;border:1px solid var(--gris-mid);text-align:center;box-shadow:var(--shadow-sm);transition:var(--transition)}
   .kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
   .kpi-val{font-family:var(--font-titre);font-size:32px;color:var(--vert);font-weight:700;letter-spacing:-0.02em}
+
+  /* ── Dashboard stratégique admin (graphiques) ── */
+  .stats-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+  .stat-tile{background:#fff;border-radius:var(--radius-lg);padding:18px 20px;border:1px solid var(--gris-mid);box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+  .stat-tile-ico{position:absolute;top:14px;right:16px;font-size:20px;opacity:.4}
+  .stat-tile-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);margin-bottom:8px}
+  .stat-tile-val{font-family:var(--font-titre);font-size:26px;font-weight:700;color:var(--noir);letter-spacing:-0.01em}
+  .stat-tile-delta{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;margin-top:8px;padding:2px 8px;border-radius:20px}
+  .stat-tile-delta.up{color:#0D7A3D;background:#E6F4EC}
+  .stat-tile-delta.down{color:#B83030;background:#FDECEA}
+  .stat-tile-delta.flat{color:var(--gris-text);background:var(--gris-clair)}
+  .stats-grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:20px}
+  .stats-grid-2b{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  @media(max-width:900px){.stats-grid-2,.stats-grid-2b{grid-template-columns:1fr}}
+  .chart-wrap{position:relative}
+  .chart-legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:14px}
+  .chart-legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gris-text);font-weight:600}
+  .chart-legend-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+  .chart-hit{cursor:pointer}
+  .chart-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .chart-bar-row:last-child{margin-bottom:0}
+  .chart-bar-label{width:96px;flex-shrink:0;font-size:12px;font-weight:600;color:var(--noir);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chart-bar-track{flex:1;height:22px;background:var(--gris-clair);border-radius:6px;overflow:hidden;position:relative}
+  .chart-bar-fill{height:100%;border-radius:6px;transition:width .5s cubic-bezier(0.34,1.56,0.64,1)}
+  .chart-bar-val{width:56px;flex-shrink:0;text-align:right;font-size:12px;font-weight:700;color:var(--gris-text);font-variant-numeric:tabular-nums}
+  .chart-empty{text-align:center;padding:32px 12px;color:var(--gris-text);font-size:13px}
+  #chart-tooltip{position:fixed;z-index:900;background:var(--noir);color:#fff;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.5;pointer-events:none;display:none;box-shadow:0 6px 20px rgba(0,0,0,.25);white-space:nowrap;transform:translate(-50%,-100%)}
+  #chart-tooltip strong{font-weight:700}
+  @media(max-width:480px){
+    .stats-kpi-row{grid-template-columns:repeat(2,1fr)}
+    .stat-tile-val{font-size:21px}
+    .chart-bar-label{width:70px;font-size:11px}
+  }
   .kpi-label{font-size:11px;color:var(--gris-text);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;font-weight:600}
 
   /* ─── MESSAGERIE ─── */
@@ -8050,12 +8083,7 @@ const CGU_DATE    = '2026-05-16';
   <div class="admin-body">
     <!-- TAB DASH -->
     <div id="admin-dash">
-      <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-val" id="kpi-annonces">0</div><div class="kpi-label">Annonces</div></div>
-        <div class="kpi"><div class="kpi-val" id="kpi-users">0</div><div class="kpi-label">Membres</div></div>
-        <div class="kpi"><div class="kpi-val" id="kpi-commissions">0</div><div class="kpi-label">Commission FCFA</div></div>
-        <div class="kpi"><div class="kpi-val" id="kpi-attente">0</div><div class="kpi-label">En attente modération</div></div>
-      </div>
+      <div id="admin-stats-strategiques"></div>
       <div class="admin-section">
         <div class="admin-section-titre">Dernières annonces à modérer</div>
         <table class="table" id="admin-moderation-table">
@@ -17471,6 +17499,239 @@ function inscrireFormation(titre, prix) {
   });
 }
 
+// ══════════════════════════════════════════
+//  DASHBOARD STRATÉGIQUE ADMIN — graphiques
+// ══════════════════════════════════════════
+
+function fmtCompactFCFA(n) {
+  const abs = Math.abs(n);
+  if (abs >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M F';
+  if (abs >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'k F';
+  return Math.round(n).toLocaleString('fr-FR') + ' F';
+}
+
+function calcStatsStrategiques() {
+  const annonces = DAO._local.annonces || [];
+  const paiements = DAO._local.paiements || [];
+  const abonnements = DAO._local.abonnements || [];
+  const plans = DAO._local.plans || [];
+  const annexes = DAO._local.revenus_annexes || [];
+  const users = (DAO._local.utilisateurs || []).filter(u => u.role !== 'admin');
+
+  const confirmes = paiements.filter(p => p.statut === 'confirmé');
+  const commissions = confirmes.reduce((s,p) => s + (p.commission||0), 0);
+  const gmv = confirmes.reduce((s,p) => s + (p.valeur||0), 0);
+
+  const abosActifs = abonnements.filter(a => a.statut === 'actif');
+  const mrr = abosActifs.reduce((s,a) => { const plan = plans.find(p=>p.nom===a.plan); return s + (plan?.prix||0); }, 0);
+
+  const pub = annexes.filter(r=>r.type==='pub').reduce((s,r)=>s+(r.montant||0),0);
+  const autresAnnexes = annexes.filter(r=>r.type!=='pub').reduce((s,r)=>s+(r.montant||0),0);
+  const revenuTotal = commissions + mrr + pub + autresAnnexes;
+
+  const annoncesActives = annonces.filter(a => a.statut === 'en-ligne').length;
+  const enAttente = annonces.filter(a => a.statut === 'attente').length;
+
+  // ── Série temporelle 14 jours (revenus confirmés par jour) ──
+  const jours = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    jours.push(d.toISOString().slice(0,10));
+  }
+  const revenuParJour = {};
+  confirmes.forEach(p => { if (p.date) revenuParJour[p.date] = (revenuParJour[p.date]||0) + (p.commission||0); });
+  annexes.forEach(r => { if (r.date && r.statut !== 'en attente') revenuParJour[r.date] = (revenuParJour[r.date]||0) + (r.montant||0); });
+  const serieRevenus = jours.map(j => ({ label: j, value: revenuParJour[j] || 0 }));
+
+  const sum7Recent = serieRevenus.slice(7).reduce((s,p)=>s+p.value,0);
+  const sum7Avant = serieRevenus.slice(0,7).reduce((s,p)=>s+p.value,0);
+  const deltaRevenu = sum7Avant > 0 ? Math.round(((sum7Recent - sum7Avant) / sum7Avant) * 100) : (sum7Recent > 0 ? 100 : 0);
+
+  // ── Répartition par source (palette validée CVD-safe) ──
+  const sources = [
+    { label: 'Commissions ventes', value: commissions, color: '#1A7A48' },
+    { label: 'Abonnements (MRR)', value: mrr, color: '#1A5FBF' },
+    { label: 'Publicité', value: pub, color: '#B8791A' },
+    { label: 'Autres (vérif., livraison…)', value: autresAnnexes, color: '#7C3A8A' },
+  ].filter(s => s.value > 0);
+
+  // ── Annonces par catégorie ──
+  const catCount = {};
+  annonces.forEach(a => { const c = a.cat || 'Divers'; catCount[c] = (catCount[c]||0) + 1; });
+  const parCategorie = Object.entries(catCount).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([label,value])=>({label,value}));
+
+  // ── Top villes ──
+  const villeCount = {};
+  annonces.forEach(a => { const v = a.ville || 'Non précisé'; villeCount[v] = (villeCount[v]||0) + 1; });
+  const topVilles = Object.entries(villeCount).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([label,value])=>({label,value}));
+
+  return { revenuTotal, gmv, commissions, mrr, annoncesActives, enAttente, totalUsers: users.length,
+    serieRevenus, deltaRevenu, sources, parCategorie, topVilles };
+}
+
+function chartArea(serie, opts) {
+  opts = opts || {};
+  const color = opts.color || '#1A7A48';
+  const w = 600, h = 170, padL = 6, padR = 6, padT = 14, padB = 10;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const max = Math.max(1, ...serie.map(p => p.value));
+  const n = serie.length;
+  const stepX = n > 1 ? innerW / (n - 1) : 0;
+  const xy = serie.map((p, i) => [padL + i * stepX, padT + innerH - (p.value / max) * innerH]);
+  const line = xy.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const base = (padT + innerH).toFixed(1);
+  const area = line + ` L${xy[n-1][0].toFixed(1)},${base} L${xy[0][0].toFixed(1)},${base} Z`;
+  const gridLines = [0, 0.5, 1].map(t => (padT + innerH * (1 - t)).toFixed(1))
+    .map(y => `<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="var(--gris-mid)" stroke-width="1"/>`).join('');
+  const hits = xy.map((p, i) => {
+    const pt = serie[i];
+    const dateLbl = new Date(pt.label + 'T00:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
+    const tip = `<strong>${fmtFCFA(pt.value)}</strong><br>${dateLbl}`;
+    return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="11" fill="transparent" class="chart-hit" data-tip="${escapeHtml(tip)}"/>`;
+  }).join('');
+  const lastPt = xy[n-1];
+  const endDot = `<circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="4" fill="${color}" stroke="#fff" stroke-width="2"/>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="overflow:visible;display:block">
+    ${gridLines}
+    <path d="${area}" fill="${color}" opacity="0.1"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${endDot}
+    ${hits}
+  </svg>`;
+}
+
+function chartDonut(segments, opts) {
+  opts = opts || {};
+  const size = opts.size || 148;
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  if (!total) return '';
+  const r = size/2, cx = r, cy = r, strokeW = opts.stroke || 24;
+  const rInner = r - strokeW/2;
+  const circ = 2 * Math.PI * rInner;
+  let offset = 0;
+  const arcs = segments.map(seg => {
+    const frac = seg.value / total;
+    const dash = Math.max(0, frac * circ - 2);
+    const gap = circ - dash;
+    const rot = (offset / total) * 360 - 90;
+    offset += seg.value;
+    const pct = Math.round(frac * 100);
+    const tip = `<strong>${escapeHtml(seg.label)}</strong><br>${fmtFCFA(seg.value)} · ${pct}%`;
+    return `<circle cx="${cx}" cy="${cy}" r="${rInner}" fill="none" stroke="${seg.color}" stroke-width="${strokeW}"
+      stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}" transform="rotate(${rot.toFixed(2)} ${cx} ${cy})"
+      class="chart-hit" data-tip="${escapeHtml(tip)}"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="overflow:visible;flex-shrink:0">
+    <circle cx="${cx}" cy="${cy}" r="${rInner}" fill="none" stroke="var(--gris-clair)" stroke-width="${strokeW}"/>
+    ${arcs}
+  </svg>`;
+}
+
+function chartBarList(items, opts) {
+  opts = opts || {};
+  const color = opts.color || '#1A7A48';
+  const unit = opts.unit || '';
+  const max = Math.max(1, ...items.map(i => i.value));
+  return items.map(it => {
+    const pct = Math.max(4, Math.round((it.value / max) * 100));
+    const tip = `<strong>${escapeHtml(it.label)}</strong><br>${it.value}${unit}`;
+    return `<div class="chart-bar-row">
+      <div class="chart-bar-label" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</div>
+      <div class="chart-bar-track"><div class="chart-bar-fill chart-hit" data-tip="${escapeHtml(tip)}" style="width:${pct}%;background:${color}"></div></div>
+      <div class="chart-bar-val">${it.value}</div>
+    </div>`;
+  }).join('');
+}
+
+function _initChartTooltips(container) {
+  if (!container || container.dataset.tipBound) return;
+  container.dataset.tipBound = '1';
+  const tip = document.getElementById('chart-tooltip');
+  if (!tip) return;
+  const show = (el, x, y) => {
+    tip.innerHTML = el.getAttribute('data-tip');
+    tip.style.display = 'block';
+    tip.style.left = x + 'px';
+    tip.style.top = (y - 10) + 'px';
+  };
+  const hide = () => { tip.style.display = 'none'; };
+  container.addEventListener('mousemove', e => {
+    const el = e.target.closest('[data-tip]');
+    if (el) show(el, e.clientX, e.clientY); else hide();
+  });
+  container.addEventListener('mouseleave', hide);
+  container.addEventListener('touchstart', e => {
+    const el = e.target.closest('[data-tip]');
+    if (el) { const t = e.touches[0]; show(el, t.clientX, t.clientY); setTimeout(hide, 2000); }
+  }, {passive:true});
+}
+
+function renderStatsStrategiques() {
+  const el = document.getElementById('admin-stats-strategiques');
+  if (!el || !SESSION) return;
+  const s = calcStatsStrategiques();
+  const deltaClass = s.deltaRevenu > 0 ? 'up' : s.deltaRevenu < 0 ? 'down' : 'flat';
+  const deltaIco = s.deltaRevenu > 0 ? '▲' : s.deltaRevenu < 0 ? '▼' : '●';
+
+  const kpis = `<div class="stats-kpi-row">
+    <div class="stat-tile"><span class="stat-tile-ico">💰</span>
+      <div class="stat-tile-label">Revenu total</div>
+      <div class="stat-tile-val">${fmtCompactFCFA(s.revenuTotal)}</div>
+      <div class="stat-tile-delta ${deltaClass}">${deltaIco} ${Math.abs(s.deltaRevenu)}% vs 7j précédents</div>
+    </div>
+    <div class="stat-tile"><span class="stat-tile-ico">🛒</span>
+      <div class="stat-tile-label">Volume de ventes (GMV)</div>
+      <div class="stat-tile-val">${fmtCompactFCFA(s.gmv)}</div>
+      <div class="stat-tile-delta flat">${fmtCompactFCFA(s.commissions)} de commission</div>
+    </div>
+    <div class="stat-tile"><span class="stat-tile-ico">👥</span>
+      <div class="stat-tile-label">Membres inscrits</div>
+      <div class="stat-tile-val">${s.totalUsers.toLocaleString('fr-FR')}</div>
+      <div class="stat-tile-delta flat">${s.annoncesActives} annonce${s.annoncesActives>1?'s':''} active${s.annoncesActives>1?'s':''}</div>
+    </div>
+    <div class="stat-tile"><span class="stat-tile-ico">⏳</span>
+      <div class="stat-tile-label">En attente modération</div>
+      <div class="stat-tile-val" style="color:${s.enAttente>0?'#B8791A':'inherit'}">${s.enAttente}</div>
+      <div class="stat-tile-delta ${s.enAttente>0?'down':'up'}">${s.enAttente>0?'À traiter':'✅ Tout traité'}</div>
+    </div>
+  </div>`;
+
+  const hasRevenu = s.serieRevenus.some(p => p.value > 0);
+  const revenuChart = `<div class="admin-section">
+    <div class="admin-section-titre">📈 Revenus — 14 derniers jours</div>
+    <div class="chart-wrap">${hasRevenu ? chartArea(s.serieRevenus, {color:'#1A7A48'}) : '<div class="chart-empty">Pas encore de revenu confirmé sur cette période</div>'}</div>
+  </div>`;
+
+  const donutChart = `<div class="admin-section">
+    <div class="admin-section-titre">🥧 Revenus par source</div>
+    <div class="chart-wrap" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      ${s.sources.length ? chartDonut(s.sources) : ''}
+      <div style="flex:1;min-width:140px">
+        ${s.sources.length ? '<div class="chart-legend" style="flex-direction:column;gap:8px;margin-top:0">' + s.sources.map(seg => {
+          const pct = Math.round(seg.value / s.sources.reduce((a,b)=>a+b.value,0) * 100);
+          return `<div class="chart-legend-item"><span class="chart-legend-dot" style="background:${seg.color}"></span>${escapeHtml(seg.label)} <strong style="color:var(--noir);margin-left:auto">${pct}%</strong></div>`;
+        }).join('') + '</div>' : '<div class="chart-empty">Aucun revenu enregistré</div>'}
+      </div>
+    </div>
+  </div>`;
+
+  const catChart = `<div class="admin-section">
+    <div class="admin-section-titre">📦 Annonces par catégorie</div>
+    ${s.parCategorie.length ? chartBarList(s.parCategorie, {color:'#1A7A48', unit: ' annonce(s)'}) : '<div class="chart-empty">Aucune annonce publiée</div>'}
+  </div>`;
+
+  const villesChart = `<div class="admin-section">
+    <div class="admin-section-titre">📍 Top villes</div>
+    ${s.topVilles.length ? chartBarList(s.topVilles, {color:'#1A5FBF', unit: ' annonce(s)'}) : '<div class="chart-empty">Aucune annonce publiée</div>'}
+  </div>`;
+
+  el.innerHTML = kpis +
+    '<div class="stats-grid-2">' + revenuChart + donutChart + '</div>' +
+    '<div class="stats-grid-2b">' + catChart + villesChart + '</div>';
+
+  _initChartTooltips(el);
+}
+
 // ── Dashboard financier admin ──
 function renderAdminFinances() {
   const commissions = DAO._local.paiements.filter(p => p.statut === 'confirmé').reduce((s,p) => s + (p.commission||0), 0);
@@ -17719,8 +17980,8 @@ function renderAdmin() {
       <td style="font-family:monospace;font-size:10px;color:var(--gris-text)">${p.ref||'—'}</td>
     </tr>`
   }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--gris-text)">Aucun paiement</td></tr>';
-  // Finances
-  renderAdminFinances();
+  // Dashboard stratégique (KPIs + graphiques)
+  renderStatsStrategiques();
 }
 
 // ══════════════════════════════════════════
@@ -20078,6 +20339,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 </div>
 
 <div id="toast" class="toast"></div>
+<div id="chart-tooltip"></div>
 
 <!-- ══════════════════════════════════════════════════════════════════
      PATCH v14 — DROITS DE PUBLICATION UNIFORMES SUR TOUS LES ONGLETS
