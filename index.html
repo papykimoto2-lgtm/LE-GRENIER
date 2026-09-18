@@ -674,6 +674,11 @@
       padding-bottom:72px /* 58px barre + 14px marge */
     }
     #screen-accueil footer{margin-bottom:58px}
+    /* Le toast (bottom:20px) était lui aussi ignoré par ce correctif : il
+       s'affichait par-dessus la barre fixe (58px + zone sécurisée), rendant
+       les messages de confirmation/erreur (ex: "Publier mon don") difficiles
+       à remarquer, voire imperceptibles selon l'appareil. */
+    .toast{bottom:calc(58px + 20px + env(safe-area-inset-bottom,0px))}
   }
 
   /* ─── ÉCRAN INFO / FORMATION ─── */
@@ -826,6 +831,14 @@
     .nav-level1{display:none}
     .nav-tabs{display:none}
     .nav-tab{padding:13px 14px;font-size:12px}
+
+    /* La bannière pub de la nav est fixée à height:160px (voir règle desktop
+       ligne ~130) alors que .pub-zone-nav n'a pas de hauteur propre et suit
+       simplement son contenu : sur le bandeau nav réduit à 56px, elle débordait
+       par-dessus le contenu affiché juste en dessous (même bug que le logo
+       ci-dessus). Pas de format compact qui reste lisible dans 56px — les
+       autres emplacements pub (hero, par onglet) restent visibles sur mobile. */
+    .pub-zone-nav{display:none}
 
     /* ── Hero ── */
     .hero{padding:0 16px}
