@@ -11343,7 +11343,7 @@ function ouvrirAnnonce(id) {
   if (photos.length) {
     const fallback = a.emoji || '📦';
     // Photo principale
-    imgEl.innerHTML = `<img src="${photos[0]}" alt="${escapeHtml(a.titre)}" style="width:100%;height:100%;object-fit:cover" data-fb="${fallback}" onerror="this.parentNode.innerHTML='<div style=font-size:72px;text-align:center>'+this.dataset.fb+'</div>">
+    imgEl.innerHTML = `<img src="${photos[0]}" alt="${escapeHtml(a.titre)}" style="width:100%;height:100%;object-fit:cover" data-fb="${fallback}" onerror="this.parentNode.innerHTML='<div style=font-size:72px;text-align:center>'+this.dataset.fb+'</div>'">
       <div style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,.5);color:#fff;font-size:11px;padding:4px 10px;border-radius:12px;backdrop-filter:blur(4px)">Agrandir</div>`;
     imgEl.style.padding = '0';
     // Miniatures si plusieurs photos
