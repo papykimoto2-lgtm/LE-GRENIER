@@ -2365,6 +2365,22 @@
   .livreur-header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
   .livreur-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#FEF2F2,#FECACA);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px solid rgba(220,38,38,.15);flex-shrink:0;font-weight:700;color:#DC2626;overflow:hidden}
   .livreur-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+
+  /* Recherche de livreur sur carte (façon Yango) */
+  .recherche-livr-panel{width:100%;height:100%;max-width:520px;margin:0 auto;background:#fff;display:flex;flex-direction:column;position:relative}
+  .recherche-livr-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;flex-shrink:0}
+  .recherche-livr-titre{font-family:var(--font-titre);font-size:17px;font-weight:700}
+  .recherche-livr-sub{font-size:12px;opacity:.85;margin-top:2px}
+  .recherche-livr-map{flex:1;min-height:0;position:relative}
+  .recherche-livr-result{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.15);padding:18px 20px 22px;animation:rechResultUp .35s ease}
+  @keyframes rechResultUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .rech-radar{position:relative;width:20px;height:20px}
+  .rech-radar::before,.rech-radar::after{content:'';position:absolute;inset:0;border-radius:50%;background:rgba(220,38,38,.35);animation:rechPulse 1.8s ease-out infinite}
+  .rech-radar::after{animation-delay:.9s}
+  .rech-radar-dot{position:absolute;inset:0;margin:auto;width:16px;height:16px;border-radius:50%;background:#DC2626;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+  @keyframes rechPulse{0%{transform:scale(.3);opacity:.9}100%{transform:scale(6);opacity:0}}
+  .rech-livreur-icon{width:34px;height:34px;border-radius:50%;background:#fff;border:2px solid #DC2626;display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.25);animation:rechPopIn .35s ease both}
+  @keyframes rechPopIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
   .livreur-nom{font-weight:700;font-size:14px;color:var(--noir)}
   .livreur-type{font-size:11px;font-weight:600;color:#DC2626;margin-top:1px}
   .livreur-dispo{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700}
@@ -9061,6 +9077,21 @@ const CGU_DATE    = '2026-05-16';
   </div>
 </div>
 
+<!-- MODAL RECHERCHE LIVREUR SUR CARTE (façon Yango) -->
+<div class="modal-overlay" id="modal-recherche-livreur" style="z-index:350;padding:0;align-items:stretch">
+  <div class="recherche-livr-panel">
+    <div class="recherche-livr-header">
+      <div>
+        <div class="recherche-livr-titre" id="rech-livr-titre">📡 Recherche d'un livreur…</div>
+        <div class="recherche-livr-sub" id="rech-livr-sub">Autour de votre point de départ</div>
+      </div>
+      <button class="modal-close" style="background:rgba(255,255,255,.2);color:#fff" onclick="passerRechercheLivreur()" title="Passer">✕</button>
+    </div>
+    <div id="rech-livr-map" class="recherche-livr-map"></div>
+    <div class="recherche-livr-result" id="rech-livr-result" style="display:none"></div>
+  </div>
+</div>
+
 <!-- MODAL PAIEMENT -->
 <div class="modal-overlay" id="modal-paiement">
   <div class="modal-pay">
@@ -11691,52 +11722,54 @@ async function validerCommandeInvite() {
   }
   DISPATCH_COMMANDES.unshift(nouvelleLivraison1);
 
-  // WA livreur
-  if (livreur) {
-    const isResto = !!_inviteArticle?._restoTel;
-    const descColis = isResto
-      ? `🍽️ Commande : ${(_inviteArticle._items||[]).map(p=>`${p.qty}×${p.nom}`).join(', ')}`
-      : `📦 ${_inviteArticle?.titre||'Colis'}`;
-    const msgL = `🛵 *Nouvelle commande Le Grenier !*\n👤 Client : ${nom} (${tel})\n${descColis}\n🚀 Départ : ${depFinal}\n🏁 Arrivée : ${adresse}\n💰 Frais : ${fmtFCFA(frais)} · Réf : ${ref}\n💳 ${_invitePayMode.toUpperCase()}`;
-    window.open(`https://wa.me/${formaterTelWhatsApp(livreur.tel)}?text=${encodeURIComponent(msgL)}`,'_blank');
-    // Si commande resto : notifier aussi le restaurant
-    if (isResto && _inviteArticle._restoTel) {
-      const msgR = `🍽️ *Nouvelle commande Le Grenier !*\n👤 ${nom} (${tel})\n${descColis}\n🛵 Livré par : ${livreur.nom}\n🏁 Livraison : ${adresse}\n💰 Total : ${fmtFCFA((_inviteArticle.valeur||0)+frais)} · Réf : ${ref}`;
-      window.open(`https://wa.me/${formaterTelWhatsApp(_inviteArticle._restoTel)}?text=${encodeURIComponent(msgR)}`,'_blank');
+  ouvrirRechercheLivreurCarte(depFinal, adresse, livreur, () => {
+    // WA livreur
+    if (livreur) {
+      const isResto = !!_inviteArticle?._restoTel;
+      const descColis = isResto
+        ? `🍽️ Commande : ${(_inviteArticle._items||[]).map(p=>`${p.qty}×${p.nom}`).join(', ')}`
+        : `📦 ${_inviteArticle?.titre||'Colis'}`;
+      const msgL = `🛵 *Nouvelle commande Le Grenier !*\n👤 Client : ${nom} (${tel})\n${descColis}\n🚀 Départ : ${depFinal}\n🏁 Arrivée : ${adresse}\n💰 Frais : ${fmtFCFA(frais)} · Réf : ${ref}\n💳 ${_invitePayMode.toUpperCase()}`;
+      window.open(`https://wa.me/${formaterTelWhatsApp(livreur.tel)}?text=${encodeURIComponent(msgL)}`,'_blank');
+      // Si commande resto : notifier aussi le restaurant
+      if (isResto && _inviteArticle._restoTel) {
+        const msgR = `🍽️ *Nouvelle commande Le Grenier !*\n👤 ${nom} (${tel})\n${descColis}\n🛵 Livré par : ${livreur.nom}\n🏁 Livraison : ${adresse}\n💰 Total : ${fmtFCFA((_inviteArticle.valeur||0)+frais)} · Réf : ${ref}`;
+        window.open(`https://wa.me/${formaterTelWhatsApp(_inviteArticle._restoTel)}?text=${encodeURIComponent(msgR)}`,'_blank');
+      }
     }
-  }
-  // WA client
-  const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreur?.nom||"En cours d'assignation"}\n📍 ${depFinal} → ${adresse}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*\n\nMerci ${nom} ! 🙏`;
-  window.open(`https://wa.me/${formaterTelWhatsApp(tel)}?text=${encodeURIComponent(msgC)}`,'_blank');
+    // WA client
+    const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreur?.nom||"En cours d'assignation"}\n📍 ${depFinal} → ${adresse}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*\n\nMerci ${nom} ! 🙏`;
+    window.open(`https://wa.me/${formaterTelWhatsApp(tel)}?text=${encodeURIComponent(msgC)}`,'_blank');
 
-  toast(`🛵 Commande ${ref} enregistrée ! Ref envoyée sur WhatsApp.`);
+    toast(`🛵 Commande ${ref} enregistrée ! Ref envoyée sur WhatsApp.`);
 
-  // Écran de succès dans le modal
-  const body = document.querySelector('#modal-livr-invite .modal-body');
-  if (body) body.innerHTML = `
-    <div style="text-align:center;padding:20px 10px">
-      <div style="font-size:52px;margin-bottom:10px">✅</div>
-      <div style="font-family:var(--font-titre);font-size:19px;font-weight:700;color:var(--vert);margin-bottom:4px">Commande confirmée !</div>
-      <div style="font-size:13px;color:var(--gris-text);margin-bottom:16px">Votre réf. de suivi a été envoyée sur WhatsApp</div>
-      <div style="background:var(--vert-pale);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;text-align:left;font-size:13px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--gris-text)">Référence</span><strong style="font-family:monospace;color:var(--vert);font-size:14px">${ref}</strong></div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--gris-text)">Livreur</span><strong>${livreur ? livreur.ico+' '+livreur.nom : '⏳ Assignation en cours'}</strong></div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--gris-text)">Arrivée est.</span><strong style="color:#DC2626">${livreur?.delai || 'À confirmer'}</strong></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:var(--gris-text)">Paiement</span><strong>${_invitePayMode.toUpperCase()}</strong></div>
-      </div>
-      <div style="font-size:12px;background:#FEF3C7;color:#92400E;border-radius:var(--radius);padding:8px 12px;margin-bottom:14px">
-        📡 Suivi : <strong>Livraison → Suivi → ${ref}</strong>
-      </div>
-      <div style="display:grid;gap:8px">
-        <button onclick="fermerModalInvite();livrTab('livr-suivi');setTimeout(()=>{document.getElementById('livr-suivi-input').value='${ref}';suivreLivraison();},100)"
-          style="width:100%;padding:11px;background:var(--vert);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer">
-          📡 Suivre ma livraison
-        </button>
-        <button onclick="fermerModalInvite()" style="width:100%;padding:9px;background:var(--gris-clair);color:var(--noir);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer">Fermer</button>
-      </div>
-    </div>`;
-  fermerModal();
-  _inviteLivreurId = null;
+    // Écran de succès dans le modal
+    const body = document.querySelector('#modal-livr-invite .modal-body');
+    if (body) body.innerHTML = `
+      <div style="text-align:center;padding:20px 10px">
+        <div style="font-size:52px;margin-bottom:10px">✅</div>
+        <div style="font-family:var(--font-titre);font-size:19px;font-weight:700;color:var(--vert);margin-bottom:4px">Commande confirmée !</div>
+        <div style="font-size:13px;color:var(--gris-text);margin-bottom:16px">Votre réf. de suivi a été envoyée sur WhatsApp</div>
+        <div style="background:var(--vert-pale);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;text-align:left;font-size:13px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--gris-text)">Référence</span><strong style="font-family:monospace;color:var(--vert);font-size:14px">${ref}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--gris-text)">Livreur</span><strong>${livreur ? livreur.ico+' '+livreur.nom : '⏳ Assignation en cours'}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="color:var(--gris-text)">Arrivée est.</span><strong style="color:#DC2626">${livreur?.delai || 'À confirmer'}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--gris-text)">Paiement</span><strong>${_invitePayMode.toUpperCase()}</strong></div>
+        </div>
+        <div style="font-size:12px;background:#FEF3C7;color:#92400E;border-radius:var(--radius);padding:8px 12px;margin-bottom:14px">
+          📡 Suivi : <strong>Livraison → Suivi → ${ref}</strong>
+        </div>
+        <div style="display:grid;gap:8px">
+          <button onclick="fermerModalInvite();livrTab('livr-suivi');setTimeout(()=>{document.getElementById('livr-suivi-input').value='${ref}';suivreLivraison();},100)"
+            style="width:100%;padding:11px;background:var(--vert);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer">
+            📡 Suivre ma livraison
+          </button>
+          <button onclick="fermerModalInvite()" style="width:100%;padding:9px;background:var(--gris-clair);color:var(--noir);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer">Fermer</button>
+        </div>
+      </div>`;
+    fermerModal();
+    _inviteLivreurId = null;
+  });
 }
 
 function demanderLivraisonAnnonce() {
@@ -19823,6 +19856,116 @@ function selectionnerLivreur(id) {
   renderLivreursChoix();
 }
 
+// ══════════════════════════════════════════
+// RECHERCHE DE LIVREUR SUR CARTE (façon Yango) — animation de recherche
+// affichée après paiement, avant de révéler le livreur assigné (ou l'attente).
+// ══════════════════════════════════════════
+let RECH_MAP = null;
+let RECH_TIMER = null;
+let RECH_OUVERT = false;
+
+function _resolveDepartCoords(depText, arrText) {
+  return coordsZone(depText) || coordsZone(arrText) || COORDS_VILLES['Plateau'];
+}
+
+function ouvrirRechercheLivreurCarte(depText, arrText, livreurFinal, onTermine) {
+  const modal = document.getElementById('modal-recherche-livreur');
+  if (!modal || typeof L === 'undefined') { onTermine(); return; } // pas de carte dispo : ne bloque jamais la commande
+  RECH_OUVERT = true;
+  window._rechOnTermine = onTermine;
+  modal.classList.add('open');
+  document.getElementById('rech-livr-titre').textContent = '📡 Recherche d\'un livreur…';
+  document.getElementById('rech-livr-sub').textContent = 'Autour de ' + (depText || arrText || 'votre position');
+  const result = document.getElementById('rech-livr-result');
+  result.style.display = 'none';
+  result.innerHTML = '';
+
+  const centre = _resolveDepartCoords(depText, arrText);
+
+  setTimeout(() => {
+    if (!RECH_OUVERT) return;
+    const container = document.getElementById('rech-livr-map');
+    if (!container) { fermerRechercheLivreur(); return; }
+    if (RECH_MAP) { RECH_MAP.remove(); RECH_MAP = null; }
+    RECH_MAP = L.map('rech-livr-map', { zoomControl: false, attributionControl: false })
+      .setView([centre.lat, centre.lng], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(RECH_MAP);
+
+    // Point de départ avec radar pulsant
+    L.marker([centre.lat, centre.lng], {
+      icon: L.divIcon({ html: '<div class="rech-radar"><div class="rech-radar-dot"></div></div>', iconSize: [20, 20], iconAnchor: [10, 10], className: '' }),
+      zIndexOffset: 1000
+    }).addTo(RECH_MAP);
+
+    // Livreurs disponibles à proximité (hors celui déjà retenu, affiché à part)
+    const proches = DB_LIVREURS.filter(l => l.dispo && l.id !== livreurFinal?.id).slice(0, 5);
+    proches.forEach((l, i) => {
+      const jitter = { lat: centre.lat + (Math.random() - .5) * 0.018, lng: centre.lng + (Math.random() - .5) * 0.018 };
+      setTimeout(() => {
+        if (!RECH_OUVERT || !RECH_MAP) return;
+        L.marker([jitter.lat, jitter.lng], {
+          icon: L.divIcon({ html: `<div class="rech-livreur-icon">${l.ico}</div>`, iconSize: [34, 34], iconAnchor: [17, 17], className: '' })
+        }).addTo(RECH_MAP);
+      }, 200 + i * 220);
+    });
+
+    RECH_TIMER = setTimeout(() => _afficherLivreurTrouve(livreurFinal, centre), 2600);
+  }, 100);
+}
+
+function _afficherLivreurTrouve(livreurFinal, centre) {
+  if (!RECH_OUVERT) return;
+  const result = document.getElementById('rech-livr-result');
+  if (livreurFinal) {
+    document.getElementById('rech-livr-titre').textContent = '✅ Livreur trouvé !';
+    document.getElementById('rech-livr-sub').textContent = 'Il a été notifié de votre commande';
+    if (RECH_MAP) {
+      const jitter = { lat: centre.lat + (Math.random() - .5) * 0.01, lng: centre.lng + (Math.random() - .5) * 0.01 };
+      L.marker([jitter.lat, jitter.lng], {
+        icon: L.divIcon({
+          html: `<div class="rech-livreur-icon" style="width:44px;height:44px;border-color:#16A34A;font-size:20px">${livreurFinal.photo ? `<img src="${livreurFinal.photo}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">` : livreurFinal.ico}</div>`,
+          iconSize: [44, 44], iconAnchor: [22, 22], className: ''
+        }),
+        zIndexOffset: 2000
+      }).addTo(RECH_MAP);
+      RECH_MAP.setView([jitter.lat, jitter.lng], 14);
+    }
+    result.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:52px;height:52px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid #16A34A;display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--livr-pale,#FEF2F2)">${livreurFinal.photo ? `<img src="${livreurFinal.photo}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">` : livreurFinal.ico}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:15px">${escapeHtml(livreurFinal.nom)}</div>
+          <div style="font-size:12px;color:var(--gris-text)">${livreurFinal.type} · ⭐ ${livreurFinal.note} · ⏱ ${livreurFinal.delai}</div>
+        </div>
+        <button onclick="fermerRechercheLivreur()" style="background:linear-gradient(135deg,#16A34A,#22C55E);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">Continuer</button>
+      </div>`;
+  } else {
+    document.getElementById('rech-livr-titre').textContent = '📡 Demande envoyée';
+    document.getElementById('rech-livr-sub').textContent = 'Visible par les livreurs à proximité';
+    result.innerHTML = `
+      <div style="text-align:center">
+        <div style="font-size:13px;color:var(--gris-text);margin-bottom:12px">Le premier livreur disponible qui accepte votre offre vous contactera directement.</div>
+        <button onclick="fermerRechercheLivreur()" style="width:100%;background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;border:none;border-radius:var(--radius);padding:11px;font-size:14px;font-weight:700;cursor:pointer">Continuer</button>
+      </div>`;
+  }
+  result.style.display = 'block';
+}
+
+function fermerRechercheLivreur() {
+  RECH_OUVERT = false;
+  if (RECH_TIMER) { clearTimeout(RECH_TIMER); RECH_TIMER = null; }
+  const modal = document.getElementById('modal-recherche-livreur');
+  if (modal) modal.classList.remove('open');
+  if (RECH_MAP) { RECH_MAP.remove(); RECH_MAP = null; }
+  const cb = window._rechOnTermine;
+  window._rechOnTermine = null;
+  if (cb) cb();
+}
+
+function passerRechercheLivreur() {
+  fermerRechercheLivreur();
+}
+
 function commanderLivraison() {
   const estAchat = LIVR_MODE === 'achat';
   const dep     = document.getElementById('livr-depart').value.trim();
@@ -19874,16 +20017,18 @@ function commanderLivraison() {
     }
     LIVR_HISTORIQUE.unshift({ id: LIVR_HISTORIQUE.length+1, ref, livreur: livreurChoisi?.nom||'Assignation en cours…', dep, arr, type: LIVR_TYPE, statut: livreurChoisi?'en livraison':'en cours', montant: tarif + (estAchat?articleBudget:0), date: new Date().toISOString().slice(0,10) });
     const desc = document.getElementById('livr-colis-desc').value.trim();
-    if (livreurChoisi) {
-      const msgL = estAchat
-        ? `🛍️ *Nouvel achat + livraison — Le Grenier !*\n🛒 À acheter : ${articleDesc}\n💵 Budget article : ${fmtFCFA(articleBudget)} (à récupérer chez le client)\n📍 ${dep ? dep+' → ' : ''}${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 Frais de service : ${fmtFCFA(tarif)} · Réf: ${ref}`
-        : `🛵 *Nouvelle commande Le Grenier !*\n📦 ${desc||'Colis'}\n🚀 ${dep} → ${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 ${fmtFCFA(tarif)} · Réf: ${ref}`;
-      window.open(`https://wa.me/${formaterTelWhatsApp(livreurChoisi.tel)}?text=${encodeURIComponent(msgL)}`, '_blank');
-    }
-    const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreurChoisi?.nom||"En cours d'assignation"}\n📍 ${dep ? dep+' → ' : ''}${arr}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*`;
-    window.open(`https://wa.me/${formaterTelWhatsApp(telExp)}?text=${encodeURIComponent(msgC)}`, '_blank');
-    toast(`🛵 Commande ${ref} enregistrée !`);
-    renderLivrHistorique(); LIVR_SELECTIONNE_ID = null;
+    ouvrirRechercheLivreurCarte(dep, arr, livreurChoisi, () => {
+      if (livreurChoisi) {
+        const msgL = estAchat
+          ? `🛍️ *Nouvel achat + livraison — Le Grenier !*\n🛒 À acheter : ${articleDesc}\n💵 Budget article : ${fmtFCFA(articleBudget)} (à récupérer chez le client)\n📍 ${dep ? dep+' → ' : ''}${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 Frais de service : ${fmtFCFA(tarif)} · Réf: ${ref}`
+          : `🛵 *Nouvelle commande Le Grenier !*\n📦 ${desc||'Colis'}\n🚀 ${dep} → ${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 ${fmtFCFA(tarif)} · Réf: ${ref}`;
+        window.open(`https://wa.me/${formaterTelWhatsApp(livreurChoisi.tel)}?text=${encodeURIComponent(msgL)}`, '_blank');
+      }
+      const msgC = `✅ *Livraison Le Grenier confirmée !*\n🔖 Réf : *${ref}*\n🛵 ${livreurChoisi?.nom||"En cours d'assignation"}\n📍 ${dep ? dep+' → ' : ''}${arr}\n\n📡 Suivez : Livraison > Suivi > entrez *${ref}*`;
+      window.open(`https://wa.me/${formaterTelWhatsApp(telExp)}?text=${encodeURIComponent(msgC)}`, '_blank');
+      toast(`🛵 Commande ${ref} enregistrée !`);
+      renderLivrHistorique(); LIVR_SELECTIONNE_ID = null;
+    });
   });
 }
 
