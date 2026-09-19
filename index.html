@@ -2381,6 +2381,12 @@
   @keyframes rechPulse{0%{transform:scale(.3);opacity:.9}100%{transform:scale(6);opacity:0}}
   .rech-livreur-icon{width:34px;height:34px;border-radius:50%;background:#fff;border:2px solid #DC2626;display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.25);animation:rechPopIn .35s ease both}
   @keyframes rechPopIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+
+  /* Saisie intuitive d'adresse (autocomplétion OpenStreetMap) */
+  .geo-autocomplete-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--gris-mid);border-radius:var(--radius);box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:230px;overflow-y:auto;z-index:60}
+  .geo-autocomplete-item{padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gris-clair)}
+  .geo-autocomplete-item:last-of-type{border-bottom:none}
+  .geo-autocomplete-item:hover,.geo-autocomplete-item.actif{background:var(--vert-pale)}
   .livreur-nom{font-weight:700;font-size:14px;color:var(--noir)}
   .livreur-type{font-size:11px;font-weight:600;color:#DC2626;margin-top:1px}
   .livreur-dispo{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700}
@@ -5910,15 +5916,19 @@
 
           <div class="form-group" style="margin-bottom:12px">
             <label id="livr-depart-label" style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Adresse de départ *</label>
-            <div style="display:flex;gap:8px">
-              <input type="text" id="livr-depart" oninput="LIVR_GEO.dep=null" placeholder="Ex: Cocody Riviera 3, Carrefour Palmeraie" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            <div class="adresse-flex-row" style="display:flex;gap:8px">
+              <div class="geo-ac-wrap" style="position:relative;flex:1;min-width:0">
+                <input type="text" id="livr-depart" autocomplete="off" placeholder="Ex: Cocody Riviera 3, Carrefour Palmeraie" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+              </div>
               <button type="button" id="livr-depart-gps-btn" onclick="captureGeoLivrDep()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 14px;font-size:14px;cursor:pointer;color:var(--gris-text)">📍 GPS</button>
             </div>
           </div>
           <div class="form-group" style="margin-bottom:12px">
             <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Adresse de livraison *</label>
-            <div style="display:flex;gap:8px">
-              <input type="text" id="livr-arrivee" oninput="LIVR_GEO.arr=null" placeholder="Ex: Marcory Zone 4, Résidence Les Cocotiers" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            <div class="adresse-flex-row" style="display:flex;gap:8px">
+              <div class="geo-ac-wrap" style="position:relative;flex:1;min-width:0">
+                <input type="text" id="livr-arrivee" autocomplete="off" placeholder="Ex: Marcory Zone 4, Résidence Les Cocotiers" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+              </div>
               <button type="button" id="livr-arrivee-gps-btn" onclick="captureGeoLivrArr()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 14px;font-size:14px;cursor:pointer;color:var(--gris-text)">📍 GPS</button>
             </div>
           </div>
@@ -9050,15 +9060,19 @@ const CGU_DATE    = '2026-05-16';
         </div>
         <div>
           <label style="font-size:12px;font-weight:700;color:var(--gris-text);display:block;margin-bottom:4px">Adresse de livraison *</label>
-          <div style="display:flex;gap:8px">
-            <input id="invite-adresse" type="text" oninput="LIVR_GEO_INVITE.arr=null" placeholder="Ex: Cocody Angré, Rue des jardins" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+          <div class="adresse-flex-row" style="display:flex;gap:8px">
+            <div class="geo-ac-wrap" style="position:relative;flex:1;min-width:0">
+              <input id="invite-adresse" type="text" autocomplete="off" placeholder="Ex: Cocody Angré, Rue des jardins" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            </div>
             <button type="button" id="invite-adresse-gps-btn" onclick="captureGeoInviteArr()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 12px;font-size:13px;cursor:pointer;color:var(--gris-text)">📍</button>
           </div>
         </div>
         <div id="invite-dep-wrap">
           <label style="font-size:12px;font-weight:700;color:var(--gris-text);display:block;margin-bottom:4px">Adresse de départ *</label>
-          <div style="display:flex;gap:8px">
-            <input id="invite-dep" type="text" oninput="LIVR_GEO_INVITE.dep=null" placeholder="Ex: Marcory Zone 4" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+          <div class="adresse-flex-row" style="display:flex;gap:8px">
+            <div class="geo-ac-wrap" style="position:relative;flex:1;min-width:0">
+              <input id="invite-dep" type="text" autocomplete="off" placeholder="Ex: Marcory Zone 4" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            </div>
             <button type="button" id="invite-dep-gps-btn" onclick="captureGeoInviteDep()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 12px;font-size:13px;cursor:pointer;color:var(--gris-text)">📍</button>
           </div>
         </div>
@@ -19463,7 +19477,7 @@ function _captureGeoAdresse(inputId, btnId, store, champ) {
     if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt.includes('GPS') ? '✅ GPS' : '✅'; btn.style.color = fiable ? 'var(--vert)' : '#B8791A'; }
     const precisionTxt = precisionM != null ? ` (précision ~${Math.round(precisionM/1000)||'<1'} km)` : '';
     toast(fiable ? `📡 Position détectée : ${ville}` : `📡 Position approximative — ${ville}${precisionTxt}. Vérifiez et corrigez si besoin.`, 'info');
-    const anchor = input ? (input.parentElement || input) : null;
+    const anchor = input ? (input.closest('.adresse-flex-row') || input.parentElement || input) : null;
     if (!fiable && anchor) {
       injecterCorrectionZone(anchor, (v) => {
         store[champ] = COORDS_VILLES[v];
@@ -19482,6 +19496,80 @@ function captureGeoLivrDep()    { _captureGeoAdresse('livr-depart', 'livr-depart
 function captureGeoLivrArr()    { _captureGeoAdresse('livr-arrivee', 'livr-arrivee-gps-btn', LIVR_GEO, 'arr'); }
 function captureGeoInviteDep()  { _captureGeoAdresse('invite-dep', 'invite-dep-gps-btn', LIVR_GEO_INVITE, 'dep'); }
 function captureGeoInviteArr()  { _captureGeoAdresse('invite-adresse', 'invite-adresse-gps-btn', LIVR_GEO_INVITE, 'arr'); }
+
+// ══════════════════════════════════════════
+// SAISIE INTUITIVE D'ADRESSE — autocomplétion via Nominatim (OpenStreetMap)
+// ══════════════════════════════════════════
+// API publique gratuite, sans clé. Usage raisonnable respecté : une
+// recherche déclenchée seulement après une pause de frappe (600 ms), la
+// requête précédente encore en vol est annulée, résultats limités à la
+// Côte d'Ivoire. Sélectionner une suggestion mémorise ses coordonnées
+// précises (même mécanisme que le bouton GPS) pour la recherche de
+// livreur sur carte ; modifier le texte à la main invalide la coordonnée.
+let _geoAcTimer = null;
+let _geoAcController = null;
+
+function activerSaisieIntuitive(inputId, store, champ) {
+  const input = document.getElementById(inputId);
+  const wrap = input ? input.closest('.geo-ac-wrap') : null;
+  if (!input || !wrap) return;
+  let list = wrap.querySelector('.geo-autocomplete-list');
+  if (!list) {
+    list = document.createElement('div');
+    list.className = 'geo-autocomplete-list';
+    list.style.display = 'none';
+    wrap.appendChild(list);
+  }
+
+  input.addEventListener('input', () => {
+    if (store) store[champ] = null;
+    const q = input.value.trim();
+    clearTimeout(_geoAcTimer);
+    if (q.length < 4) { list.style.display = 'none'; list.innerHTML = ''; return; }
+    _geoAcTimer = setTimeout(() => _rechercherAdresse(q, list, input, store, champ), 600);
+  });
+  input.addEventListener('blur', () => { setTimeout(() => { list.style.display = 'none'; }, 150); });
+  input.addEventListener('focus', () => { if (list.innerHTML) list.style.display = 'block'; });
+}
+
+function _libelleCourtAdresse(displayName) {
+  const parts = String(displayName || '').split(',').map(s => s.trim()).filter(Boolean);
+  return parts.slice(0, 3).join(', ');
+}
+
+async function _rechercherAdresse(q, list, input, store, champ) {
+  if (_geoAcController) _geoAcController.abort();
+  _geoAcController = new AbortController();
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ci&accept-language=fr&q=${encodeURIComponent(q)}`;
+    const r = await fetch(url, { signal: _geoAcController.signal });
+    if (!r.ok) throw new Error('nominatim_http_' + r.status);
+    const data = await r.json();
+    if (!Array.isArray(data) || !data.length) { list.style.display = 'none'; list.innerHTML = ''; return; }
+    list.innerHTML = data.map((d, i) => `<div class="geo-autocomplete-item" data-idx="${i}">📍 ${escapeHtml(_libelleCourtAdresse(d.display_name))}</div>`).join('')
+      + `<div style="padding:4px 12px;font-size:10px;color:var(--gris-text);text-align:right">via OpenStreetMap</div>`;
+    list.style.display = 'block';
+    list.querySelectorAll('.geo-autocomplete-item').forEach(el => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // s'exécute avant le blur de l'input
+        const d = data[+el.dataset.idx];
+        input.value = _libelleCourtAdresse(d.display_name);
+        if (store) store[champ] = { lat: parseFloat(d.lat), lng: parseFloat(d.lon) };
+        list.style.display = 'none';
+        retirerCorrectionZone(input.closest('.adresse-flex-row') || input.parentElement);
+      });
+    });
+  } catch (e) {
+    if (e.name !== 'AbortError') { list.style.display = 'none'; }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  activerSaisieIntuitive('livr-depart', LIVR_GEO, 'dep');
+  activerSaisieIntuitive('livr-arrivee', LIVR_GEO, 'arr');
+  activerSaisieIntuitive('invite-dep', LIVR_GEO_INVITE, 'dep');
+  activerSaisieIntuitive('invite-adresse', LIVR_GEO_INVITE, 'arr');
+});
 
 let LIVR_HISTORIQUE = [
   {id:1,ref:'LVR-08432',livreur:'Kofi Moto Express',dep:'Cocody Riviera',arr:'Plateau Zone 4',type:'moto',statut:'livré',montant:1200,date:'2025-05-10'},
