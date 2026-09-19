@@ -13479,20 +13479,12 @@ function renderHeroTop() {
     .sort((a,b) => (b.vues||0) - (a.vues||0))
     .slice(0, 3);
   if (!top.length) return;
-  const bgs = [
-    'linear-gradient(135deg,#E6F4EC,#C8E6D4)',
-    'linear-gradient(135deg,var(--or-pale),#FFE4A0)',
-    'linear-gradient(135deg,#EDF2FF,#C5D5FF)'
-  ];
   grid.innerHTML = top.map((a, i) => {
-    const hasPhoto = a.photos && a.photos.length;
-    const bgStyle = hasPhoto
-      ? `background:#eee`
-      : `background:${bgs[i]}`;
+    const photo = photoAnnonce(a);
     return `
-    <div class="hero-card${i===0?' hero-card-1':''}" style="${bgStyle}" onclick="ouvrirAnnonce(${a.id})">
-      ${hasPhoto ? `<div class="hero-card-bg" style="background-image:url('${a.photos[0]}')"></div>
-      <div class="hero-card-overlay"></div>` : `<div class="hero-card-emoji">${a.emoji||'📦'}</div>`}
+    <div class="hero-card${i===0?' hero-card-1':''}" style="background:#eee" onclick="ouvrirAnnonce(${a.id})">
+      <div class="hero-card-bg" style="background-image:url('${photo}')"></div>
+      <div class="hero-card-overlay"></div>
       <div class="hero-card-vues">👁 ${a.vues}</div>
       <div class="hero-card-body">
         <div class="hero-card-badge">Top ${i+1}</div>
