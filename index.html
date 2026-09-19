@@ -10628,54 +10628,47 @@ function regEtape3() {
   regEtape(3);
 }
 
+function _appliquerZoneInscription(ville) {
+  REG_GEO.ville = ville;
+  REG_GEO.adresse = `${ville} (zone détectée)`;
+  REG_GEO.coords = COORDS_VILLES[ville] || REG_GEO.coords;
+  document.getElementById('reg-geo-adresse').textContent = ville + ' · Abidjan, Côte d\'Ivoire';
+  const sel = document.getElementById('reg-ville');
+  if (sel && [...sel.options].some(o => o.value === ville || o.text === ville)) sel.value = ville;
+  regInitMiniMap();
+  GEO.userCoords = REG_GEO.coords;
+  GEO.actif = true;
+  retirerCorrectionZone(document.getElementById('reg-geo-coords'));
+}
+
 function regDetecterGPS() {
-  if (!navigator.geolocation) {
-    toast('Géolocalisation non supportée sur cet appareil', 'erreur'); return;
-  }
   const btn = document.getElementById('reg-gps-btn');
   btn.textContent = '⏳ Localisation en cours…';
   btn.disabled = true;
 
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      REG_GEO.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      const { ville, dist } = villeLaPlusProche(REG_GEO.coords);
-      REG_GEO.ville = ville;
-      REG_GEO.adresse = `${ville} (zone détectée)`;
+  localiserVille().then(({ coords, ville, dist, precisionM, fiable }) => {
+    REG_GEO.coords = coords;
+    GEO.rayonKm = REG_GEO.rayon;
 
-      btn.textContent = '✅ Position détectée !';
-      btn.disabled = false;
-      btn.style.background = 'linear-gradient(135deg,#16A34A,#22C55E)';
+    btn.textContent = '✅ Position détectée !';
+    btn.disabled = false;
+    btn.style.background = 'linear-gradient(135deg,#16A34A,#22C55E)';
 
-      // Afficher résultat
-      document.getElementById('reg-geo-result').style.display = 'block';
-      document.getElementById('reg-geo-adresse').textContent = ville + ' · Abidjan, Côte d\'Ivoire';
-      document.getElementById('reg-geo-coords').textContent = `📡 Lat: ${REG_GEO.coords.lat.toFixed(4)} · Lng: ${REG_GEO.coords.lng.toFixed(4)} · ~${dist} km du centre`;
+    document.getElementById('reg-geo-result').style.display = 'block';
+    const precisionTxt = precisionM != null ? `précision ~${Math.round(precisionM/1000)||'<1'} km` : 'précision inconnue';
+    document.getElementById('reg-geo-coords').textContent = `📡 Lat: ${coords.lat.toFixed(4)} · Lng: ${coords.lng.toFixed(4)} · ~${dist} km du centre · ${precisionTxt}`;
 
-      // Pré-sélectionner la ville
-      const sel = document.getElementById('reg-ville');
-      if ([...sel.options].some(o => o.value === ville || o.text === ville)) sel.value = ville;
+    _appliquerZoneInscription(ville);
 
-      // Afficher mini-carte Leaflet
-      regInitMiniMap();
-
-      toast(`📡 Position détectée : ${ville}`, 'info');
-
-      // Mettre à jour GEO global
-      GEO.userCoords = REG_GEO.coords;
-      GEO.actif = true;
-      GEO.rayonKm = REG_GEO.rayon;
-    },
-    err => {
-      btn.textContent = '📡 Utiliser ma position GPS';
-      btn.disabled = false;
-      let msg = 'Position indisponible.';
-      if (err.code === 1) msg = 'Permission refusée. Activez la localisation dans votre navigateur.';
-      else if (err.code === 3) msg = 'Délai dépassé. Vérifiez votre connexion GPS.';
-      toast(msg, 'erreur');
-    },
-    { timeout: 10000, maximumAge: 30000, enableHighAccuracy: true }
-  );
+    toast(fiable ? `📡 Position détectée : ${ville}` : `📡 Position approximative — ${ville}. Vérifiez et corrigez si besoin.`, 'info');
+    if (!fiable) injecterCorrectionZone(document.getElementById('reg-geo-coords'), _appliquerZoneInscription);
+  }).catch(reason => {
+    btn.textContent = '📡 Utiliser ma position GPS';
+    btn.disabled = false;
+    toast(reason === 'unsupported' ? 'Géolocalisation non supportée sur cet appareil'
+      : reason === 'denied' ? 'Permission refusée. Activez la localisation dans votre navigateur.'
+      : 'Position indisponible.', 'erreur');
+  });
 }
 
 function regInitMiniMap() {
@@ -13182,7 +13175,7 @@ const COORDS_VILLES = {
   'Treichville':  {lat:5.2997, lng:-4.0075},
   'Riviera':      {lat:5.3750, lng:-3.9500},
   'Bingerville':  {lat:5.3600, lng:-3.8900},
-  'Songon':       {lat:5.3500, lng:-4.2000},
+  'Songon':       {lat:5.3667, lng:-4.2833},
   'Anyama':       {lat:5.4900, lng:-4.0500},
   'Bouaké':       {lat:7.6881, lng:-5.0283},
   'Daloa':        {lat:6.8770, lng:-6.4502},
@@ -13208,20 +13201,32 @@ const GEO = {
 // Coordonnées GPS capturées au moment de la publication d'une annonce
 let DEPOT_GEO = null; // {lat, lng} ou null
 
-// Capture silencieuse du GPS pour un formulaire de publication
+// Capture du GPS pour un formulaire de publication
 function captureGeoDepot(btnId, labelId, onSuccess) {
-  if (!navigator.geolocation) return;
   const btn = btnId ? document.getElementById(btnId) : null;
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
-  navigator.geolocation.getCurrentPosition(pos => {
-    DEPOT_GEO = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    const { ville } = villeLaPlusProche(DEPOT_GEO);
+  localiserVille().then(({ coords, ville, precisionM, fiable }) => {
+    DEPOT_GEO = coords;
     if (btn) { btn.textContent = '📍 Localisé'; btn.disabled = false; btn.style.color = 'var(--vert)'; }
-    if (labelId) { const lbl = document.getElementById(labelId); if (lbl) lbl.textContent = `📍 ${ville} (GPS)`; }
+    const lbl = labelId ? document.getElementById(labelId) : null;
+    if (lbl) {
+      lbl.textContent = fiable ? `📍 ${ville} (GPS)` : `📍 ${ville} (GPS approximatif)`;
+      const anchor = lbl.parentElement || lbl;
+      if (!fiable) {
+        injecterCorrectionZone(anchor, (v) => {
+          DEPOT_GEO = COORDS_VILLES[v];
+          lbl.textContent = `📍 ${v} (corrigé)`;
+          retirerCorrectionZone(anchor);
+          if (onSuccess) onSuccess(DEPOT_GEO, v);
+        });
+      } else {
+        retirerCorrectionZone(anchor);
+      }
+    }
     if (onSuccess) onSuccess(DEPOT_GEO, ville);
-  }, () => {
+  }).catch(() => {
     if (btn) { btn.textContent = '📍 GPS'; btn.disabled = false; }
-  }, { timeout: 8000, maximumAge: 60000 });
+  });
 }
 
 // Retourne les coords d'un objet annonce (GPS précis si dispo, sinon COORDS_VILLES)
@@ -13254,40 +13259,91 @@ function villeLaPlusProche(coords) {
   return {ville: best, dist: Math.round(bestDist)};
 }
 
-function activerProximite() {
-  if (!navigator.geolocation) {
-    toast('Géolocalisation non supportée sur cet appareil', 'erreur'); return;
+// ══════════════════════════════════════════
+// GÉOLOCALISATION — résolution commune position → quartier connu
+// ══════════════════════════════════════════
+// Sur un appareil sans puce GPS (ordinateur, portable sans GPS activé),
+// navigator.geolocation s'appuie sur une géolocalisation Wi-Fi/IP : en
+// Côte d'Ivoire, hors hyper-centre d'Abidjan, ces bases sont peu denses
+// et peuvent placer l'utilisateur à 10, 20, voire 30+ km de sa position
+// réelle (ex: Songon détecté comme Adjamé). Le quartier "le plus proche"
+// n'est donc jamais présenté comme une certitude : la précision réelle
+// (pos.coords.accuracy, en mètres) est systématiquement remontée, et
+// chaque appelant doit proposer une correction manuelle à côté du résultat
+// via injecterCorrectionZone().
+function localiserVille() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject('unsupported'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const precisionM = pos.coords.accuracy || null;
+      const { ville, dist } = villeLaPlusProche(coords);
+      // Au-delà de 3 km de précision annoncée par le navigateur, deux
+      // quartiers voisins ne sont plus fiablement distinguables.
+      const fiable = precisionM != null && precisionM <= 3000;
+      resolve({ coords, ville, dist, precisionM, fiable });
+    }, () => reject('denied'), { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true });
+  });
+}
+
+// Ajoute (ou met à jour) un petit sélecteur "Zone incorrecte ? corriger"
+// juste après refEl. onChoix(ville) est appelé avec le nom exact choisi
+// dans COORDS_VILLES quand l'utilisateur corrige manuellement.
+function injecterCorrectionZone(refEl, onChoix) {
+  if (!refEl) return;
+  let box = refEl.nextElementSibling;
+  if (!box || !box.classList.contains('geo-correction-box')) {
+    box = document.createElement('div');
+    box.className = 'geo-correction-box';
+    refEl.insertAdjacentElement('afterend', box);
   }
+  const villes = Object.keys(COORDS_VILLES);
+  box.innerHTML = `<div style="margin-top:6px;font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--gris-text)">
+    <span>Zone incorrecte ?</span>
+    <select class="geo-correction-select" style="border:1px solid var(--gris-mid);border-radius:6px;padding:3px 6px;font-size:12px;font-family:var(--font-corps)">
+      <option value="">Corriger manuellement…</option>
+      ${villes.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')}
+    </select>
+  </div>`;
+  const sel = box.querySelector('.geo-correction-select');
+  if (sel) sel.addEventListener('change', () => { if (sel.value) onChoix(sel.value); });
+}
+
+function retirerCorrectionZone(refEl) {
+  const box = refEl && refEl.nextElementSibling;
+  if (box && box.classList.contains('geo-correction-box')) box.remove();
+}
+
+function _appliquerZoneProximite(ville) {
+  GEO.userCoords = COORDS_VILLES[ville] || GEO.userCoords;
+  GEO.actif = true;
+  document.getElementById('section-proche').style.display = 'flex';
+  document.getElementById('proche-titre').textContent = `Annonces près de vous`;
+  document.getElementById('proche-sous').textContent = `(Zone : ${ville}, rayon ${GEO.rayonKm} km)`;
+  const sel = document.getElementById('filtre-localite');
+  if (sel && [...sel.options].some(o => o.value === ville)) sel.value = ville;
+  retirerCorrectionZone(document.getElementById('proche-sous'));
+  appliquerFiltres();
+}
+
+function activerProximite() {
   const btn = document.getElementById('btn-gps');
-  btn.textContent = '⏳ Localisation...';
-  btn.disabled = true;
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      GEO.userCoords = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-      GEO.actif = true;
-      btn.textContent = 'Près de moi';
-      btn.disabled = false;
-      btn.classList.add('actif');
-      const {ville, dist} = villeLaPlusProche(GEO.userCoords);
-      // Afficher le bandeau
-      document.getElementById('section-proche').style.display = 'flex';
-      document.getElementById('proche-titre').textContent = `Annonces près de vous`;
-      document.getElementById('proche-sous').textContent = `(Zone détectée : ${ville}, rayon ${GEO.rayonKm} km)`;
-      // Pré-sélectionner la ville dans le dropdown si elle existe
-      const sel = document.getElementById('filtre-localite');
-      if ([...sel.options].some(o => o.value === ville)) sel.value = ville;
-      appliquerFiltres();
-      toast(`📡 Position détectée — ${ville} (~${dist} km du centre)`, 'info');
-    },
-    err => {
-      btn.textContent = 'Près de moi';
-      btn.disabled = false;
-      let msg = 'Impossible d\'obtenir votre position.';
-      if (err.code === 1) msg = 'Permission refusée. Autorisez la localisation dans votre navigateur.';
-      toast(msg, 'erreur');
-    },
-    {timeout: 8000, maximumAge: 60000}
-  );
+  if (btn) { btn.textContent = '⏳ Localisation...'; btn.disabled = true; }
+  localiserVille().then(({ ville, dist, precisionM, fiable }) => {
+    if (btn) { btn.textContent = 'Près de moi'; btn.disabled = false; btn.classList.add('actif'); }
+    _appliquerZoneProximite(ville);
+    const precisionTxt = precisionM != null ? ` (précision ~${Math.round(precisionM/1000)||'<1'} km)` : '';
+    toast(fiable
+      ? `📡 Position détectée — ${ville} (~${dist} km du centre)`
+      : `📡 Position approximative — ${ville}${precisionTxt}. Corrigez si besoin.`, 'info');
+    const sousEl = document.getElementById('proche-sous');
+    if (!fiable) injecterCorrectionZone(sousEl, _appliquerZoneProximite);
+  }).catch(reason => {
+    if (btn) { btn.textContent = 'Près de moi'; btn.disabled = false; }
+    toast(reason === 'unsupported' ? 'Géolocalisation non supportée sur cet appareil'
+      : reason === 'denied' ? 'Permission refusée. Autorisez la localisation dans votre navigateur.'
+      : 'Impossible d\'obtenir votre position.', 'erreur');
+  });
 }
 
 function desactiverProximite() {
@@ -15844,29 +15900,22 @@ function renderMapMarkers() {
 }
 
 function centrerSurMoi() {
-  if (!navigator.geolocation) { toast('Géolocalisation non supportée', 'erreur'); return; }
   toast('📡 Localisation en cours…', 'info');
-  navigator.geolocation.getCurrentPosition(pos => {
-    GEO.userCoords = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+  localiserVille().then(({ coords, ville, dist, precisionM, fiable }) => {
+    GEO.userCoords = coords;
     GEO.actif = true;
-    if (MAP) {
-      MAP.setView([GEO.userCoords.lat, GEO.userCoords.lng], 13);
-      renderMapMarkers();
-    }
-    // Aussi mettre à jour le filtre de proximité marché
-    const {ville, dist} = villeLaPlusProche(GEO.userCoords);
-    toast(`📡 Position : ${ville} (~${dist} km du centre)`, 'info');
+    if (MAP) { MAP.setView([coords.lat, coords.lng], 13); renderMapMarkers(); }
     const btn = document.getElementById('btn-gps');
     if (btn) { btn.textContent = 'Près de moi'; btn.classList.add('actif'); }
-    document.getElementById('section-proche').style.display = 'flex';
-    document.getElementById('proche-titre').textContent = 'Annonces près de vous';
-    document.getElementById('proche-sous').textContent = `(Zone : ${ville}, rayon ${GEO.rayonKm} km)`;
-    appliquerFiltres();
-  }, err => {
-    let msg = 'Position indisponible.';
-    if (err.code === 1) msg = 'Permission refusée. Autorisez la localisation.';
-    toast(msg, 'erreur');
-  }, {timeout: 8000, maximumAge: 60000});
+    _appliquerZoneProximite(ville);
+    const precisionTxt = precisionM != null ? ` (précision ~${Math.round(precisionM/1000)||'<1'} km)` : '';
+    toast(fiable ? `📡 Position : ${ville} (~${dist} km du centre)` : `📡 Position approximative — ${ville}${precisionTxt}. Corrigez si besoin.`, 'info');
+    if (!fiable) injecterCorrectionZone(document.getElementById('proche-sous'), (v) => { _appliquerZoneProximite(v); if (MAP) { MAP.setView([COORDS_VILLES[v].lat, COORDS_VILLES[v].lng], 13); GEO.userCoords = COORDS_VILLES[v]; renderMapMarkers(); } });
+  }).catch(reason => {
+    toast(reason === 'unsupported' ? 'Géolocalisation non supportée'
+      : reason === 'denied' ? 'Permission refusée. Autorisez la localisation.'
+      : 'Position indisponible.', 'erreur');
+  });
 }
 
 // ══════════════════════════════════════════
@@ -19405,21 +19454,29 @@ let LIVR_GEO = { dep: null, arr: null };         // {lat,lng} précis, si le cli
 let LIVR_GEO_INVITE = { dep: null, arr: null };  // idem pour le formulaire invité
 
 function _captureGeoAdresse(inputId, btnId, store, champ) {
-  if (!navigator.geolocation) { toast('Géolocalisation non disponible sur cet appareil', 'erreur'); return; }
   const btn = document.getElementById(btnId);
   if (btn) { btn.disabled = true; btn.dataset.txt = btn.textContent; btn.textContent = '⏳'; }
-  navigator.geolocation.getCurrentPosition(pos => {
-    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  const input = document.getElementById(inputId);
+  localiserVille().then(({ coords, ville, precisionM, fiable }) => {
     store[champ] = coords;
-    const { ville } = villeLaPlusProche(coords);
-    const input = document.getElementById(inputId);
     if (input) input.value = `${ville} (position GPS)`;
-    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt.includes('GPS') ? '✅ GPS' : '✅'; btn.style.color = 'var(--vert)'; }
-    toast(`📡 Position détectée : ${ville}`, 'info');
-  }, () => {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt.includes('GPS') ? '✅ GPS' : '✅'; btn.style.color = fiable ? 'var(--vert)' : '#B8791A'; }
+    const precisionTxt = precisionM != null ? ` (précision ~${Math.round(precisionM/1000)||'<1'} km)` : '';
+    toast(fiable ? `📡 Position détectée : ${ville}` : `📡 Position approximative — ${ville}${precisionTxt}. Vérifiez et corrigez si besoin.`, 'info');
+    const anchor = input ? (input.parentElement || input) : null;
+    if (!fiable && anchor) {
+      injecterCorrectionZone(anchor, (v) => {
+        store[champ] = COORDS_VILLES[v];
+        if (input) input.value = v;
+        retirerCorrectionZone(anchor);
+      });
+    } else if (anchor) {
+      retirerCorrectionZone(anchor);
+    }
+  }).catch(reason => {
     if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt; }
-    toast('Position indisponible. Vérifiez les autorisations de localisation.', 'erreur');
-  }, { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true });
+    toast(reason === 'unsupported' ? 'Géolocalisation non disponible sur cet appareil' : 'Position indisponible. Vérifiez les autorisations de localisation.', 'erreur');
+  });
 }
 function captureGeoLivrDep()    { _captureGeoAdresse('livr-depart', 'livr-depart-gps-btn', LIVR_GEO, 'dep'); }
 function captureGeoLivrArr()    { _captureGeoAdresse('livr-arrivee', 'livr-arrivee-gps-btn', LIVR_GEO, 'arr'); }
