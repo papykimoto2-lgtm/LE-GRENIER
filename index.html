@@ -5921,6 +5921,7 @@
                 <input type="text" id="livr-depart" autocomplete="off" placeholder="Ex: Cocody Riviera 3, Carrefour Palmeraie" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
               </div>
               <button type="button" id="livr-depart-gps-btn" onclick="captureGeoLivrDep()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 14px;font-size:14px;cursor:pointer;color:var(--gris-text)">📍 GPS</button>
+              <button type="button" onclick="ouvrirCarteAdresse('livr-depart','livr-depart-gps-btn',LIVR_GEO,'dep')" title="Choisir sur la carte" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 14px;font-size:14px;cursor:pointer;color:var(--gris-text)">🗺️</button>
             </div>
           </div>
           <div class="form-group" style="margin-bottom:12px">
@@ -9074,6 +9075,7 @@ const CGU_DATE    = '2026-05-16';
               <input id="invite-dep" type="text" autocomplete="off" placeholder="Ex: Marcory Zone 4" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
             </div>
             <button type="button" id="invite-dep-gps-btn" onclick="captureGeoInviteDep()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 12px;font-size:13px;cursor:pointer;color:var(--gris-text)">📍</button>
+            <button type="button" onclick="ouvrirCarteAdresse('invite-dep','invite-dep-gps-btn',LIVR_GEO_INVITE,'dep')" title="Choisir sur la carte" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 12px;font-size:13px;cursor:pointer;color:var(--gris-text)">🗺️</button>
           </div>
         </div>
         <div style="background:var(--gris-clair);border-radius:var(--radius);padding:10px 14px;font-size:13px">
@@ -9115,6 +9117,23 @@ const CGU_DATE    = '2026-05-16';
     </div>
     <div id="rech-livr-map" class="recherche-livr-map"></div>
     <div class="recherche-livr-result" id="rech-livr-result" style="display:none"></div>
+  </div>
+</div>
+
+<!-- MODAL CHOISIR L'ADRESSE DE DÉPART SUR LA CARTE -->
+<div class="modal-overlay" id="modal-carte-adresse" style="z-index:360;padding:0;align-items:stretch">
+  <div class="recherche-livr-panel">
+    <div class="recherche-livr-header">
+      <div>
+        <div class="recherche-livr-titre">🗺️ Choisir votre point de départ</div>
+        <div class="recherche-livr-sub">Faites glisser le repère pour préciser l'endroit exact</div>
+      </div>
+      <button class="modal-close" style="background:rgba(255,255,255,.2);color:#fff" onclick="fermerCarteAdresse()" title="Annuler">✕</button>
+    </div>
+    <div id="carte-adresse-map" class="recherche-livr-map"></div>
+    <div class="recherche-livr-result">
+      <button onclick="confirmerCarteAdresse()" style="width:100%;background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;border:none;border-radius:var(--radius);padding:12px;font-size:14px;font-weight:700;cursor:pointer">📍 Confirmer cette position</button>
+    </div>
   </div>
 </div>
 
@@ -19496,6 +19515,68 @@ function captureGeoLivrDep()    { _captureGeoAdresse('livr-depart', 'livr-depart
 function captureGeoLivrArr()    { _captureGeoAdresse('livr-arrivee', 'livr-arrivee-gps-btn', LIVR_GEO, 'arr'); }
 function captureGeoInviteDep()  { _captureGeoAdresse('invite-dep', 'invite-dep-gps-btn', LIVR_GEO_INVITE, 'dep'); }
 function captureGeoInviteArr()  { _captureGeoAdresse('invite-adresse', 'invite-adresse-gps-btn', LIVR_GEO_INVITE, 'arr'); }
+
+// ══════════════════════════════════════════
+// CHOISIR L'ADRESSE DE DÉPART SUR LA CARTE — repère déplaçable
+// ══════════════════════════════════════════
+let CARTE_ADR_MAP = null;
+let CARTE_ADR_MARKER = null;
+let _carteAdrCible = null; // { inputId, store, champ }
+
+// Reverse-géocodage via Nominatim (adresse lisible) avec repli sur le
+// quartier connu le plus proche si l'appel échoue (hors-ligne, etc.).
+async function _reverseGeocode(lat, lng) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fr`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('reverse_http_' + r.status);
+    const d = await r.json();
+    if (d && d.display_name) return _libelleCourtAdresse(d.display_name);
+  } catch (e) {}
+  const { ville } = villeLaPlusProche({ lat, lng });
+  return `${ville} (position sur la carte)`;
+}
+
+function ouvrirCarteAdresse(inputId, btnId, store, champ) {
+  const modal = document.getElementById('modal-carte-adresse');
+  if (!modal || typeof L === 'undefined') { toast('Carte indisponible pour le moment', 'erreur'); return; }
+  _carteAdrCible = { inputId, store, champ };
+  modal.classList.add('open');
+  const depart = (store && store[champ]) || GEO.userCoords || COORDS_VILLES['Plateau'];
+  setTimeout(() => {
+    if (CARTE_ADR_MAP) { CARTE_ADR_MAP.remove(); CARTE_ADR_MAP = null; }
+    CARTE_ADR_MAP = L.map('carte-adresse-map', { zoomControl: true }).setView([depart.lat, depart.lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 18
+    }).addTo(CARTE_ADR_MAP);
+    CARTE_ADR_MARKER = L.marker([depart.lat, depart.lng], { draggable: true }).addTo(CARTE_ADR_MAP);
+    // Un clic sur la carte déplace directement le repère à cet endroit
+    CARTE_ADR_MAP.on('click', (e) => CARTE_ADR_MARKER.setLatLng(e.latlng));
+    setTimeout(() => CARTE_ADR_MAP.invalidateSize(), 50);
+  }, 100);
+}
+
+function fermerCarteAdresse() {
+  document.getElementById('modal-carte-adresse').classList.remove('open');
+  if (CARTE_ADR_MAP) { CARTE_ADR_MAP.remove(); CARTE_ADR_MAP = null; }
+  CARTE_ADR_MARKER = null;
+  _carteAdrCible = null;
+}
+
+async function confirmerCarteAdresse() {
+  if (!_carteAdrCible || !CARTE_ADR_MARKER) { fermerCarteAdresse(); return; }
+  const { inputId, store, champ } = _carteAdrCible;
+  const pos = CARTE_ADR_MARKER.getLatLng();
+  const coords = { lat: pos.lat, lng: pos.lng };
+  const input = document.getElementById(inputId);
+  if (input) input.value = '⏳ Localisation…';
+  const libelle = await _reverseGeocode(coords.lat, coords.lng);
+  if (store) store[champ] = coords;
+  if (input) input.value = libelle;
+  const anchor = input ? (input.closest('.adresse-flex-row') || input.parentElement) : null;
+  if (anchor) retirerCorrectionZone(anchor);
+  fermerCarteAdresse();
+}
 
 // ══════════════════════════════════════════
 // SAISIE INTUITIVE D'ADRESSE — autocomplétion via Nominatim (OpenStreetMap)
