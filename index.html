@@ -5910,11 +5910,17 @@
 
           <div class="form-group" style="margin-bottom:12px">
             <label id="livr-depart-label" style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Adresse de départ *</label>
-            <input type="text" id="livr-depart" placeholder="Ex: Cocody Riviera 3, Carrefour Palmeraie" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            <div style="display:flex;gap:8px">
+              <input type="text" id="livr-depart" oninput="LIVR_GEO.dep=null" placeholder="Ex: Cocody Riviera 3, Carrefour Palmeraie" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+              <button type="button" id="livr-depart-gps-btn" onclick="captureGeoLivrDep()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 14px;font-size:14px;cursor:pointer;color:var(--gris-text)">📍 GPS</button>
+            </div>
           </div>
           <div class="form-group" style="margin-bottom:12px">
             <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Adresse de livraison *</label>
-            <input type="text" id="livr-arrivee" placeholder="Ex: Marcory Zone 4, Résidence Les Cocotiers" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            <div style="display:flex;gap:8px">
+              <input type="text" id="livr-arrivee" oninput="LIVR_GEO.arr=null" placeholder="Ex: Marcory Zone 4, Résidence Les Cocotiers" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:11px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+              <button type="button" id="livr-arrivee-gps-btn" onclick="captureGeoLivrArr()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 14px;font-size:14px;cursor:pointer;color:var(--gris-text)">📍 GPS</button>
+            </div>
           </div>
           <div class="form-group" style="margin-bottom:12px" id="livr-colis-desc-group">
             <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-text);display:block;margin-bottom:5px">Description du colis</label>
@@ -9044,11 +9050,17 @@ const CGU_DATE    = '2026-05-16';
         </div>
         <div>
           <label style="font-size:12px;font-weight:700;color:var(--gris-text);display:block;margin-bottom:4px">Adresse de livraison *</label>
-          <input id="invite-adresse" type="text" placeholder="Ex: Cocody Angré, Rue des jardins" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+          <div style="display:flex;gap:8px">
+            <input id="invite-adresse" type="text" oninput="LIVR_GEO_INVITE.arr=null" placeholder="Ex: Cocody Angré, Rue des jardins" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            <button type="button" id="invite-adresse-gps-btn" onclick="captureGeoInviteArr()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 12px;font-size:13px;cursor:pointer;color:var(--gris-text)">📍</button>
+          </div>
         </div>
         <div id="invite-dep-wrap">
           <label style="font-size:12px;font-weight:700;color:var(--gris-text);display:block;margin-bottom:4px">Adresse de départ *</label>
-          <input id="invite-dep" type="text" placeholder="Ex: Marcory Zone 4" style="width:100%;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+          <div style="display:flex;gap:8px">
+            <input id="invite-dep" type="text" oninput="LIVR_GEO_INVITE.dep=null" placeholder="Ex: Marcory Zone 4" style="flex:1;min-width:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);padding:10px 12px;font-size:14px;font-family:var(--font-corps);outline:none">
+            <button type="button" id="invite-dep-gps-btn" onclick="captureGeoInviteDep()" title="Utiliser ma position" style="flex-shrink:0;border:1.5px solid var(--gris-mid);border-radius:var(--radius);background:#fff;padding:0 12px;font-size:13px;cursor:pointer;color:var(--gris-text)">📍</button>
+          </div>
         </div>
         <div style="background:var(--gris-clair);border-radius:var(--radius);padding:10px 14px;font-size:13px">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Frais livraison estimés</span><strong id="invite-frais">~2 000 F</strong></div>
@@ -11722,7 +11734,7 @@ async function validerCommandeInvite() {
   }
   DISPATCH_COMMANDES.unshift(nouvelleLivraison1);
 
-  ouvrirRechercheLivreurCarte(depFinal, adresse, livreur, () => {
+  ouvrirRechercheLivreurCarte(depFinal, adresse, livreur, LIVR_GEO_INVITE.dep || LIVR_GEO_INVITE.arr, () => {
     // WA livreur
     if (livreur) {
       const isResto = !!_inviteArticle?._restoTel;
@@ -11769,6 +11781,7 @@ async function validerCommandeInvite() {
       </div>`;
     fermerModal();
     _inviteLivreurId = null;
+    LIVR_GEO_INVITE = { dep: null, arr: null };
   });
 }
 
@@ -19386,6 +19399,33 @@ const LIVR_SUIVI_DEMO = {
 };
 
 let LIVR_TYPE = 'moto';
+
+// ── Géolocalisation GPS des adresses de départ/arrivée (commande connectée + invité) ──
+let LIVR_GEO = { dep: null, arr: null };         // {lat,lng} précis, si le client a utilisé le bouton GPS
+let LIVR_GEO_INVITE = { dep: null, arr: null };  // idem pour le formulaire invité
+
+function _captureGeoAdresse(inputId, btnId, store, champ) {
+  if (!navigator.geolocation) { toast('Géolocalisation non disponible sur cet appareil', 'erreur'); return; }
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = true; btn.dataset.txt = btn.textContent; btn.textContent = '⏳'; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    store[champ] = coords;
+    const { ville } = villeLaPlusProche(coords);
+    const input = document.getElementById(inputId);
+    if (input) input.value = `${ville} (position GPS)`;
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt.includes('GPS') ? '✅ GPS' : '✅'; btn.style.color = 'var(--vert)'; }
+    toast(`📡 Position détectée : ${ville}`, 'info');
+  }, () => {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt; }
+    toast('Position indisponible. Vérifiez les autorisations de localisation.', 'erreur');
+  }, { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true });
+}
+function captureGeoLivrDep()    { _captureGeoAdresse('livr-depart', 'livr-depart-gps-btn', LIVR_GEO, 'dep'); }
+function captureGeoLivrArr()    { _captureGeoAdresse('livr-arrivee', 'livr-arrivee-gps-btn', LIVR_GEO, 'arr'); }
+function captureGeoInviteDep()  { _captureGeoAdresse('invite-dep', 'invite-dep-gps-btn', LIVR_GEO_INVITE, 'dep'); }
+function captureGeoInviteArr()  { _captureGeoAdresse('invite-adresse', 'invite-adresse-gps-btn', LIVR_GEO_INVITE, 'arr'); }
+
 let LIVR_HISTORIQUE = [
   {id:1,ref:'LVR-08432',livreur:'Kofi Moto Express',dep:'Cocody Riviera',arr:'Plateau Zone 4',type:'moto',statut:'livré',montant:1200,date:'2025-05-10'},
   {id:2,ref:'LVR-07123',livreur:'Adjoua Tricycle CI',dep:'Adjamé',arr:'Yopougon Maroc',type:'tricycle',statut:'livré',montant:2000,date:'2025-05-08'},
@@ -19864,11 +19904,11 @@ let RECH_MAP = null;
 let RECH_TIMER = null;
 let RECH_OUVERT = false;
 
-function _resolveDepartCoords(depText, arrText) {
-  return coordsZone(depText) || coordsZone(arrText) || COORDS_VILLES['Plateau'];
+function _resolveDepartCoords(depText, arrText, coordsHint) {
+  return coordsHint || coordsZone(depText) || coordsZone(arrText) || COORDS_VILLES['Plateau'];
 }
 
-function ouvrirRechercheLivreurCarte(depText, arrText, livreurFinal, onTermine) {
+function ouvrirRechercheLivreurCarte(depText, arrText, livreurFinal, coordsHint, onTermine) {
   const modal = document.getElementById('modal-recherche-livreur');
   if (!modal || typeof L === 'undefined') { onTermine(); return; } // pas de carte dispo : ne bloque jamais la commande
   RECH_OUVERT = true;
@@ -19880,7 +19920,7 @@ function ouvrirRechercheLivreurCarte(depText, arrText, livreurFinal, onTermine) 
   result.style.display = 'none';
   result.innerHTML = '';
 
-  const centre = _resolveDepartCoords(depText, arrText);
+  const centre = _resolveDepartCoords(depText, arrText, coordsHint);
 
   setTimeout(() => {
     if (!RECH_OUVERT) return;
@@ -20017,7 +20057,7 @@ function commanderLivraison() {
     }
     LIVR_HISTORIQUE.unshift({ id: LIVR_HISTORIQUE.length+1, ref, livreur: livreurChoisi?.nom||'Assignation en cours…', dep, arr, type: LIVR_TYPE, statut: livreurChoisi?'en livraison':'en cours', montant: tarif + (estAchat?articleBudget:0), date: new Date().toISOString().slice(0,10) });
     const desc = document.getElementById('livr-colis-desc').value.trim();
-    ouvrirRechercheLivreurCarte(dep, arr, livreurChoisi, () => {
+    ouvrirRechercheLivreurCarte(dep, arr, livreurChoisi, LIVR_GEO.dep || LIVR_GEO.arr, () => {
       if (livreurChoisi) {
         const msgL = estAchat
           ? `🛍️ *Nouvel achat + livraison — Le Grenier !*\n🛒 À acheter : ${articleDesc}\n💵 Budget article : ${fmtFCFA(articleBudget)} (à récupérer chez le client)\n📍 ${dep ? dep+' → ' : ''}${arr}\n📞 Exp: ${telExp} · Dest: ${telDest}\n💰 Frais de service : ${fmtFCFA(tarif)} · Réf: ${ref}`
@@ -20028,6 +20068,7 @@ function commanderLivraison() {
       window.open(`https://wa.me/${formaterTelWhatsApp(telExp)}?text=${encodeURIComponent(msgC)}`, '_blank');
       toast(`🛵 Commande ${ref} enregistrée !`);
       renderLivrHistorique(); LIVR_SELECTIONNE_ID = null;
+      LIVR_GEO = { dep: null, arr: null };
     });
   });
 }
