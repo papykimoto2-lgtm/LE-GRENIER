@@ -10474,6 +10474,34 @@ async function seConnecter() {
   _routerApresConnexion(user);
 }
 
+// Restaure la session applicative après un rafraîchissement de page : SESSION
+// n'était jusqu'ici jamais reconstruite au chargement, alors que le token
+// Supabase Auth, lui, survit dans localStorage. Résultat perçu côté admin :
+// un simple F5 « déconnecte » l'appli et fait disparaître ce qui vient
+// d'être enregistré — alors que les données sont bien en base, seule la
+// session applicative avait disparu.
+async function restaurerSessionExistante() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote') return false;
+  const session = typeof _supa !== 'undefined' ? _supa.auth.getSession() : null;
+  const authId = session?.user?.id;
+  if (!authId) return false;
+  try {
+    let user = DAO._local.utilisateurs.find(u => u.authId === authId);
+    if (!user) {
+      const r = await _xhr('GET', SUPABASE_URL + `/rest/v1/utilisateurs?auth_id=eq.${authId}&select=*`);
+      if (r.error || !r.data || !r.data.length) return false; // token expiré/invalide : reste déconnecté
+      user = _mapRowToFront('utilisateurs', r.data[0]);
+      DAO._local.utilisateurs.push(user);
+    }
+    SESSION = user;
+    _routerApresConnexion(user);
+    return true;
+  } catch (e) {
+    console.warn('[restaurerSessionExistante] échec', e);
+    return false;
+  }
+}
+
 function _routerApresConnexion(user) {
   if (user.role === 'admin') {
     goScreen('screen-admin');
@@ -21232,6 +21260,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if (typeof bootstrapCache === 'function') {
     try { await bootstrapCache(); }
     catch (e) { console.error('[INIT] bootstrapCache a échoué, poursuite avec cache vide', e); }
+  }
+  // Reconnecte automatiquement si un token valide subsiste (survit à un F5).
+  if (typeof restaurerSessionExistante === 'function') {
+    try { await restaurerSessionExistante(); }
+    catch (e) { console.warn('[INIT] restauration de session échouée', e); }
   }
   if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
   if (typeof window.enregistrerVisite === 'function') window.enregistrerVisite('accueil');
