@@ -9657,7 +9657,7 @@ function renderAdminTarifs() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div>
         <div style="font-family:var(--font-titre);font-size:22px;font-weight:700">Paramétrage Tarifaire</div>
-        <div style="font-size:13px;color:var(--gris-text);margin-top:4px">Tous les taux et prix sont sauvegardés localement (IndexedDB) et s'appliquent immédiatement.</div>
+        <div style="font-size:13px;color:var(--gris-text);margin-top:4px">Tous les taux et prix sont synchronisés sur le serveur (partagés entre appareils) et s'appliquent immédiatement.</div>
       </div>
       <span class="cfg-badge-saved" id="cfg-badge">Enregistré</span>
     </div>
@@ -9952,7 +9952,20 @@ async function renderAdminVisibilite() {
   _initChartTooltips(zone);
 }
 
-function sauvegarderAdminTarifs() {
+// Charge les tarifs/commissions/plans depuis Supabase (source de vérité
+// partagée entre appareils) — écrase le cache local IndexedDB s'il existe.
+window.chargerTarifsDepuisSupabase = async function() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote') return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/configuration?cle=eq.tarifs_config_json&select=valeur');
+    if (!r.error && r.data && r.data[0] && r.data[0].valeur) {
+      Object.assign(CFG, JSON.parse(r.data[0].valeur));
+      syncPlansFromCFG();
+    }
+  } catch (e) { console.error('[tarifs] chargement échoué', e); }
+};
+
+async function sauvegarderAdminTarifs() {
   const plans = ['gratuit','plus','pro','business'];
   const nouvCfg = Object.assign({}, CFG);
 
@@ -9991,17 +10004,23 @@ function sauvegarderAdminTarifs() {
     if (el) nouvCfg[k] = el.value.trim();
   });
 
-  // Appliquer + persister
+  // Appliquer + persister (cache local IndexedDB, secours hors-ligne)
   Object.assign(CFG, nouvCfg);
   syncPlansFromCFG();
-  sauvegarderCFG(nouvCfg, ok => {
-    const badge = document.getElementById('cfg-badge');
-    if (badge) {
-      badge.style.opacity = '1';
-      setTimeout(() => badge.style.opacity = '0', 2500);
-    }
-    toast(ok ? '✅ Tarifs enregistrés avec succès' : '⚠️ Sauvegarde partiellement échouée — vérifiez IndexedDB', ok ? 'succes' : 'erreur');
-  });
+  sauvegarderCFG(Object.assign({}, CFG));
+
+  // Persistance Supabase — source de vérité partagée entre tous les appareils admin.
+  const badge = document.getElementById('cfg-badge');
+  const r = await DAO_PERSIST.configurationMaj('tarifs_config_json', JSON.stringify(CFG));
+  if (r && r.error) {
+    toast('⚠️ Enregistré localement, mais la synchronisation serveur a échoué', 'erreur');
+    return;
+  }
+  if (badge) {
+    badge.style.opacity = '1';
+    setTimeout(() => badge.style.opacity = '0', 2500);
+  }
+  toast('✅ Tarifs enregistrés avec succès');
 }
 
 function resetAdminTarifs() {
@@ -13242,6 +13261,64 @@ async function adminSupprimerAnnonce(id) {
   const r = await DAO_PERSIST.annonceSuppression(id);
   if (r && r.error) { DAO._local.annonces.splice(idx,0,retiree); renderAdmin(); toast('Échec de la suppression (annonce restaurée)', 'erreur'); return; }
   toast('Annonce supprimée');
+}
+
+// ── Admin : modifier une annonce (titre/catégorie/prix/ville/statut) ──
+function adminEditerAnnonce(id) {
+  const a = DAO._local.annonces.find(x => x.id === id);
+  if (!a) return;
+  const existing = document.getElementById('modal-admin-edit-annonce');
+  if (existing) existing.remove();
+  const div = document.createElement('div');
+  div.id = 'modal-admin-edit-annonce';
+  div.className = 'modal-overlay';
+  div.style.zIndex = '480';
+  div.innerHTML = `
+    <div style="background:#fff;border-radius:var(--radius-lg);max-width:440px;width:92vw;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="font-family:var(--font-titre);font-size:18px;font-weight:700;margin-bottom:16px">Modifier l'annonce</div>
+      <div class="form-group"><label>Titre</label><input type="text" id="aea-titre" value="${escapeHtml(a.titre)}"></div>
+      <div class="form-group"><label>Catégorie</label><input type="text" id="aea-cat" value="${escapeHtml(a.cat||'')}"></div>
+      <div class="form-group"><label>Prix (FCFA)</label><input type="number" id="aea-valeur" value="${a.valeur||0}" min="0" step="100"></div>
+      <div class="form-group"><label>Ville</label><input type="text" id="aea-ville" value="${escapeHtml(a.ville||'')}"></div>
+      <div class="form-group"><label>Statut</label>
+        <select id="aea-statut">
+          <option value="attente"${a.statut==='attente'?' selected':''}>En attente</option>
+          <option value="en-ligne"${a.statut==='en-ligne'?' selected':''}>En ligne</option>
+          <option value="vendu"${a.statut==='vendu'?' selected':''}>Vendu</option>
+          <option value="refuse"${a.statut==='refuse'?' selected':''}>Refusée</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-admin-edit-annonce').remove()">Annuler</button>
+        <button class="btn btn-primary" style="flex:1" onclick="adminSauvegarderAnnonce(${id})">Enregistrer</button>
+      </div>
+    </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  div.classList.add('open');
+}
+
+async function adminSauvegarderAnnonce(id) {
+  const a = DAO._local.annonces.find(x => x.id === id);
+  if (!a) return;
+  const avant = { titre: a.titre, cat: a.cat, valeur: a.valeur, ville: a.ville, statut: a.statut };
+  const titre = document.getElementById('aea-titre').value.trim();
+  const cat = document.getElementById('aea-cat').value.trim();
+  const valeur = parseInt(document.getElementById('aea-valeur').value) || 0;
+  const ville = document.getElementById('aea-ville').value.trim();
+  const statut = document.getElementById('aea-statut').value;
+  if (!titre) { toast('Le titre est obligatoire', 'erreur'); return; }
+  Object.assign(a, { titre, cat, valeur, ville, statut });
+  document.getElementById('modal-admin-edit-annonce')?.remove();
+  renderAdmin();
+  const r = await DAO_PERSIST.annonceMaj(id, { titre, cat, valeur, ville, statut });
+  if (r && r.error) {
+    Object.assign(a, avant);
+    renderAdmin();
+    toast('Échec : modification non enregistrée', 'erreur');
+    return;
+  }
+  toast('✅ Annonce mise à jour');
 }
 
 // ─── AVIS ───
@@ -17212,10 +17289,72 @@ function renderAdminAbonnements() {
       <td><span style="color:${couleurStatut};font-weight:700;font-size:12px">${a.statut}</span></td>
       <td style="font-size:12px">${a.moyen}</td>
       <td>
+        <button class="btn btn-sm" style="font-size:11px;padding:4px 8px;background:var(--bleu);color:#fff;border:none;margin-right:4px" onclick="adminEditerAbonnement(${a.id})">✏️</button>
         ${a.statut === 'actif' ? `<button class="btn btn-sm btn-outline" style="font-size:11px;padding:4px 8px" onclick="resilierAbo(${a.id})">Résilier</button>` : ''}
       </td>
     </tr>`
   }).join('');
+}
+
+// ── Admin : modifier un abonnement existant (plan, dates, statut) ──
+function adminEditerAbonnement(id) {
+  const a = DAO._local.abonnements.find(x => x.id === id);
+  if (!a) return;
+  const existing = document.getElementById('modal-admin-edit-abo');
+  if (existing) existing.remove();
+  const div = document.createElement('div');
+  div.id = 'modal-admin-edit-abo';
+  div.className = 'modal-overlay';
+  div.style.zIndex = '480';
+  div.innerHTML = `
+    <div style="background:#fff;border-radius:var(--radius-lg);max-width:420px;width:92vw;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="font-family:var(--font-titre);font-size:18px;font-weight:700;margin-bottom:16px">Modifier l'abonnement</div>
+      <div class="form-group"><label>Plan</label>
+        <select id="aea2-plan">
+          ${DAO._local.plans.map(p => `<option value="${escapeHtml(p.nom)}"${a.plan===p.nom?' selected':''}>${escapeHtml(p.nom)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Début</label><input type="date" id="aea2-depuis" value="${a.depuis||''}"></div>
+        <div class="form-group"><label>Expire</label><input type="date" id="aea2-expire" value="${a.expire||''}"></div>
+      </div>
+      <div class="form-group"><label>Statut</label>
+        <select id="aea2-statut">
+          <option value="actif"${a.statut==='actif'?' selected':''}>Actif</option>
+          <option value="résilié"${a.statut==='résilié'?' selected':''}>Résilié</option>
+          <option value="refuse"${a.statut==='refuse'?' selected':''}>Refusé</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-admin-edit-abo').remove()">Annuler</button>
+        <button class="btn btn-primary" style="flex:1" onclick="adminSauvegarderAbonnement(${id})">Enregistrer</button>
+      </div>
+    </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  div.classList.add('open');
+}
+
+async function adminSauvegarderAbonnement(id) {
+  const a = DAO._local.abonnements.find(x => x.id === id);
+  if (!a) return;
+  const avant = { plan: a.plan, depuis: a.depuis, expire: a.expire, statut: a.statut, actif: a.actif };
+  const plan = document.getElementById('aea2-plan').value;
+  const depuis = document.getElementById('aea2-depuis').value;
+  const expire = document.getElementById('aea2-expire').value;
+  const statut = document.getElementById('aea2-statut').value;
+  const actif = statut === 'actif';
+  Object.assign(a, { plan, depuis, expire, statut, actif });
+  document.getElementById('modal-admin-edit-abo')?.remove();
+  renderAdminAbonnements();
+  const r = await DAO_PERSIST.abonnementMaj(id, { plan, debut: depuis, fin: expire, statut, actif });
+  if (r && r.error) {
+    Object.assign(a, avant);
+    renderAdminAbonnements();
+    toast('Échec : modification non enregistrée', 'erreur');
+    return;
+  }
+  toast('✅ Abonnement mis à jour');
 }
 
 async function approuverAbonnement(id) {
@@ -17902,6 +18041,7 @@ window.renderAdminInscriptions = function() {
     </div>
     <div style="padding:10px 18px 14px;border-top:1px solid var(--gris-clair);display:flex;gap:8px;flex-wrap:wrap">
       ${u.statut==='attente'?`
+        <button onclick="adminEditerUser(${u.id})" style="padding:7px 16px;border:1.5px solid var(--bleu);border-radius:var(--radius);background:transparent;color:var(--bleu);font-size:13px;font-weight:600;cursor:pointer">✏️ Corriger les infos</button>
         <button onclick="insOuvrirValider(${u.id})" style="padding:7px 16px;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;font-size:13px;font-weight:600;cursor:pointer">Valider et envoyer MDP</button>
         <button onclick="insOuvrirRefuser(${u.id})" style="padding:7px 16px;border:1.5px solid var(--rouge);border-radius:var(--radius);background:transparent;color:var(--rouge);font-size:13px;font-weight:600;cursor:pointer">Refuser</button>
         <button onclick="insNotifierWA(${u.id})" style="padding:7px 16px;border:none;border-radius:var(--radius);background:#25D366;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Contacter WA</button>
@@ -18719,14 +18859,14 @@ function renderAdmin() {
   const tbody = document.getElementById('admin-annonces-tbody');
   if (tbody) tbody.innerHTML = annonces.map(a=>{
     const v=users.find(u=>u.id===a.vendeurId);
-    return `<tr><td>${a.emoji||'📦'} ${escapeHtml(a.titre)}</td><td>${v?escapeHtml(v.prenom+' '+v.nom):'—'}</td><td>${a.cat}</td><td>${fmtFCFA(a.valeur)}</td><td><span class="badge-statut ${a.statut==='en-ligne'?'badge-en-ligne':a.statut==='attente'?'badge-attente':'badge-expiree'}">${a.statut}</span></td><td><button class="btn btn-sm btn-outline" onclick="adminSupprimerAnnonce(${a.id})" style="font-size:11px;padding:3px 8px;color:var(--rouge);border-color:var(--rouge)">🗑</button></td></tr>`
+    return `<tr><td>${a.emoji||'📦'} ${escapeHtml(a.titre)}</td><td>${v?escapeHtml(v.prenom+' '+v.nom):'—'}</td><td>${a.cat}</td><td>${fmtFCFA(a.valeur)}</td><td><span class="badge-statut ${a.statut==='en-ligne'?'badge-en-ligne':a.statut==='attente'?'badge-attente':'badge-expiree'}">${a.statut}</span></td><td><button class="btn btn-sm" onclick="adminEditerAnnonce(${a.id})" style="font-size:11px;padding:3px 8px;background:var(--bleu);color:#fff;border:none;margin-right:4px">✏️</button><button class="btn btn-sm btn-outline" onclick="adminSupprimerAnnonce(${a.id})" style="font-size:11px;padding:3px 8px;color:var(--rouge);border-color:var(--rouge)">🗑</button></td></tr>`
   }).join('');
   // Users
   const utbody = document.getElementById('admin-users-tbody');
   if (utbody) utbody.innerHTML = users.filter(u=>u.role!=='admin').map(u=>{
     const nb=annonces.filter(a=>a.vendeurId===u.id).length;
     const plan=getPlanUser(u.id);
-    return `<tr><td><strong>${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}</strong>${u.verifie?'<span style="color:var(--vert);font-size:11px;margin-left:4px">✅</span>':''}<br><span style="font-size:11px;color:var(--gris-text)">${plan.ico} ${plan.nom}</span></td><td style="font-size:13px">${u.email}</td><td>${u.ville||'—'}</td><td style="font-size:13px">${u.tel||'—'}</td><td>${nb}</td><td><button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="adminSupprimerUser(${u.id})">🗑</button></td></tr>`
+    return `<tr><td><strong>${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}</strong>${u.verifie?'<span style="color:var(--vert);font-size:11px;margin-left:4px">✅</span>':''}<br><span style="font-size:11px;color:var(--gris-text)">${plan.ico} ${plan.nom}</span></td><td style="font-size:13px">${u.email}</td><td>${u.ville||'—'}</td><td style="font-size:13px">${u.tel||'—'}</td><td>${nb}</td><td><button class="btn btn-sm" onclick="adminEditerUser(${u.id})" style="font-size:11px;padding:3px 8px;background:var(--bleu);color:#fff;border:none;margin-right:4px">✏️</button><button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="adminSupprimerUser(${u.id})">🗑</button></td></tr>`
   }).join('');
   // Paiements
   const ptbody = document.getElementById('admin-paiements-tbody');
@@ -18753,6 +18893,87 @@ function renderAdmin() {
 // ══════════════════════════════════════════
 
 function adminSupprimerUser(id) { const idx=DAO._local.utilisateurs.findIndex(u=>u.id===id); if(idx>=0){DAO._local.utilisateurs.splice(idx,1);renderAdmin();toast("Utilisateur supprimé");} }
+
+// ── Admin : modifier un utilisateur (profil, rôle, statut) ──
+function adminEditerUser(id) {
+  const u = DAO._local.utilisateurs.find(x => x.id === id);
+  if (!u) return;
+  const existing = document.getElementById('modal-admin-edit-user');
+  if (existing) existing.remove();
+  const div = document.createElement('div');
+  div.id = 'modal-admin-edit-user';
+  div.className = 'modal-overlay';
+  div.style.zIndex = '480';
+  div.innerHTML = `
+    <div style="background:#fff;border-radius:var(--radius-lg);max-width:440px;width:92vw;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="font-family:var(--font-titre);font-size:18px;font-weight:700;margin-bottom:16px">Modifier l'utilisateur</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Prénom</label><input type="text" id="aeu-prenom" value="${escapeHtml(u.prenom||'')}"></div>
+        <div class="form-group"><label>Nom</label><input type="text" id="aeu-nom" value="${escapeHtml(u.nom||'')}"></div>
+      </div>
+      <div class="form-group"><label>Email</label><input type="email" id="aeu-email" value="${escapeHtml(u.email||'')}"></div>
+      <div class="form-group"><label>Téléphone</label><input type="tel" id="aeu-tel" value="${escapeHtml(u.tel||'')}"></div>
+      <div class="form-group"><label>Ville</label><input type="text" id="aeu-ville" value="${escapeHtml(u.ville||'')}"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Rôle</label>
+          <select id="aeu-role">
+            <option value="user"${u.role==='user'?' selected':''}>Utilisateur</option>
+            <option value="livreur"${u.role==='livreur'?' selected':''}>Livreur</option>
+            <option value="annonceur"${u.role==='annonceur'?' selected':''}>Annonceur</option>
+            <option value="admin"${u.role==='admin'?' selected':''}>Admin</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Statut</label>
+          <select id="aeu-statut">
+            <option value="valide"${u.statut==='valide'?' selected':''}>Validé</option>
+            <option value="attente"${u.statut==='attente'?' selected':''}>En attente</option>
+            <option value="refuse"${u.statut==='refuse'?' selected':''}>Suspendu/Refusé</option>
+          </select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:6px"><input type="checkbox" id="aeu-verifie"${u.verifie?' checked':''}> Compte vérifié (badge ✅)</label>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-admin-edit-user').remove()">Annuler</button>
+        <button class="btn btn-primary" style="flex:1" onclick="adminSauvegarderUser(${id})">Enregistrer</button>
+      </div>
+    </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  div.classList.add('open');
+}
+
+async function adminSauvegarderUser(id) {
+  const u = DAO._local.utilisateurs.find(x => x.id === id);
+  if (!u) return;
+  const avant = { prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel, ville: u.ville, role: u.role, statut: u.statut, verifie: u.verifie };
+  const prenom = document.getElementById('aeu-prenom').value.trim();
+  const nom = document.getElementById('aeu-nom').value.trim();
+  const email = document.getElementById('aeu-email').value.trim();
+  const tel = document.getElementById('aeu-tel').value.trim();
+  const ville = document.getElementById('aeu-ville').value.trim();
+  const role = document.getElementById('aeu-role').value;
+  const statut = document.getElementById('aeu-statut').value;
+  const verifie = document.getElementById('aeu-verifie').checked;
+  if (!prenom || !email) { toast('Prénom et email sont obligatoires', 'erreur'); return; }
+  if (u.id === SESSION.id && role !== 'admin') { toast('Vous ne pouvez pas retirer votre propre rôle admin', 'erreur'); return; }
+  Object.assign(u, { prenom, nom, email, tel, ville, role, statut, verifie });
+  document.getElementById('modal-admin-edit-user')?.remove();
+  const rafraichir = () => {
+    renderAdmin();
+    const insU = (window.DB_INSCRIPTIONS || []).find(x => x.id === id);
+    if (insU) Object.assign(insU, { prenom, nom, email, tel, ville, role, statut });
+    if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
+  };
+  rafraichir();
+  const r = await DAO_PERSIST.utilisateurMaj(id, { prenom, nom, email, tel, ville, role, statut, verifie });
+  if (r && r.error) {
+    Object.assign(u, avant);
+    rafraichir();
+    toast('Échec : modification non enregistrée', 'erreur');
+    return;
+  }
+  toast('✅ Utilisateur mis à jour');
+}
 
 // ══════════════════════════════════════════
 //  MODULE BEAUTÉ & RDV
@@ -23835,6 +24056,7 @@ if (document.readyState === 'loading') {
       startAdRotation();
       // Supabase = source de vérité partagée ; écrase le cache local IndexedDB.
       if (typeof window.chargerProfilAdminDepuisSupabase === 'function') window.chargerProfilAdminDepuisSupabase();
+      if (typeof window.chargerTarifsDepuisSupabase === 'function') window.chargerTarifsDepuisSupabase();
     });
   });
 } else {
@@ -23850,6 +24072,7 @@ if (document.readyState === 'loading') {
     syncCFGUI();
     startAdRotation();
     if (typeof window.chargerProfilAdminDepuisSupabase === 'function') window.chargerProfilAdminDepuisSupabase();
+    if (typeof window.chargerTarifsDepuisSupabase === 'function') window.chargerTarifsDepuisSupabase();
   });
 }
 </script>
