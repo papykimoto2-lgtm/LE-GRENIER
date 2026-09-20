@@ -3396,6 +3396,16 @@
     return { ok: true, data: r.data };
   };
 
+  // Incrémente usages d'un code promo — en RPC (SECURITY DEFINER) car promos
+  // n'est modifiable que par un admin via RLS : un PATCH direct depuis le
+  // compte de l'utilisateur qui publie serait toujours rejeté.
+  window.consommerCodePromo = async function(code) {
+    if (MODE !== 'remote') return { ok: true, local: true };
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/rpc/consommer_code_promo', { p_code: code });
+    if (r.error) { console.error('[promo] consommation échouée', r.error); return { ok: false, error: r.error }; }
+    return { ok: true, data: r.data };
+  };
+
   // Retourne { ok:true } si la mise à jour a bien touché la ligne, { ok:false, conflit:true }
   // si 0 ligne n'a matché (un autre livreur a déjà pris la commande entre-temps — la policy
   // RLS livraisons_livreur_maj fait alors office de verrou atomique), ou { ok:false, error }
@@ -14005,8 +14015,9 @@ async function _consommerPromoActif(promoInfoOuCode) {
     const promo = DAO._local.promos.find(p => p.code === code);
     if (promo) {
       promo.usages = (promo.usages || 0) + 1;
-      const r = await DAO_PERSIST.promoMaj(promo.id, { usages: promo.usages });
-      if (r && r.error) promo.usages--;
+      const r = await window.consommerCodePromo(code);
+      if (r && r.error) { promo.usages--; }
+      else if (r && r.data && typeof r.data.usages === 'number') { promo.usages = r.data.usages; }
     }
   }
   promoActif = null;
