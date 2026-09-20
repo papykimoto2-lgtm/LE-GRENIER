@@ -485,7 +485,8 @@
   .msg-conv-nom{font-weight:600;font-size:14px}
   .msg-conv-apercu{font-size:12px;color:var(--gris-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
   .msg-chat{display:flex;flex-direction:column;height:100%}
-  .msg-chat-header{padding:16px 22px;border-bottom:1px solid var(--gris-mid);font-weight:700;background:#fff;font-size:15px}
+  .msg-chat-header{padding:16px 22px;border-bottom:1px solid var(--gris-mid);font-weight:700;background:#fff;font-size:15px;display:flex;align-items:center;gap:10px}
+  .msg-back-btn{display:none}
   .msg-bulles{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;background:var(--gris-clair)}
   .bulle{max-width:65%;padding:11px 15px;border-radius:14px;font-size:14px;line-height:1.55}
   .bulle-eux{background:#fff;border:1px solid var(--gris-mid);align-self:flex-start;border-bottom-left-radius:4px;box-shadow:var(--shadow-sm)}
@@ -873,8 +874,15 @@
     .form-row{grid-template-columns:1fr}
     .kpi-grid{grid-template-columns:repeat(2,1fr)}
     .stats-grid{grid-template-columns:1fr}
+    /* Messagerie mobile : vue "liste puis conversation" (comme une appli de
+       chat classique) au lieu de masquer .msg-list sans aucun remplaçant —
+       ce qui rendait la sélection d'une conversation impossible. */
     .msg-layout{grid-template-columns:1fr}
-    .msg-list{display:none}
+    .msg-list{display:block}
+    .msg-chat{display:none}
+    .msg-layout.msg-chat-actif .msg-list{display:none}
+    .msg-layout.msg-chat-actif .msg-chat{display:flex}
+    .msg-back-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;border:1.5px solid var(--gris-mid);background:#fff;font-size:16px;cursor:pointer;flex-shrink:0}
     .paiement-options{grid-template-columns:1fr}
     .hero-stats{gap:16px}
     .hero-stat strong{font-size:22px}
@@ -7854,7 +7862,10 @@ const CGU_DATE    = '2026-05-16';
       <div style="padding:16px;font-weight:600;border-bottom:1px solid var(--gris-mid);font-size:14px">Conversations</div>
     </div>
     <div class="msg-chat">
-      <div class="msg-chat-header" id="msg-chat-nom">Sélectionner une conversation</div>
+      <div class="msg-chat-header">
+        <button class="msg-back-btn" onclick="fermerConversationMobile()" aria-label="Retour aux conversations">←</button>
+        <span id="msg-chat-nom">Sélectionner une conversation</span>
+      </div>
       <div class="msg-bulles" id="msg-bulles"></div>
       <div class="msg-input-bar">
         <input type="text" id="msg-input" placeholder="Écrire un message..." onkeydown="if(event.key==='Enter')envoyerMsg()">
@@ -10513,6 +10524,13 @@ function goScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
+  // Le bouton flottant "Voir sur la carte" n'a de sens que sur l'accueil
+  // (annonces géolocalisées) — ailleurs (messagerie, dashboard, admin,
+  // connexion...) il ne fait que flotter par-dessus un contenu sans rapport.
+  const mapFab = document.getElementById('map-fab');
+  if (mapFab && !document.getElementById('map-panel')?.classList.contains('open')) {
+    mapFab.style.display = id === 'screen-accueil' ? 'flex' : 'none';
+  }
   if (id === 'screen-accueil') appliquerFiltres();
   setTimeout(majBoutons, 50);
   if (id === 'screen-dashboard') renderDashboard();
@@ -13311,6 +13329,7 @@ function supprimerAnnonce(type, id) {
 // ─── MESSAGERIE ───
 function renderMessagerie() {
   if (!SESSION) { goScreen('screen-login'); return; }
+  document.querySelector('.msg-layout')?.classList.remove('msg-chat-actif'); // repart sur la liste (mobile)
   const list = document.getElementById('msg-list');
   const convItems = DAO._local.conversations.map(c=>`
     <div class="msg-conv-item" data-conv-id="${escapeHtml(String(c.id))}" data-conv-nom="${escapeHtml(c.nom)}">
@@ -13332,6 +13351,7 @@ function renderMessagerie() {
 function ouvrirConversation(convId, nom, el) {
   document.querySelectorAll('.msg-conv-item').forEach(i=>i.classList.remove('actif'));
   if (el) el.classList.add('actif');
+  document.querySelector('.msg-layout')?.classList.add('msg-chat-actif'); // bascule vers le chat (mobile)
   document.getElementById('msg-chat-nom').textContent = nom;
   const bulles = document.getElementById('msg-bulles');
   const msgs = DAO._local.messages.filter(m=>m.convId===convId);
@@ -13343,6 +13363,11 @@ function ouvrirConversation(convId, nom, el) {
   `).join('');
   bulles.scrollTop = bulles.scrollHeight;
   document.getElementById('msg-input').dataset.conv = convId;
+}
+
+// Retour à la liste des conversations (bouton visible en mobile/tablette uniquement)
+function fermerConversationMobile() {
+  document.querySelector('.msg-layout')?.classList.remove('msg-chat-actif');
 }
 
 function envoyerMsg() {
