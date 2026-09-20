@@ -846,7 +846,13 @@
 
   @media(max-width:768px){
     /* ── Layout ── */
-    .dash-layout{grid-template-columns:1fr}
+    /* grid-template-rows:auto 1fr est nécessaire depuis que le bouton
+       hamburger est un item de grille en flux normal (rangée 1) : sans ça,
+       .dash-layout (min-height:calc(100vh - 64px) hérité du desktop) répartit
+       l'espace restant à parts égales entre SES DEUX rangées auto (bouton
+       ET contenu), créant un immense vide blanc autour du bouton au lieu de
+       laisser .dash-main (rangée 2, 1fr) seul occuper l'espace disponible. */
+    .dash-layout{grid-template-columns:1fr;grid-template-rows:auto 1fr}
     /* Le menu Mes annonces/Mes paiements/Mon profil/Messages/Avis/QR/
        Parrainage (colonne .dash-side) devient un tiroir coulissant ouvert
        par le bouton hamburger, au lieu d'être simplement masqué et donc
