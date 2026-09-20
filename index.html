@@ -8385,11 +8385,11 @@ const CGU_DATE    = '2026-05-16';
 
             <!-- Vidéo -->
             <div>
-              <label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--noir)">Vidéo <span style="font-weight:400;color:var(--gris-text)">(max 60s)</span></label>
+              <label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--noir)">Vidéo <span style="font-weight:400;color:var(--gris-text)">(max 3 min)</span></label>
               <div style="border:2px dashed var(--gris-mid);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;background:#fff;transition:var(--transition)" onclick="document.getElementById('pub-video-input').click()" id="pub-video-drop">
                 <div id="pub-video-preview" style="display:none;margin-bottom:6px"><video id="pub-video-el" style="width:100%;max-height:70px;border-radius:8px;object-fit:cover" muted></video></div>
                 <div id="pub-video-placeholder" style="font-size:24px;margin-bottom:4px">🎬</div>
-                <div style="font-size:11px;color:var(--gris-text)">MP4 / MOV / WebM · max 60 sec · max 150 Mo</div>
+                <div style="font-size:11px;color:var(--gris-text)">MP4 / MOV / WebM · max 3 min · max 150 Mo</div>
                 <input type="file" id="pub-video-input" accept="video/*" style="display:none" onchange="pubChargerVideo(this)">
               </div>
               <div id="pub-video-tarif" style="font-size:11px;color:var(--or);font-weight:700;margin-top:4px;text-align:center"></div>
@@ -8403,9 +8403,12 @@ const CGU_DATE    = '2026-05-16';
               <span>🖼️ <strong>1 photo</strong> : +15 000 FCFA</span>
               <span>🖼️ <strong>2–3 photos</strong> : +25 000 FCFA</span>
               <span>🖼️ <strong>4–5 photos</strong> : +35 000 FCFA</span>
-              <span>🎬 <strong>Vidéo ≤15s</strong> : +40 000 FCFA</span>
               <span>🎬 <strong>Vidéo ≤30s</strong> : +70 000 FCFA</span>
               <span>🎬 <strong>Vidéo ≤60s</strong> : +100 000 FCFA</span>
+              <span>🎬 <strong>Vidéo ≤90s</strong> : +130 000 FCFA</span>
+              <span>🎬 <strong>Vidéo ≤2min</strong> : +160 000 FCFA</span>
+              <span>🎬 <strong>Vidéo ≤2min30</strong> : +190 000 FCFA</span>
+              <span>🎬 <strong>Vidéo ≤3min</strong> : +220 000 FCFA</span>
             </div>
           </div>
         </div>
@@ -16557,17 +16560,23 @@ let pubVideoErreur = false;
 let pubVideoDuree = 0;       // durée en secondes
 
 const TARIF_BASE_JOUR = 8000; // FCFA par jour de diffusion
+const VIDEO_DUREE_MAX = 180; // 3 minutes
+const VIDEO_TRANCHE_S = 30;  // facturation par tranche de 30s
+
+// Tranche 1 (0-30s) = 70 000 F, puis +30 000 F par tranche de 30s
+// supplémentaire jusqu'à 3 min (tranche 6 = 220 000 F).
+function tarifVideoParDuree(duree) {
+  if (!duree || duree <= 0) return 0;
+  const tranche = Math.min(Math.ceil(duree / VIDEO_TRANCHE_S), VIDEO_DUREE_MAX / VIDEO_TRANCHE_S);
+  return 40000 + tranche * 30000;
+}
 
 function tarifMedias() {
   let extra = 0;
   if (pubPhotosData.length === 1) extra += 15000;
   else if (pubPhotosData.length <= 3) extra += 25000;
   else if (pubPhotosData.length <= 5) extra += 35000;
-  if (pubVideoDuree > 0) {
-    if (pubVideoDuree <= 15) extra += 40000;
-    else if (pubVideoDuree <= 30) extra += 70000;
-    else extra += 100000;
-  }
+  extra += tarifVideoParDuree(pubVideoDuree);
   return extra;
 }
 
@@ -16591,7 +16600,7 @@ function majBudgetAuto() {
       💰 <strong>Détail budget :</strong>
       Base diffusion ${jours}j × ${fmtFCFA(TARIF_BASE_JOUR)} = <strong>${fmtFCFA(base)}</strong>
       ${pubPhotosData.length ? ` &nbsp;+&nbsp; Photos (${pubPhotosData.length}) = <strong>${fmtFCFA(pubPhotosData.length===1?15000:pubPhotosData.length<=3?25000:35000)}</strong>` : ''}
-      ${pubVideoDuree > 0 ? ` &nbsp;+&nbsp; Vidéo ${Math.round(pubVideoDuree)}s = <strong>${fmtFCFA(pubVideoDuree<=15?40000:pubVideoDuree<=30?70000:100000)}</strong>` : ''}
+      ${pubVideoDuree > 0 ? ` &nbsp;+&nbsp; Vidéo ${Math.round(pubVideoDuree)}s = <strong>${fmtFCFA(tarifVideoParDuree(pubVideoDuree))}</strong>` : ''}
       &nbsp;→ <strong style="font-size:16px">${fmtFCFA(total)}</strong>`;
   } else if (detail) { detail.style.display='none'; }
 }
@@ -16697,14 +16706,14 @@ function pubChargerVideo(input) {
   vid.src = url;
   vid.onloadedmetadata = () => {
     pubVideoDuree = vid.duration;
-    if (pubVideoDuree > 60) {
-      toast('Vidéo trop longue (max 60s). Elle sera tronquée à 60s.','erreur');
-      pubVideoDuree = 60;
+    if (pubVideoDuree > VIDEO_DUREE_MAX) {
+      toast(`Vidéo trop longue (max ${VIDEO_DUREE_MAX/60} min). Elle sera tronquée à ${VIDEO_DUREE_MAX/60} min.`,'erreur');
+      pubVideoDuree = VIDEO_DUREE_MAX;
     }
     document.getElementById('pub-video-preview').style.display = 'block';
     document.getElementById('pub-video-placeholder').style.display = 'none';
     const t = document.getElementById('pub-video-tarif');
-    const tarif = pubVideoDuree<=15?40000:pubVideoDuree<=30?70000:100000;
+    const tarif = tarifVideoParDuree(pubVideoDuree);
     if (t) t.textContent = `+${fmtFCFA(tarif)} · ${Math.round(pubVideoDuree)}s`;
     majBudgetAuto();
     majPubPreview();
