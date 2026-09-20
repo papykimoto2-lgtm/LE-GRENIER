@@ -395,6 +395,11 @@
   .dash-menu-item:hover,.dash-menu-item.actif{background:var(--vert-pale);color:var(--vert);font-weight:600}
   .dash-menu-item .ico{font-size:18px;width:22px;text-align:center}
   .dash-main{padding:clamp(16px,4vw,36px);background:var(--gris-clair)}
+  /* Bouton hamburger + fond assombri : invisibles en desktop, activés en
+     media query mobile/tablette où .dash-side devient un tiroir coulissant
+     (voir plus bas) au lieu d'être simplement masqué et donc inaccessible. */
+  .dash-hamburger{display:none}
+  .dash-side-backdrop{display:none}
   .dash-titre{font-family:var(--font-titre);font-size:26px;font-weight:700;margin-bottom:22px;letter-spacing:-0.02em}
   .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
   .stat-card{background:#fff;border-radius:var(--radius);padding:20px;border:1px solid var(--gris-mid);box-shadow:var(--shadow-sm);transition:var(--transition)}
@@ -841,7 +846,29 @@
   @media(max-width:768px){
     /* ── Layout ── */
     .dash-layout{grid-template-columns:1fr}
-    .dash-side{display:none}
+    /* Le menu Mes annonces/Mes paiements/Mon profil/Messages/Avis/QR/
+       Parrainage (colonne .dash-side) devient un tiroir coulissant ouvert
+       par le bouton hamburger, au lieu d'être simplement masqué et donc
+       injoignable sur mobile/tablette. */
+    .dash-side{
+      display:block;position:fixed;top:0;left:0;bottom:0;width:280px;max-width:85vw;
+      z-index:1000;overflow-y:auto;transform:translateX(-100%);
+      transition:transform .25s ease;box-shadow:2px 0 24px rgba(0,0,0,.18);
+    }
+    .dash-side.open{transform:translateX(0)}
+    .dash-side-backdrop{
+      display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;
+      opacity:0;pointer-events:none;transition:opacity .25s ease;
+    }
+    .dash-side-backdrop.open{opacity:1;pointer-events:auto}
+    .dash-hamburger{
+      display:flex;align-items:center;justify-content:center;width:40px;height:40px;
+      position:fixed;top:70px;left:14px;z-index:1001;
+      border-radius:10px;border:1.5px solid var(--gris-mid);background:#fff;
+      font-size:18px;cursor:pointer;box-shadow:var(--shadow-sm);
+    }
+    /* Laisse la place au bouton hamburger fixe pour ne pas chevaucher le titre */
+    .dash-layout .dash-titre{padding-left:50px}
     .form-row{grid-template-columns:1fr}
     .kpi-grid{grid-template-columns:repeat(2,1fr)}
     .stats-grid{grid-template-columns:1fr}
@@ -7333,7 +7360,9 @@ const CGU_DATE    = '2026-05-16';
     </div>
   </nav>
   <div class="dash-layout">
-    <div class="dash-side">
+    <button class="dash-hamburger" onclick="toggleDashSidebar()" aria-label="Ouvrir le menu">☰</button>
+    <div class="dash-side-backdrop" id="dash-side-backdrop" onclick="toggleDashSidebar(false)"></div>
+    <div class="dash-side" id="dash-side">
       <div style="margin-bottom:20px">
         <!-- Avatar cliquable -->
         <div style="position:relative;width:64px;height:64px;margin:0 auto 8px;cursor:pointer" onclick="dashTab(document.querySelector('.dash-menu-item:nth-child(4)'),'tab-profil');document.getElementById('profil-photo-input').click()" title="Changer la photo de profil">
@@ -7343,8 +7372,8 @@ const CGU_DATE    = '2026-05-16';
         <div style="font-weight:600;font-size:15px" id="dash-username">Kouassi A.</div>
         <div style="font-size:12px;color:var(--gris-text)" id="dash-plan-label">Plan Gratuit</div>
         <div id="dash-verif-row" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;font-size:11px;padding:5px 10px;border-radius:8px" onclick="afficherPlans()">Upgrader</button>
-          <button class="btn btn-outline btn-sm" style="font-size:11px;padding:5px 10px;border-radius:8px" id="btn-verif-identite" onclick="demanderVerification()">Vérifier ID — 1 000 F</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;font-size:11px;padding:5px 10px;border-radius:8px" onclick="toggleDashSidebar(false);afficherPlans()">Upgrader</button>
+          <button class="btn btn-outline btn-sm" style="font-size:11px;padding:5px 10px;border-radius:8px" id="btn-verif-identite" onclick="toggleDashSidebar(false);demanderVerification()">Vérifier ID — 1 000 F</button>
         </div>
       </div>
       <div class="dash-menu-item actif" onclick="dashTab(this,'tab-annonces')">
@@ -7356,13 +7385,13 @@ const CGU_DATE    = '2026-05-16';
       <div class="dash-menu-item" onclick="dashTab(this,'tab-profil')">
         <span class="ico">👤</span> Mon profil
       </div>
-      <div class="dash-menu-item" onclick="goScreen('screen-messagerie')">
+      <div class="dash-menu-item" onclick="toggleDashSidebar(false);goScreen('screen-messagerie')">
         <span class="ico">💬</span> Messages
       </div>
       <div class="dash-menu-item" onclick="dashTab(this,'tab-avis')">
         <span class="ico">⭐</span> Avis reçus
       </div>
-      <button class="qr-badge" onclick="ouvrirQR()">
+      <button class="qr-badge" onclick="toggleDashSidebar(false);ouvrirQR()">
         <span class="qr-badge-icon">⬛</span> Connexion QR
       </button>
       <button class="qr-badge" onclick="dashTab(this,'tab-parrainage')" style="background:linear-gradient(135deg,#F8EDFA,#fff);border-color:rgba(134,46,156,.2);color:#862E9C;margin-top:8px">
@@ -12880,6 +12909,18 @@ function dashTab(el, tabId) {
   document.querySelectorAll('#tab-annonces,#tab-paiements,#tab-profil,#tab-avis,#tab-parrainage').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
   if (tabId === 'tab-paiements') renderMesPaiements('');
+  toggleDashSidebar(false); // referme le tiroir mobile après un choix
+}
+
+// Tiroir mobile/tablette du menu utilisateur (.dash-side) — sur desktop ces
+// classes n'ont aucun effet visuel puisque .dash-side reste dans la grille.
+function toggleDashSidebar(force) {
+  const side = document.getElementById('dash-side');
+  const backdrop = document.getElementById('dash-side-backdrop');
+  if (!side || !backdrop) return;
+  const open = force !== undefined ? !!force : !side.classList.contains('open');
+  side.classList.toggle('open', open);
+  backdrop.classList.toggle('open', open);
 }
 
 let _payFilter = '';
