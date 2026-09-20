@@ -8232,6 +8232,7 @@ const CGU_DATE    = '2026-05-16';
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-profil');renderAdminProfil()">Profil & Paiements</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-tarifs');renderAdminTarifs()">Tarifs & Plans</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-visibilite');renderAdminVisibilite()">Visibilité</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-contenus')">Contenus</button>
       </div>
     </div>
   </div>
@@ -8943,6 +8944,32 @@ const CGU_DATE    = '2026-05-16';
     <!-- ONGLET VISIBILITÉ -->
     <div id="admin-visibilite" class="hidden">
       <!-- Rendu dynamique par renderAdminVisibilite() -->
+    </div>
+
+    <!-- ONGLET CONTENUS (modules verticaux : boulots, logements, voitures, salons, restos...) -->
+    <div id="admin-contenus" class="hidden">
+      <div class="dash-titre">Contenus des modules</div>
+      <div class="admin-section" style="padding:14px 18px;margin-bottom:16px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <select id="cont-filtre-module" onchange="renderAdminContenus()" style="padding:9px 14px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
+            <option value="">Tous les modules</option>
+          </select>
+          <select id="cont-filtre-statut" onchange="renderAdminContenus()" style="padding:9px 14px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
+            <option value="">Tous les statuts</option>
+            <option value="en-ligne">En ligne</option>
+            <option value="attente">En attente</option>
+            <option value="refuse">Retiré</option>
+          </select>
+          <input id="cont-search" type="text" placeholder="Rechercher titre, vendeur, tél..." oninput="renderAdminContenus()" style="flex:1;min-width:180px;padding:9px 14px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
+          <button onclick="chargerAdminContenus()" style="padding:9px 16px;border:none;border-radius:var(--radius);background:var(--vert-pale);color:var(--vert);font-size:13px;font-weight:600;cursor:pointer">Actualiser</button>
+        </div>
+      </div>
+      <div class="table-wrap-scroll" style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid)">
+        <table class="table">
+          <thead><tr><th>Module</th><th>Titre</th><th>Vendeur</th><th>Tél / Zone</th><th>Statut</th><th>Publié le</th><th>Actions</th></tr></thead>
+          <tbody id="cont-tbody"><tr><td colspan="7" style="text-align:center;color:var(--gris-text);padding:20px">Cliquez sur « Actualiser » pour charger les contenus</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ONGLET INSCRIPTIONS -->
@@ -17568,8 +17595,9 @@ async function _adminRafraichirCache(cles) {
 async function adminTab(el, tabId) {
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
   el.classList.add('actif');
-  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite').forEach(t=>t.classList.add('hidden'));
+  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
+  if (tabId==='admin-contenus') chargerAdminContenus();
   if (tabId==='admin-annonces') { await _adminRafraichirCache(['annonces','utilisateurs']); renderAdmin(); }
   if (tabId==='admin-pub') { await _adminRafraichirCache(['bannieres']); renderAdminPub(); }
   if (tabId==='admin-abonnements') { await _adminRafraichirCache(['abonnements','plans']); renderAdminAbonnements(); }
@@ -17579,6 +17607,108 @@ async function adminTab(el, tabId) {
   if (tabId==='admin-inscriptions') insRafraichir();
   if (tabId==='admin-profil') renderAdminProfil();
   if (tabId==='admin-visibilite') renderAdminVisibilite();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ADMIN — CONTENUS (vue unifiée des 11 modules verticaux : boulots,
+//  nounous, trajets, voitures, locations_vehicules, dons, besoins,
+//  salons, artistes, logements, restos). Ces modules publient
+//  instantanément (aucune file d'attente) — cet onglet donne à l'admin
+//  la visibilité et les moyens de modération qui manquaient totalement.
+// ══════════════════════════════════════════════════════════════
+const MODULES_CONTENUS_CONFIG = [
+  { table: 'boulots',             label: 'Boulot',            titre: r => r.nom + (r.metier ? ' — ' + r.metier : ''), zone: r => r.zone },
+  { table: 'nounous',             label: 'Nounou',             titre: r => r.nom, zone: r => r.zone },
+  { table: 'trajets',             label: 'Trajet colis',       titre: r => (r.dep||'?') + ' → ' + (r.arr||'?'), zone: r => r.porteur },
+  { table: 'voitures',            label: 'Voiture',            titre: r => [r.marque, r.modele].filter(Boolean).join(' ') || 'Voiture', zone: r => r.quartier },
+  { table: 'locations_vehicules', label: 'Location véhicule',  titre: r => [r.marque, r.modele].filter(Boolean).join(' ') || 'Véhicule', zone: r => r.quartier },
+  { table: 'dons',                label: 'Don',                titre: r => r.titre, zone: r => r.quartier },
+  { table: 'besoins',             label: 'Besoin',             titre: r => r.titre, zone: r => r.quartier },
+  { table: 'salons',              label: 'Salon beauté',       titre: r => r.nom, zone: r => r.quartier },
+  { table: 'artistes',            label: 'Artiste',            titre: r => r.nom, zone: r => r.zone },
+  { table: 'logements',           label: 'Logement',           titre: r => r.nom, zone: r => r.quartier },
+  { table: 'restos',              label: 'Resto',              titre: r => r.nom, zone: r => r.quartier },
+];
+
+let ADMIN_CONTENUS_CACHE = [];
+
+async function chargerAdminContenus() {
+  const tbody = document.getElementById('cont-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gris-text);padding:20px">Chargement…</td></tr>';
+  const selMod = document.getElementById('cont-filtre-module');
+  if (selMod && selMod.options.length <= 1) {
+    selMod.innerHTML = '<option value="">Tous les modules</option>' +
+      MODULES_CONTENUS_CONFIG.map(m => `<option value="${m.table}">${m.label}</option>`).join('');
+  }
+  if (typeof MODE === 'undefined' || MODE !== 'remote') { ADMIN_CONTENUS_CACHE = []; renderAdminContenus(); return; }
+  const rows = [];
+  await Promise.all(MODULES_CONTENUS_CONFIG.map(async (m) => {
+    try {
+      const r = await _xhr('GET', SUPABASE_URL + `/rest/v1/${m.table}?select=*&order=created_at.desc`);
+      if (r.error || !r.data) { console.warn('[admin contenus]', m.table, r.error); return; }
+      r.data.forEach(row => rows.push({
+        table: m.table, label: m.label, id: row.id, vendeurId: row.vendeur_id,
+        titre: m.titre(row) || 'Sans titre', zone: m.zone(row) || '', tel: row.tel || '',
+        statut: row.statut, date: (row.created_at || '').slice(0, 10)
+      }));
+    } catch (e) { console.warn('[admin contenus]', m.table, e); }
+  }));
+  rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  ADMIN_CONTENUS_CACHE = rows;
+  renderAdminContenus();
+}
+
+function renderAdminContenus() {
+  const tbody = document.getElementById('cont-tbody');
+  if (!tbody) return;
+  const fMod = document.getElementById('cont-filtre-module')?.value || '';
+  const fStatut = document.getElementById('cont-filtre-statut')?.value || '';
+  const q = (document.getElementById('cont-search')?.value || '').toLowerCase();
+  let data = ADMIN_CONTENUS_CACHE;
+  if (fMod) data = data.filter(r => r.table === fMod);
+  if (fStatut) data = data.filter(r => r.statut === fStatut);
+  if (q) {
+    data = data.filter(r => {
+      const v = DAO._local.utilisateurs.find(u => u.id === r.vendeurId);
+      const vNom = v ? (v.prenom + ' ' + v.nom) : '';
+      return (r.titre + ' ' + r.tel + ' ' + vNom).toLowerCase().includes(q);
+    });
+  }
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gris-text);padding:20px">Aucun contenu trouvé</td></tr>'; return; }
+  const statutLabel = { 'en-ligne': '🟢 En ligne', attente: '⏳ En attente', refuse: '🔴 Retiré', vendu: '✅ Vendu', pris: '✅ Pris', satisfait: '✅ Satisfait' };
+  tbody.innerHTML = data.map(r => {
+    const v = DAO._local.utilisateurs.find(u => u.id === r.vendeurId);
+    return `<tr>
+      <td><span style="background:var(--gris-clair);padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600">${r.label}</span></td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.titre)}</td>
+      <td style="font-size:12px">${v ? escapeHtml(v.prenom+' '+v.nom) : '—'}</td>
+      <td style="font-size:12px">${escapeHtml(r.tel)}${r.zone?' · '+escapeHtml(r.zone):''}</td>
+      <td><span style="font-size:12px">${statutLabel[r.statut] || escapeHtml(r.statut)}</span></td>
+      <td style="font-size:12px">${r.date}</td>
+      <td style="white-space:nowrap">
+        ${r.statut !== 'en-ligne' ? `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:var(--vert);color:#fff;border:none;margin-right:4px" onclick="adminContenuChangerStatut('${r.table}',${r.id},'en-ligne')">Publier</button>` : `<button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="adminContenuChangerStatut('${r.table}',${r.id},'refuse')">Retirer</button>`}
+        <button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px;color:var(--rouge);border-color:var(--rouge)" onclick="adminContenuSupprimer('${r.table}',${r.id})">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function adminContenuChangerStatut(table, id, statut) {
+  const r = await _xhr('PATCH', SUPABASE_URL + `/rest/v1/${table}?id=eq.${id}`, { statut }, { Prefer: 'return=minimal' });
+  if (r.error) { toast('Échec : statut non modifié', 'erreur'); return; }
+  const row = ADMIN_CONTENUS_CACHE.find(x => x.table === table && x.id === id);
+  if (row) row.statut = statut;
+  renderAdminContenus();
+  toast(statut === 'en-ligne' ? '✅ Contenu publié' : '⛔ Contenu retiré');
+}
+
+async function adminContenuSupprimer(table, id) {
+  if (!confirm('Supprimer définitivement ce contenu ?')) return;
+  const r = await _xhr('DELETE', SUPABASE_URL + `/rest/v1/${table}?id=eq.${id}`);
+  if (r.error) { toast('Échec de la suppression', 'erreur'); return; }
+  ADMIN_CONTENUS_CACHE = ADMIN_CONTENUS_CACHE.filter(x => !(x.table === table && x.id === id));
+  renderAdminContenus();
+  toast('Contenu supprimé');
 }
 
 // ==============================================
