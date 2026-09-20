@@ -3034,7 +3034,7 @@
     };
     if (table === 'plans') return {
       id: row.id, nom: row.nom, prix: Number(row.prix) || 0, ico: row.ico || '🆓', couleur: row.couleur || '#6B7280',
-      features: row.avantages || [],
+      features: row.avantages || [], populaire: !!row.populaire,
       limites: {
         annonces: row.annonces ?? 0, commission: Number(row.commission) || 0, boosts: row.boosts ?? 0,
         badge: !!row.badge, stats: !!row.stats, boutique: !!row.boutique
