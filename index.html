@@ -3111,9 +3111,14 @@
       return r;
     },
     async abonnement(record) {
-      if (MODE !== 'remote') return;
-      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/abonnements', record, { Prefer: 'return=minimal' });
+      if (MODE !== 'remote') return { data: null, error: null };
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/abonnements', {
+        utilisateur_id: record.userId, plan: record.plan, debut: record.depuis,
+        fin: record.expire, actif: record.actif, statut: record.statut,
+        moyen: record.moyen, ref: record.ref || null
+      }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] abonnement', r.error);
+      return r;
     },
     async annonceMaj(id, patch) {
       if (MODE !== 'remote') return { error: null };
@@ -8454,6 +8459,10 @@ const CGU_DATE    = '2026-05-16';
       <div class="admin-section" style="margin-bottom:20px">
         <div class="admin-section-titre">Plans tarifaires</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:14px" id="plans-grid"></div>
+      </div>
+      <div class="admin-section" id="abo-attente-section" style="margin-bottom:20px;display:none">
+        <div class="admin-section-titre">⏳ Demandes en attente de validation</div>
+        <div id="abo-attente-liste" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"></div>
       </div>
       <div class="admin-section">
         <div class="admin-section-titre">Abonnés récents</div>
@@ -17108,14 +17117,42 @@ function renderAdminAbonnements() {
       </div>`).join('');
   }
 
-  // Table abonnés
+  // Demandes en attente de validation (paiement simulé reçu, activation admin requise)
+  const attente = DAO._local.abonnements.filter(a => a.statut === 'attente');
+  const sectionAttente = document.getElementById('abo-attente-section');
+  const listeAttente = document.getElementById('abo-attente-liste');
+  if (sectionAttente && listeAttente) {
+    sectionAttente.style.display = attente.length ? 'block' : 'none';
+    listeAttente.innerHTML = attente.map(a => {
+      const u = DAO._local.utilisateurs.find(x => x.id === a.userId);
+      const nom = u ? escapeHtml(u.prenom + ' ' + u.nom) : 'Inconnu';
+      return `<div class="pub-admin-card">
+        <div class="pub-admin-info">
+          <div class="pub-admin-nom">${nom} <span class="pub-status" style="font-size:10px;margin-left:6px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:20px">⏳ En attente</span></div>
+          <div class="pub-admin-meta">
+            <span class="pub-admin-stat">Plan : ${escapeHtml(a.plan)}</span>
+            <span class="pub-admin-stat">${fmtFCFA(a.montant||0)}</span>
+            <span class="pub-admin-stat">Moyen : ${escapeHtml(a.moyen||'—')}</span>
+            <span class="pub-admin-stat">Réf : ${escapeHtml(a.ref||'—')}</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button class="btn btn-sm" style="font-size:12px;padding:6px 12px;background:var(--vert);color:#fff;border:none" onclick="approuverAbonnement(${a.id})">✅ Valider</button>
+          <button class="btn btn-outline btn-sm" style="font-size:12px;padding:6px 12px;color:var(--rouge);border-color:var(--rouge)" onclick="refuserAbonnement(${a.id})">❌ Refuser</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Table abonnés (déjà décidés)
   const tbody = document.getElementById('abo-tbody');
   if (!tbody) return;
-  if (!DAO._local.abonnements.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gris-text);padding:20px">Aucun abonné</td></tr>'; return; }
-  tbody.innerHTML = DAO._local.abonnements.map(a => {
+  const decides = DAO._local.abonnements.filter(a => a.statut !== 'attente');
+  if (!decides.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gris-text);padding:20px">Aucun abonné</td></tr>'; return; }
+  tbody.innerHTML = decides.map(a => {
     const u = DAO._local.utilisateurs.find(x => x.id === a.userId);
     const nom = u ? escapeHtml(u.prenom + ' ' + u.nom) : 'Inconnu';
-    const couleurStatut = {actif:'#16A34A',essai:'#D97706',résilié:'#DC2626'}[a.statut] || '#6B7280';
+    const couleurStatut = {actif:'#16A34A',essai:'#D97706',résilié:'#DC2626',refuse:'#6B7280'}[a.statut] || '#6B7280';
     return `<tr>
       <td><strong>${nom}</strong><br><span style="font-size:11px;color:var(--gris-text)">${u?.email||''}</span></td>
       <td><span style="background:var(--vert-pale);color:var(--vert);padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700">${a.plan}</span></td>
@@ -17124,10 +17161,44 @@ function renderAdminAbonnements() {
       <td><span style="color:${couleurStatut};font-weight:700;font-size:12px">${a.statut}</span></td>
       <td style="font-size:12px">${a.moyen}</td>
       <td>
-        <button class="btn btn-sm btn-outline" style="font-size:11px;padding:4px 8px" onclick="resilierAbo(${a.id})">Résilier</button>
+        ${a.statut === 'actif' ? `<button class="btn btn-sm btn-outline" style="font-size:11px;padding:4px 8px" onclick="resilierAbo(${a.id})">Résilier</button>` : ''}
       </td>
     </tr>`
   }).join('');
+}
+
+async function approuverAbonnement(id) {
+  const a = DAO._local.abonnements.find(x => x.id === id);
+  if (!a) return;
+  const avant = { statut: a.statut, actif: a.actif, depuis: a.depuis, expire: a.expire };
+  const depuis = new Date().toISOString().slice(0,10);
+  const expire = new Date(Date.now() + 30*24*3600*1000).toISOString().slice(0,10);
+  a.statut = 'actif'; a.actif = true; a.depuis = depuis; a.expire = expire;
+  renderAdminAbonnements();
+  const r = await DAO_PERSIST.abonnementMaj(id, { statut: 'actif', actif: true, debut: depuis, fin: expire });
+  if (r && r.error) {
+    Object.assign(a, avant);
+    renderAdminAbonnements();
+    toast('Échec : validation non enregistrée', 'erreur');
+    return;
+  }
+  toast(`✅ Abonnement ${a.plan} activé`);
+}
+
+async function refuserAbonnement(id) {
+  const a = DAO._local.abonnements.find(x => x.id === id);
+  if (!a) return;
+  const avant = { statut: a.statut, actif: a.actif };
+  a.statut = 'refuse'; a.actif = false;
+  renderAdminAbonnements();
+  const r = await DAO_PERSIST.abonnementMaj(id, { statut: 'refuse', actif: false });
+  if (r && r.error) {
+    Object.assign(a, avant);
+    renderAdminAbonnements();
+    toast('Échec : refus non enregistré', 'erreur');
+    return;
+  }
+  toast(`❌ Demande d'abonnement ${a.plan} refusée`);
 }
 
 async function resilierAbo(id) {
@@ -17200,28 +17271,47 @@ function afficherPlans() {
   div.classList.add('open');
 }
 
-function souscrirePlan(nom, prix) {
+async function souscrirePlan(nom, prix) {
   if (prix === 0) { toast('Vous êtes déjà sur le plan gratuit'); return; }
   if (!SESSION) { goScreen('screen-login'); document.getElementById('modal-plans')?.classList.remove('open'); return; }
   document.getElementById('modal-plans')?.classList.remove('open');
-  ouvrirModalPaiement(prix, `Abonnement Grenier ${nom} — 1 mois`, () => {
+  ouvrirModalPaiement(prix, `Abonnement Grenier ${nom} — 1 mois`, async () => {
     const debut = new Date().toISOString().slice(0,10);
     const fin   = new Date(Date.now() + 30*24*3600*1000).toISOString().slice(0,10);
     const ref   = 'ABO' + Date.now().toString().slice(-8).toUpperCase();
-    DAO._local.abonnements.push({
+    const moyen = PAY_METHODES[payMethodeActive]?.nom || 'Wave';
+
+    // L'abonnement est créé en attente : seul un admin peut l'activer après
+    // vérification du paiement (aucune passerelle de paiement réelle n'est
+    // branchée ici — voir DAO_PERSIST.abonnement / approuverAbonnement).
+    const abo = {
       id: DAO._local.abonnements.length+1, userId: SESSION.id,
       plan: nom, depuis: debut, expire: fin,
-      statut: 'actif', moyen: PAY_METHODES[payMethodeActive]?.nom || 'Wave', montant: prix
-    });
-    // Enregistrer le paiement
-    DAO._local.paiements.push({
+      statut: 'attente', actif: false, moyen, montant: prix, ref
+    };
+    DAO._local.abonnements.push(abo);
+    renderAdminAbonnements();
+    const rAbo = await DAO_PERSIST.abonnement(abo);
+    if (rAbo && rAbo.error) {
+      DAO._local.abonnements.splice(DAO._local.abonnements.indexOf(abo), 1);
+      renderAdminAbonnements();
+      toast('Échec : demande d\'abonnement non enregistrée, réessayez', 'erreur');
+      return;
+    }
+    if (rAbo && rAbo.data && rAbo.data[0]) abo.id = rAbo.data[0].id;
+
+    // Enregistrer le paiement (le paiement simulé a bien été reçu ; seule
+    // l'activation de l'abonnement attend la validation admin)
+    const paiement = {
       id: DAO._local.paiements.length+1, date: debut, vendeurId: SESSION.id,
       annonce: `Abonnement Grenier ${nom}`, valeur: prix, commission: 0,
-      ref, passerelle: PAY_METHODES[payMethodeActive]?.nom || 'Wave',
-      moyen: PAY_METHODES[payMethodeActive]?.nom || 'Wave',
-      statut: 'confirmé', planVendeur: nom, type: 'abonnement'
-    });
-    toast(`🎉 Bienvenue sur Grenier ${nom} ! Profitez de vos avantages.`);
+      ref, passerelle: moyen, moyen, statut: 'confirmé', planVendeur: nom, type: 'abonnement'
+    };
+    DAO._local.paiements.push(paiement);
+    const rPay = await DAO_PERSIST.paiement(paiement);
+    if (rPay && rPay.data && rPay.data[0]) paiement.id = rPay.data[0].id;
+
+    toast(`✅ Paiement reçu ! Abonnement ${nom} en attente de validation (sous 24h).`);
   });
 }
 
