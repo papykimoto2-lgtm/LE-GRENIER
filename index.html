@@ -3032,6 +3032,14 @@
       id: row.id, cibleId: row.cible_id, auteurId: row.auteur_id, note: row.note,
       commentaire: row.commentaire, date: (row.created_at || '').slice(0, 10)
     };
+    if (table === 'plans') return {
+      id: row.id, nom: row.nom, prix: Number(row.prix) || 0, ico: row.ico || '🆓', couleur: row.couleur || '#6B7280',
+      features: row.avantages || [],
+      limites: {
+        annonces: row.annonces ?? 0, commission: Number(row.commission) || 0, boosts: row.boosts ?? 0,
+        badge: !!row.badge, stats: !!row.stats, boutique: !!row.boutique
+      }
+    };
     if (table === 'messages') return {
       id: row.id, convId: row.conversation_id, de: row.expediteur_id, texte: row.contenu,
       lu: row.lu, date: (row.created_at || '').slice(0, 19).replace('T', ' ')
@@ -3065,6 +3073,12 @@
       if (MODE !== 'remote') return { error: null };
       const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/utilisateurs?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
       if (r.error) console.error('[persist] utilisateur maj', r.error);
+      return r;
+    },
+    async planMaj(id, patch) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/plans?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] plan maj', r.error);
       return r;
     },
     async configurationMaj(cle, valeur) {
@@ -10081,6 +10095,11 @@ window.chargerTarifsDepuisSupabase = async function() {
 async function sauvegarderAdminTarifs() {
   const plans = ['gratuit','plus','pro','business'];
   const nouvCfg = Object.assign({}, CFG);
+  // getPlanUser() lit les vraies lignes Supabase (table plans), pas CFG — sans
+  // cette synchronisation, changer un tarif ici n'aurait jamais d'effet réel
+  // sur la commission/les limites appliquées aux utilisateurs.
+  const idParPlan = { gratuit: 1, plus: 2, pro: 3, business: 4 };
+  const patchsPlans = [];
 
   // Plans
   plans.forEach(p => {
@@ -10092,6 +10111,7 @@ async function sauvegarderAdminTarifs() {
     if (!isNaN(comm))  nouvCfg['comm_taux_'+p]   = comm;
     if (!isNaN(ann))   nouvCfg['plan_ann_'+p]    = ann;
     if (!isNaN(boost)) nouvCfg['plan_boost_'+p]  = boost;
+    patchsPlans.push({ id: idParPlan[p], prix, commission: comm, annonces: ann, boosts: boost });
   });
 
   // Règles globales
@@ -10128,6 +10148,13 @@ async function sauvegarderAdminTarifs() {
   if (r && r.error) {
     toast('⚠️ Enregistré localement, mais la synchronisation serveur a échoué', 'erreur');
     return;
+  }
+  // Répercute sur les vraies lignes plans (celles que getPlanUser() lit réellement).
+  const echecsPlans = (await Promise.all(patchsPlans.map(p =>
+    DAO_PERSIST.planMaj(p.id, { prix: p.prix, commission: p.commission, annonces: p.annonces, boosts: p.boosts })
+  ))).filter(pr => pr && pr.error);
+  if (echecsPlans.length) {
+    toast('⚠️ Tarifs enregistrés, mais certaines limites de plan n\'ont pas pu être synchronisées', 'erreur');
   }
   if (badge) {
     badge.style.opacity = '1';
@@ -13876,7 +13903,7 @@ function appliquerFiltres() {
 }
 
 function fmtFCFA(n) {
-  return n.toLocaleString('fr-FR') + ' FCFA';
+  return (Number(n) || 0).toLocaleString('fr-FR') + ' FCFA';
 }
 
 function toast(msg, type='success') {
@@ -18635,15 +18662,23 @@ if (typeof cguInitVersions === 'function') cguInitVersions();
 //  MOTEUR PLANS & MODÈLE ÉCONOMIQUE
 // ══════════════════════════════════════════
 
+// Plan de secours si DAO._local.plans est vide (ex : bootstrapCache pas
+// encore terminé) — évite un plantage plutôt qu'une limite silencieusement
+// fausse ; la vraie liste (chargée depuis Supabase) prime dès qu'elle existe.
+const PLAN_SECOURS = { id: 0, nom: 'Gratuit', prix: 0, ico: '🆓', couleur: '#6B7280', features: [],
+  limites: { annonces: 1, commission: 10, boosts: 0, badge: false, stats: false, boutique: false } };
+
 // Retourne le plan actif d'un utilisateur
 function getPlanUser(userId) {
   const uid = userId || SESSION?.id;
-  if (!uid) return DAO._local.plans[0]; // gratuit
+  const plans = DAO._local.plans;
+  if (!plans || !plans.length) return PLAN_SECOURS;
+  if (!uid) return plans[0];
   const abo = DAO._local.abonnements.find(a =>
     a.userId === uid && a.statut === 'actif' && a.expire >= new Date().toISOString().slice(0,10)
   );
-  if (!abo) return DAO._local.plans[0];
-  return DAO._local.plans.find(p => p.nom === abo.plan) || DAO._local.plans[0];
+  if (!abo) return plans[0];
+  return plans.find(p => p.nom === abo.plan) || plans[0];
 }
 
 // Compte les annonces actives d'un vendeur
