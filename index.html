@@ -2993,7 +2993,10 @@
       id: row.id, authId: row.auth_id, prenom: row.prenom, nom: row.nom, email: row.email,
       tel: row.tel, ville: row.ville, role: row.role, note: Number(row.note) || 0,
       nbAvis: row.nb_avis || 0, verifie: row.verifie, statut: row.statut || 'valide',
-      entreprise: row.entreprise, secteur: row.secteur
+      entreprise: row.entreprise, secteur: row.secteur,
+      dateInscription: (row.created_at || '').slice(0, 10),
+      dateValidation: row.date_validation ? row.date_validation.slice(0, 10) : null,
+      validePar: row.valide_par || null
     };
     if (table === 'paiements') return {
       id: row.id, vendeurId: row.vendeur_id, annonce: row.annonce_titre, valeur: Number(row.valeur),
@@ -17991,9 +17994,9 @@ window._syncInscriptionsDepuisSupabase = function() {
     return {
       id: u.id, _supabaseId: u.id, prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel,
       ville: u.ville, role: u.role, statut: u.statut || 'valide',
-      dateInscription: p.dateInscription || '', mdpTemp: p.mdpTemp || null,
+      dateInscription: u.dateInscription || p.dateInscription || '', mdpTemp: p.mdpTemp || null,
       entreprise: u.entreprise || p.entreprise || null, secteur: u.secteur || p.secteur || null,
-      dateValidation: p.dateValidation, validePar: p.validePar,
+      dateValidation: u.dateValidation || p.dateValidation, validePar: u.validePar || p.validePar,
       motifRefus: p.motifRefus, antiBotScore: p.antiBotScore,
       consentementCGU: p.consentementCGU, geo: p.geo
     };
@@ -18138,6 +18141,9 @@ window.insConfirmerValidation = async function() {
       _insValiderUser.mdpTemp=mdp;
       _insValiderUser.dateValidation=new Date().toISOString().slice(0,10);
       _insValiderUser.validePar=(SESSION?((SESSION.prenom||'')+' '+(SESSION.nom||'')).trim():'Admin')||'Admin';
+      DAO_PERSIST.utilisateurMaj(_insValiderUser._supabaseId, {
+        date_validation: new Date().toISOString(), valide_par: _insValiderUser.validePar
+      }).then(rv => { if (rv && rv.error) console.warn('[inscriptions] date de validation non enregistrée', rv.error); });
 
       if(!DAO._local.utilisateurs.find(u=>u.email===_insValiderUser.email)) {
         DAO._local.utilisateurs.push({
