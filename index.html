@@ -16434,22 +16434,33 @@ async function refuserCampagne(id) {
   toast(`❌ Campagne "${b.annonceur}" refusée`);
 }
 
+// ── État médias dédié à la modale de modification (ne partage rien avec
+// pubLogoData/pubPhotosData/pubVideoData — évite d'écraser un dépôt de
+// campagne en cours sur l'écran de création) ──
+let ebLogoData = null, ebLogoUploading = false, ebLogoErreur = false;
+let ebPhotosData = [], ebPhotosUploading = [], ebPhotosErreur = [];
+let ebVideoData = null, ebVideoUploading = false, ebVideoErreur = false, ebVideoDuree = 0;
+
 function editBanniere(id) {
   const b = DAO._local.bannieres.find(x => x.id === id);
   if (!b) return;
   // Supprimer ancienne modale si présente
   const old = document.getElementById('modal-edit-banniere');
   if (old) old.remove();
+  // Réinitialiser l'état médias avec le contenu actuel de la bannière
+  ebLogoData = b.logo || null; ebLogoUploading = false; ebLogoErreur = false;
+  ebPhotosData = [...(b.photos || [])]; ebPhotosUploading = ebPhotosData.map(() => false); ebPhotosErreur = ebPhotosData.map(() => false);
+  ebVideoData = b.video || null; ebVideoUploading = false; ebVideoErreur = false; ebVideoDuree = b.videoDuree || 0;
   const zones = ['hero','global','boulots','colis','auto','dons','logement','resto','livraison','info','nounou','beaute'];
   const optionsZone = zones.map(z => `<option value="${z}" ${b.position===z?'selected':''}>${z}</option>`).join('');
   const modal = document.createElement('div');
   modal.id = 'modal-edit-banniere';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   modal.innerHTML = `
-    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
         <div style="font-size:17px;font-weight:700;color:var(--noir)">Modifier la bannière</div>
-        <button onclick="document.getElementById('modal-edit-banniere').remove()" style="background:var(--gris-clair);border:none;border-radius:8px;width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button>
+        <button onclick="fermerEditBanniere()" style="background:var(--gris-clair);border:none;border-radius:8px;width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:14px">
         <div>
@@ -16477,17 +16488,46 @@ function editBanniere(id) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
             <label style="font-size:13px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Date début *</label>
-            <input id="eb-debut" type="date" value="${b.debut||''}" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
+            <input id="eb-debut" type="date" value="${b.debut||''}" onchange="ebMajBudget()" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
           </div>
           <div>
             <label style="font-size:13px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Date fin *</label>
-            <input id="eb-fin" type="date" value="${b.fin||''}" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
+            <input id="eb-fin" type="date" value="${b.fin||''}" onchange="ebMajBudget()" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
           </div>
         </div>
-        <div>
-          <label style="font-size:13px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Budget (FCFA)</label>
-          <input id="eb-budget" type="number" value="${b.budget||0}" min="0" style="width:100%;padding:10px 12px;border:1.5px solid var(--gris-mid);border-radius:10px;font-size:14px;outline:none">
+
+        <!-- Médias -->
+        <div style="border-top:1px solid var(--gris-clair);padding-top:14px">
+          <div style="font-size:13px;font-weight:700;color:var(--noir);margin-bottom:10px">Médias de la bannière</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Logo</label>
+              <div id="eb-logo-drop" onclick="document.getElementById('eb-logo-input').click()" style="border:2px dashed var(--gris-mid);border-radius:10px;padding:10px;text-align:center;cursor:pointer;background:#fff">
+                <div id="eb-logo-preview" style="display:${ebLogoData?'block':'none'};margin-bottom:4px"><img id="eb-logo-img" src="${ebLogoData||''}" style="width:100%;max-height:60px;object-fit:contain;border-radius:6px"></div>
+                <div id="eb-logo-placeholder" style="display:${ebLogoData?'none':'block'};font-size:20px">🖼️</div>
+                <input type="file" id="eb-logo-input" accept="image/*" style="display:none" onchange="ebChargerLogo(this)">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Vidéo <span style="font-weight:400">(max 3 min)</span></label>
+              <div id="eb-video-drop" onclick="document.getElementById('eb-video-input').click()" style="border:2px dashed var(--gris-mid);border-radius:10px;padding:10px;text-align:center;cursor:pointer;background:#fff">
+                <div id="eb-video-preview" style="display:${ebVideoData?'block':'none'};margin-bottom:4px"><video id="eb-video-el" src="${ebVideoData||''}" muted style="width:100%;max-height:60px;object-fit:cover;border-radius:6px"></video></div>
+                <div id="eb-video-placeholder" style="display:${ebVideoData?'none':'block'};font-size:20px">🎬</div>
+                <input type="file" id="eb-video-input" accept="video/*" style="display:none" onchange="ebChargerVideo(this)">
+              </div>
+              <div id="eb-video-tarif" style="font-size:10px;color:var(--or);font-weight:700;margin-top:3px;text-align:center">${ebVideoDuree>0?`${Math.round(ebVideoDuree)}s`:''}</div>
+            </div>
+          </div>
+          <label style="font-size:12px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Photos <span style="font-weight:400">(max 3)</span></label>
+          <div id="eb-photos-drop" onclick="document.getElementById('eb-photos-input').click()" style="border:2px dashed var(--gris-mid);border-radius:10px;padding:10px;text-align:center;cursor:pointer;background:#fff;margin-bottom:6px">
+            <div style="font-size:20px">📷</div>
+            <input type="file" id="eb-photos-input" accept="image/*" multiple style="display:none" onchange="ebChargerPhotos(this.files)">
+          </div>
+          <div id="eb-photos-grid" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
+
+        <div id="eb-budget-detail" style="background:var(--vert-pale);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--vert)"></div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
             <label style="font-size:13px;font-weight:600;color:var(--gris-text);display:block;margin-bottom:5px">Impressions</label>
@@ -16500,13 +16540,139 @@ function editBanniere(id) {
         </div>
       </div>
       <div style="display:flex;gap:10px;margin-top:22px">
-        <button onclick="document.getElementById('modal-edit-banniere').remove()" style="flex:1;padding:11px;border:1.5px solid var(--gris-mid);border-radius:10px;background:#fff;font-size:14px;font-weight:500;cursor:pointer;color:var(--gris-text)">Annuler</button>
+        <button onclick="fermerEditBanniere()" style="flex:1;padding:11px;border:1.5px solid var(--gris-mid);border-radius:10px;background:#fff;font-size:14px;font-weight:500;cursor:pointer;color:var(--gris-text)">Annuler</button>
         <button onclick="sauvegarderEditBanniere(${id})" style="flex:2;padding:11px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;font-size:14px;font-weight:600;cursor:pointer">Enregistrer</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
-  // Fermer en cliquant hors modale
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  modal.addEventListener('click', e => { if (e.target === modal) fermerEditBanniere(); });
+  ebMajPhotosGrid();
+  ebMajBudget(b.budget || 0);
+}
+
+function fermerEditBanniere() {
+  const modal = document.getElementById('modal-edit-banniere');
+  if (modal) modal.remove();
+  // Libère les aperçus locaux (blob:) créés pendant l'édition
+  if (ebLogoData && ebLogoData.startsWith('blob:')) URL.revokeObjectURL(ebLogoData);
+  if (ebVideoData && ebVideoData.startsWith('blob:')) URL.revokeObjectURL(ebVideoData);
+  ebPhotosData.forEach(p => { if (p && p.startsWith('blob:')) URL.revokeObjectURL(p); });
+  ebLogoData = null; ebPhotosData = []; ebVideoData = null; ebVideoDuree = 0;
+}
+
+// Affiche le nouveau total calculé et son écart avec le budget déjà réglé
+// (ancienBudget) ; l'écart positif sera facturé au moment d'enregistrer.
+function ebMajBudget(ancienBudget) {
+  if (typeof ancienBudget !== 'number') ancienBudget = window._ebAncienBudget || 0;
+  window._ebAncienBudget = ancienBudget;
+  const debut = document.getElementById('eb-debut')?.value;
+  const fin = document.getElementById('eb-fin')?.value;
+  const jours = tarifDiffusionJours(debut, fin);
+  const base = jours * TARIF_BASE_JOUR;
+  const media = tarifMedias(ebPhotosData.length, ebVideoDuree);
+  const total = base + media;
+  const diff = total - ancienBudget;
+  const detail = document.getElementById('eb-budget-detail');
+  if (!detail) return;
+  detail.innerHTML = `
+    💰 <strong>Nouveau total :</strong> ${jours}j × ${fmtFCFA(TARIF_BASE_JOUR)}${media?` + médias ${fmtFCFA(media)}`:''} = <strong style="font-size:15px">${fmtFCFA(total)}</strong>
+    <div style="margin-top:4px;font-size:12px">Déjà réglé : ${fmtFCFA(ancienBudget)}
+      ${diff > 0 ? `&nbsp;→ <strong style="color:#B8791A">Complément à payer : ${fmtFCFA(diff)}</strong>` : '&nbsp;→ <strong>Aucun frais supplémentaire</strong>'}
+    </div>`;
+}
+
+function ebChargerLogo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) { toast('Logo trop lourd (max 50 Mo)', 'erreur'); input.value=''; return; }
+  if (!file.type.startsWith('image/')) { toast('Format non supporté', 'erreur'); return; }
+  const url = URL.createObjectURL(file);
+  ebLogoData = url; ebLogoUploading = true; ebLogoErreur = false;
+  document.getElementById('eb-logo-img').src = url;
+  document.getElementById('eb-logo-preview').style.display = 'block';
+  document.getElementById('eb-logo-placeholder').style.display = 'none';
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+    DAO.uploadPhoto(file, path).then(r => {
+      ebLogoUploading = false;
+      if (r.error || !r.data) { ebLogoErreur = true; toast(`⚠️ Échec de l'envoi du logo`, 'erreur'); }
+      else ebLogoData = r.data.publicUrl;
+    });
+  } else { ebLogoUploading = false; }
+}
+
+function ebChargerPhotos(files) {
+  if (!files || !files.length) return;
+  const restant = 3 - ebPhotosData.length;
+  if (restant <= 0) { toast('Maximum 3 photos', 'erreur'); return; }
+  Array.from(files).slice(0, restant).forEach(file => {
+    if (file.size > 50 * 1024 * 1024) { toast(`${file.name} dépasse 50 Mo`, 'erreur'); return; }
+    if (!file.type.startsWith('image/')) { toast(`${file.name} n'est pas une image`, 'erreur'); return; }
+    const url = URL.createObjectURL(file);
+    const idx = ebPhotosData.length;
+    ebPhotosData.push(url); ebPhotosUploading.push(true); ebPhotosErreur.push(false);
+    ebMajPhotosGrid(); ebMajBudget();
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(file, path).then(r => {
+        ebPhotosUploading[idx] = false;
+        if (r.error || !r.data) { ebPhotosErreur[idx] = true; toast(`⚠️ Échec de l'envoi de ${file.name}`, 'erreur'); }
+        else ebPhotosData[idx] = r.data.publicUrl;
+        ebMajPhotosGrid();
+      });
+    } else { ebPhotosUploading[idx] = false; }
+  });
+  document.getElementById('eb-photos-input').value = '';
+}
+
+function ebSupprimerPhoto(idx) {
+  const [url] = ebPhotosData.splice(idx, 1);
+  ebPhotosUploading.splice(idx, 1); ebPhotosErreur.splice(idx, 1);
+  if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+  ebMajPhotosGrid(); ebMajBudget();
+}
+
+function ebMajPhotosGrid() {
+  const grid = document.getElementById('eb-photos-grid');
+  if (!grid) return;
+  grid.innerHTML = ebPhotosData.map((src, i) => `
+    <div style="position:relative;width:56px;height:56px">
+      <img src="${src}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;border:1.5px solid var(--gris-mid)">
+      <button onclick="ebSupprimerPhoto(${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--rouge);color:#fff;border:none;font-size:10px;cursor:pointer;line-height:1">✕</button>
+      ${ebPhotosUploading[i] ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff">⏳</div>' : ''}
+    </div>`).join('');
+}
+
+function ebChargerVideo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formatsAcceptes = ['video/mp4','video/webm','video/quicktime'];
+  if (!formatsAcceptes.includes(file.type)) { toast('Format vidéo non supporté (MP4, WEBM, MOV uniquement)', 'erreur'); input.value=''; return; }
+  if (file.size > 150 * 1024 * 1024) { toast('Vidéo trop lourde (max 150 Mo)', 'erreur'); input.value=''; return; }
+  const url = URL.createObjectURL(file);
+  ebVideoData = url; ebVideoUploading = true; ebVideoErreur = false;
+  const vid = document.getElementById('eb-video-el');
+  vid.src = url;
+  vid.onloadedmetadata = () => {
+    ebVideoDuree = vid.duration;
+    if (ebVideoDuree > VIDEO_DUREE_MAX) {
+      toast(`Vidéo trop longue (max ${VIDEO_DUREE_MAX/60} min). Elle sera tronquée à ${VIDEO_DUREE_MAX/60} min.`,'erreur');
+      ebVideoDuree = VIDEO_DUREE_MAX;
+    }
+    document.getElementById('eb-video-preview').style.display = 'block';
+    document.getElementById('eb-video-placeholder').style.display = 'none';
+    const t = document.getElementById('eb-video-tarif');
+    if (t) t.textContent = `${Math.round(ebVideoDuree)}s`;
+    ebMajBudget();
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${file.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(file, path, 'campagnes-videos').then(r => {
+        ebVideoUploading = false;
+        if (r.error || !r.data) { ebVideoErreur = true; toast(`⚠️ Échec de l'envoi de la vidéo`, 'erreur'); }
+        else ebVideoData = r.data.publicUrl;
+      });
+    } else { ebVideoUploading = false; }
+  };
 }
 
 async function sauvegarderEditBanniere(id) {
@@ -16518,33 +16684,49 @@ async function sauvegarderEditBanniere(id) {
   const fin       = document.getElementById('eb-fin').value;
   if (!annonceur || !slogan || !debut || !fin) { toast('Champs obligatoires manquants', 'erreur'); return; }
   if (debut > fin) { toast('Date de fin antérieure au début', 'erreur'); return; }
-  const avant = { ...b };
-  b.annonceur   = annonceur;
-  b.slogan      = slogan;
-  b.lien        = document.getElementById('eb-lien').value.trim() || '#';
-  b.couleur     = document.getElementById('eb-couleur').value;
-  b.position    = document.getElementById('eb-position').value;
-  b.debut       = debut;
-  b.fin         = fin;
-  b.budget      = parseFloat(document.getElementById('eb-budget').value) || 0;
-  b.impressions = parseInt(document.getElementById('eb-impressions').value) || 0;
-  b.clics       = parseInt(document.getElementById('eb-clics').value) || 0;
-  document.getElementById('modal-edit-banniere').remove();
-  renderAdminPub();
-  renderBannieresSite();
-  const r = await DAO_PERSIST.banniereMaj(id, {
-    annonceur: b.annonceur, slogan: b.slogan, lien: b.lien, couleur: b.couleur,
-    position: b.position, debut: b.debut, fin: b.fin, budget: b.budget,
-    impressions: b.impressions, clics: b.clics
-  });
-  if (r && r.error) {
-    Object.assign(b, avant);
+  if (ebLogoUploading || ebPhotosUploading.some(u=>u) || ebVideoUploading) { toast('⏳ Envoi des médias en cours, patientez…', 'erreur'); return; }
+  if (ebLogoErreur || ebPhotosErreur.some(e=>e) || ebVideoErreur) { toast('⚠️ Un média n\'a pas pu être envoyé — retirez-le ou réessayez', 'erreur'); return; }
+
+  const jours = tarifDiffusionJours(debut, fin);
+  const nouveauTotal = jours * TARIF_BASE_JOUR + tarifMedias(ebPhotosData.length, ebVideoDuree);
+  const ancienBudget = b.budget || 0;
+  const difference = nouveauTotal - ancienBudget;
+
+  const champs = {
+    annonceur, slogan,
+    lien: document.getElementById('eb-lien').value.trim() || '#',
+    couleur: document.getElementById('eb-couleur').value,
+    position: document.getElementById('eb-position').value,
+    debut, fin,
+    budget: nouveauTotal,
+    logo: ebLogoData, photos: [...ebPhotosData], video: ebVideoData, videoDuree: ebVideoDuree,
+    impressions: parseInt(document.getElementById('eb-impressions').value) || 0,
+    clics: parseInt(document.getElementById('eb-clics').value) || 0,
+  };
+
+  const appliquer = async () => {
+    const avant = { ...b };
+    Object.assign(b, champs);
+    document.getElementById('modal-edit-banniere')?.remove();
+    ebLogoData = null; ebPhotosData = []; ebVideoData = null; ebVideoDuree = 0;
     renderAdminPub();
     renderBannieresSite();
-    toast('Échec : modification non enregistrée', 'erreur');
-    return;
+    const r = await DAO_PERSIST.banniereMaj(id, champs);
+    if (r && r.error) {
+      Object.assign(b, avant);
+      renderAdminPub();
+      renderBannieresSite();
+      toast('Échec : modification non enregistrée', 'erreur');
+      return;
+    }
+    toast(`Bannière "${annonceur}" mise à jour ✅${difference > 0 ? ` — complément de ${fmtFCFA(difference)} réglé` : ''}`);
+  };
+
+  if (difference > 0) {
+    ouvrirModalPaiement(difference, `Complément bannière "${annonceur}"`, appliquer);
+  } else {
+    appliquer();
   }
-  toast(`Bannière "${annonceur}" mise à jour ✅`);
 }
 
 // ── Variables globales médias bannière ──
@@ -16571,35 +16753,42 @@ function tarifVideoParDuree(duree) {
   return 40000 + tranche * 30000;
 }
 
-function tarifMedias() {
-  let extra = 0;
-  if (pubPhotosData.length === 1) extra += 15000;
-  else if (pubPhotosData.length <= 3) extra += 25000;
-  else if (pubPhotosData.length <= 5) extra += 35000;
-  extra += tarifVideoParDuree(pubVideoDuree);
-  return extra;
+// Tarif photos seul, réutilisable (création ET modification de bannière).
+function tarifPhotos(nbPhotos) {
+  if (nbPhotos === 1) return 15000;
+  if (nbPhotos >= 2 && nbPhotos <= 3) return 25000;
+  if (nbPhotos >= 4 && nbPhotos <= 5) return 35000;
+  return 0;
+}
+
+// nbPhotos/videoDuree optionnels : sans argument, retombe sur l'état du
+// formulaire de création (pubPhotosData/pubVideoDuree) — compatibilité.
+function tarifMedias(nbPhotos, videoDuree) {
+  if (nbPhotos == null) nbPhotos = pubPhotosData.length;
+  if (videoDuree == null) videoDuree = pubVideoDuree;
+  return tarifPhotos(nbPhotos) + tarifVideoParDuree(videoDuree);
+}
+
+function tarifDiffusionJours(debut, fin) {
+  if (!debut || !fin || fin < debut) return 0;
+  return Math.round((new Date(fin) - new Date(debut)) / 86400000) + 1;
 }
 
 function majBudgetAuto() {
   const debut = document.getElementById('pub-debut')?.value;
   const fin = document.getElementById('pub-fin')?.value;
-  let base = 0;
-  if (debut && fin && fin >= debut) {
-    const jours = Math.round((new Date(fin) - new Date(debut)) / 86400000) + 1;
-    base = jours * TARIF_BASE_JOUR;
-  }
+  const jours = tarifDiffusionJours(debut, fin);
+  const base = jours * TARIF_BASE_JOUR;
   const total = base + tarifMedias();
   const budgetEl = document.getElementById('pub-budget');
   if (budgetEl) budgetEl.value = total || '';
   const detail = document.getElementById('pub-budget-detail');
   if (detail && total > 0) {
-    const jours = debut && fin ? Math.round((new Date(fin) - new Date(debut)) / 86400000) + 1 : 0;
-    const med = tarifMedias();
     detail.style.display = 'block';
     detail.innerHTML = `
       💰 <strong>Détail budget :</strong>
       Base diffusion ${jours}j × ${fmtFCFA(TARIF_BASE_JOUR)} = <strong>${fmtFCFA(base)}</strong>
-      ${pubPhotosData.length ? ` &nbsp;+&nbsp; Photos (${pubPhotosData.length}) = <strong>${fmtFCFA(pubPhotosData.length===1?15000:pubPhotosData.length<=3?25000:35000)}</strong>` : ''}
+      ${pubPhotosData.length ? ` &nbsp;+&nbsp; Photos (${pubPhotosData.length}) = <strong>${fmtFCFA(tarifPhotos(pubPhotosData.length))}</strong>` : ''}
       ${pubVideoDuree > 0 ? ` &nbsp;+&nbsp; Vidéo ${Math.round(pubVideoDuree)}s = <strong>${fmtFCFA(tarifVideoParDuree(pubVideoDuree))}</strong>` : ''}
       &nbsp;→ <strong style="font-size:16px">${fmtFCFA(total)}</strong>`;
   } else if (detail) { detail.style.display='none'; }
