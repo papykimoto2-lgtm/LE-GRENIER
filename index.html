@@ -22736,7 +22736,7 @@ async function smValiderCommande() {
   const byMag = {};
   SM_PANIER.forEach(({produit:p,qty}) => {
     if(!byMag[p.magId]) byMag[p.magId]=[];
-    byMag[p.magId].push({nom:p.nom, ico:p.ico, prix:p.prix, qty});
+    byMag[p.magId].push({nom:p.nom, ico:p.ico, prix:p.prix, qty, produit_id:p.id});
   });
   const nom = document.getElementById('sm-addr-nom')?.value||SESSION?.prenom+' '+SESSION?.nom||'Client';
   const tel = document.getElementById('sm-addr-tel')?.value||SESSION?.tel||'';
