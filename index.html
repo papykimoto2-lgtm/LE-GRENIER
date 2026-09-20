@@ -2676,6 +2676,14 @@
           },
           getPublicUrl(path) {
             return { data: { publicUrl: `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}` } };
+          },
+          // Pour un bucket PRIVÉ (ex. documents d'identité livreur) : génère
+          // une URL temporaire signée, seule façon d'accéder au fichier sans
+          // exposer un lien public permanent.
+          async createSignedUrl(path, expiresIn) {
+            const r = await _xhr('POST', `${SUPABASE_URL}/storage/v1/object/sign/${bucket}/${path}`, { expiresIn: expiresIn || 300 });
+            if (r.error || !r.data || !r.data.signedURL) return { data: null, error: r.error || { message: 'Signature échouée' } };
+            return { data: { signedUrl: `${SUPABASE_URL}/storage/v1${r.data.signedURL}` }, error: null };
           }
         };
       }
@@ -3282,6 +3290,24 @@
         tel: record.tel, tarif: record.tarif, delai: record.delai, photo: record.photo || null
       }, { Prefer: 'return=representation' });
       if (r.error) console.error('[persist] livreur', r.error);
+      return r;
+    },
+    // Documents d'identité — table séparée, jamais lisible publiquement
+    // (voir livreurs_documents_lecture_proprietaire/_admin), à l'inverse de
+    // `livreurs` dont le SELECT est public pour l'annuaire client.
+    async livreurDocuments(record) {
+      if (MODE !== 'remote') return { data: null, error: null };
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/livreurs_documents', {
+        utilisateur_id: record.userId, doc_cni: record.docCni, doc_permis: record.docPermis,
+        doc_carte_grise: record.docCarteGrise, doc_assurance: record.docAssurance
+      }, { Prefer: 'return=representation' });
+      if (r.error) console.error('[persist] livreurDocuments', r.error);
+      return r;
+    },
+    async livreurDocumentsMaj(id, patch) {
+      if (MODE !== 'remote') return { data: null, error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/livreurs_documents?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] livreurDocumentsMaj', r.error);
       return r;
     },
   };
@@ -6310,8 +6336,10 @@
             </div>
             <div id="livr-reg-photo-manquante" style="display:none;color:#DC2626;font-size:12px;font-weight:600;margin-top:6px">⚠️ Photo obligatoire pour rejoindre les livreurs</div>
           </div>
-          <div style="background:#FEF2F2;border-radius:var(--radius);padding:12px;font-size:12px;color:#991B1B;border:1px solid rgba(220,38,38,.15);margin-bottom:14px">
-            📋 Documents requis à l'inscription : CNI · Permis de conduire · Carte grise · Attestation d'assurance
+          <div class="form-group">
+            <label>Documents d'identité *</label>
+            <div style="font-size:12px;color:var(--gris-text);margin:-2px 0 8px">Photo ou scan lisible (JPG/PNG/PDF, max 8 Mo chacun). Consultés uniquement par vous et l'équipe Le Grenier CI — jamais publics.</div>
+            <div id="livr-reg-docs-liste" style="display:flex;flex-direction:column;gap:8px"></div>
           </div>
           <button class="btn w-full" onclick="inscrireLivreur()" style="background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;padding:13px;font-size:15px;font-weight:700;border-radius:var(--radius)">Rejoindre comme livreur</button>
         </div>
@@ -8348,7 +8376,7 @@ const CGU_DATE    = '2026-05-16';
       </div>
       <div class="admin-nav">
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
-        <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');livrRafraichir(renderAdminLivraisons)">Livraisons</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-livraisons');livrRafraichir(renderAdminLivraisons);chargerAdminLivreursDocuments()">Livraisons</button>
         <button class="admin-nav-btn" id="admin-nav-inscriptions" onclick="adminTab(this,'admin-inscriptions')">Inscriptions <span id="admin-nav-badge-inscriptions" style="display:none;background:var(--or);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-profil');renderAdminProfil()">Profil & Paiements</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-tarifs');renderAdminTarifs()">Tarifs & Plans</button>
@@ -8776,6 +8804,31 @@ const CGU_DATE    = '2026-05-16';
             </thead>
             <tbody id="livr-admin-tbody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Candidatures livreurs — documents d'identité -->
+      <div class="admin-section" style="margin-top:24px">
+        <div class="admin-section-titre" style="display:flex;align-items:center;gap:10px">
+          📋 Candidatures livreurs — documents d'identité
+          <button onclick="chargerAdminLivreursDocuments()" style="padding:5px 12px;background:var(--vert);color:#fff;border:none;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer">↺ Actualiser</button>
+        </div>
+        <div style="font-size:12px;color:var(--gris-text);margin-bottom:14px">CNI, permis, carte grise et attestation d'assurance soumis à l'inscription — jamais publics, visibles uniquement ici.</div>
+        <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);overflow:hidden;box-shadow:var(--shadow-sm)">
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead>
+                <tr style="background:var(--vert);color:#fff;text-align:left">
+                  <th style="padding:11px 14px">Livreur</th>
+                  <th style="padding:11px 14px">Documents</th>
+                  <th style="padding:11px 14px">Statut</th>
+                  <th style="padding:11px 14px">Soumis le</th>
+                  <th style="padding:11px 14px;text-align:center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-livr-docs-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -20738,6 +20791,70 @@ async function livrRafraichirHistorique() {
 // ══════════════════════════════════════════
 //  ADMIN — SUIVI LIVRAISONS
 // ══════════════════════════════════════════
+// ── Documents d'identité des candidats livreurs (admin) ──
+// Table séparée + bucket privé (voir migration livreurs_documents) : jamais
+// exposés publiquement, contrairement à l'annuaire `livreurs` lui-même.
+let ADMIN_LIVR_DOCS = [];
+
+async function chargerAdminLivreursDocuments() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote') return;
+  const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/livreurs_documents?select=*&order=created_at.desc');
+  if (r.error) { console.error('[admin] chargement documents livreurs échoué', r.error); return; }
+  ADMIN_LIVR_DOCS = r.data || [];
+  renderAdminLivreursDocuments();
+}
+
+function renderAdminLivreursDocuments() {
+  const tbody = document.getElementById('admin-livr-docs-tbody');
+  if (!tbody) return;
+  if (!ADMIN_LIVR_DOCS.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--gris-text)">Aucune candidature pour l\'instant.</td></tr>';
+    return;
+  }
+  const docLabels = { doc_cni: 'CNI', doc_permis: 'Permis', doc_carte_grise: 'Carte grise', doc_assurance: 'Assurance' };
+  const statutBadge = { en_attente: ['⏳ En attente', '#92400E', '#FEF3C7'], verifie: ['✅ Vérifié', '#065F46', '#D1FAE5'], rejete: ['❌ Rejeté', '#991B1B', '#FEE2E2'] };
+  tbody.innerHTML = ADMIN_LIVR_DOCS.map(d => {
+    const u = DAO._local.utilisateurs.find(x => x.id === d.utilisateur_id);
+    const nom = u ? escapeHtml(u.prenom + ' ' + u.nom) : ('Utilisateur #' + d.utilisateur_id);
+    const liens = Object.keys(docLabels).filter(k => d[k]).map(k =>
+      `<button onclick="adminVoirDocumentLivreur('${d[k]}')" style="background:none;border:none;color:var(--vert);font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline;padding:0;margin-right:8px">${docLabels[k]}</button>`
+    ).join('');
+    const [label, color, bg] = statutBadge[d.statut] || statutBadge.en_attente;
+    return `<tr style="border-top:1px solid var(--gris-clair)">
+      <td style="padding:10px 14px">${nom}</td>
+      <td style="padding:10px 14px">${liens || '—'}</td>
+      <td style="padding:10px 14px"><span style="background:${bg};color:${color};padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${label}</span></td>
+      <td style="padding:10px 14px;font-size:12px;color:var(--gris-text)">${new Date(d.created_at).toLocaleDateString('fr-FR')}</td>
+      <td style="padding:10px 14px;text-align:center;white-space:nowrap">
+        ${d.statut !== 'verifie' ? `<button onclick="adminMajStatutDocumentLivreur(${d.id},'verifie')" title="Vérifier" style="padding:4px 8px;font-size:11px;background:#0D5C35;color:#fff;border:none;border-radius:5px;cursor:pointer;margin-right:4px">✅</button>` : ''}
+        ${d.statut !== 'rejete' ? `<button onclick="adminMajStatutDocumentLivreur(${d.id},'rejete')" title="Rejeter" style="padding:4px 8px;font-size:11px;background:#DC2626;color:#fff;border:none;border-radius:5px;cursor:pointer">❌</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function adminVoirDocumentLivreur(path) {
+  const r = await _supa.storage.from('livreurs-documents').createSignedUrl(path, 300);
+  if (r.error || !r.data) { toast('⚠️ Impossible d\'ouvrir ce document', 'erreur'); return; }
+  window.open(r.data.signedUrl, '_blank');
+}
+
+async function adminMajStatutDocumentLivreur(id, statut) {
+  const doc = ADMIN_LIVR_DOCS.find(d => d.id === id);
+  if (!doc) return;
+  const avant = doc.statut;
+  doc.statut = statut;
+  renderAdminLivreursDocuments();
+  const r = await DAO_PERSIST.livreurDocumentsMaj(id, { statut });
+  if (r && r.error) {
+    doc.statut = avant;
+    renderAdminLivreursDocuments();
+    toast('Échec : statut non enregistré', 'erreur');
+    return;
+  }
+  toast(statut === 'verifie' ? '✅ Documents vérifiés' : '❌ Documents rejetés');
+}
+
 function renderAdminLivraisons() {
   const filtreStatut = document.getElementById('livr-admin-filtre-statut')?.value || 'tous';
   const filtreType   = document.getElementById('livr-admin-filtre-type')?.value   || 'tous';
@@ -21072,7 +21189,10 @@ function livrTab(id) {
   const section = document.getElementById(id);
   if (section) section.classList.add('actif');
   document.querySelectorAll('.livr-tab').forEach(t => { if (t.getAttribute('onclick')?.includes(id)) t.classList.add('actif'); });
-  if (id === 'livr-devenir' && typeof restaurerBrouillonLivreur === 'function') restaurerBrouillonLivreur();
+  if (id === 'livr-devenir') {
+    if (typeof restaurerBrouillonLivreur === 'function') restaurerBrouillonLivreur();
+    if (typeof renderLivrDocsUpload === 'function') renderLivrDocsUpload();
+  }
 }
 
 function selLivrType(type) {
@@ -21558,6 +21678,72 @@ function effacerBrouillonLivreur() {
   try { localStorage.removeItem(LIVR_BROUILLON_KEY); } catch (e) {}
 }
 
+// ── Documents d'identité du livreur (CNI, permis, carte grise, assurance) ──
+// Stockés dans un bucket PRIVÉ (livreurs-documents) + table livreurs_documents
+// jamais lisible publiquement (contrairement à `livreurs`, dont l'annuaire
+// est public) — voir la migration correspondante.
+const LIVR_DOCS_CONFIG = [
+  { key: 'cni', label: "Carte Nationale d'Identité (CNI)" },
+  { key: 'permis', label: 'Permis de conduire' },
+  { key: 'carteGrise', label: 'Carte grise du véhicule' },
+  { key: 'assurance', label: "Attestation d'assurance" },
+];
+let LIVR_DOCS = {}; // { [key]: { nom, file, uploading, erreur, path } }
+
+function renderLivrDocsUpload() {
+  const zone = document.getElementById('livr-reg-docs-liste');
+  if (!zone) return;
+  zone.innerHTML = LIVR_DOCS_CONFIG.map(d => {
+    const doc = LIVR_DOCS[d.key];
+    const ok = doc && !doc.uploading && !doc.erreur;
+    const statut = !doc ? 'Aucun fichier' : doc.uploading ? '⏳ Envoi en cours…' : doc.erreur ? '⚠️ Échec de l\'envoi' : '✅ ' + escapeHtml(doc.nom);
+    return `
+    <div style="display:flex;align-items:center;gap:10px;border:1.5px solid ${ok ? 'rgba(13,92,53,.25)' : 'rgba(220,38,38,.25)'};border-radius:var(--radius);padding:10px 12px;background:${ok ? '#F0FAF4' : '#FEF2F2'}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:var(--noir)">${d.label}</div>
+        <div style="font-size:11px;color:${doc && doc.erreur ? '#DC2626' : 'var(--gris-text)'}">${statut}</div>
+      </div>
+      <label style="font-size:11px;font-weight:700;color:#DC2626;cursor:pointer;flex-shrink:0;white-space:nowrap">
+        ${doc ? 'Changer' : 'Choisir'}
+        <input type="file" accept="image/*,.pdf" style="display:none" onchange="livrChargerDocument(this,'${d.key}')">
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function livrChargerDocument(input, key) {
+  const f = input.files[0];
+  if (!f) return;
+  if (f.size > 8*1024*1024) { toast('Fichier trop grand (max 8 Mo)', 'erreur'); return; }
+  if (!f.type.startsWith('image/') && f.type !== 'application/pdf') { toast('Format non supporté (image ou PDF)', 'erreur'); return; }
+  LIVR_DOCS[key] = { nom: f.name, file: f, uploading: true };
+  renderLivrDocsUpload();
+  if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined') {
+    const path = `${SESSION?.id || 'anon'}/${key}-${Date.now()}-${f.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+    DAO.uploadPhoto(f, path, 'livreurs-documents').then(r => {
+      if (!LIVR_DOCS[key] || LIVR_DOCS[key].file !== f) return; // fichier changé entre-temps
+      LIVR_DOCS[key].uploading = false;
+      if (r.error || !r.data) {
+        LIVR_DOCS[key].erreur = true;
+        toast('⚠️ Échec de l\'envoi du document', 'erreur');
+      } else {
+        LIVR_DOCS[key].path = path; // bucket privé : on garde le CHEMIN, jamais d'URL publique
+        LIVR_DOCS[key].erreur = false;
+      }
+      renderLivrDocsUpload();
+    });
+  } else {
+    LIVR_DOCS[key].uploading = false;
+    LIVR_DOCS[key].path = 'demo/' + f.name;
+  }
+  input.value = '';
+}
+
+function effacerDocumentsLivreur() {
+  LIVR_DOCS = {};
+  renderLivrDocsUpload();
+}
+
 // ── Photo d'identification du livreur (obligatoire à l'inscription) ──
 let LIVR_REG_PHOTO = null; // { src, file, uploading, erreur, uploaded }
 
@@ -21632,7 +21818,16 @@ async function inscrireLivreur() {
   }
   if (LIVR_REG_PHOTO.uploading) { toast('⏳ Envoi de la photo en cours, patientez…', 'erreur'); return; }
   if (LIVR_REG_PHOTO.erreur) { toast('⚠️ La photo n\'a pas pu être envoyée — réessayez', 'erreur'); return; }
-  const typeMap = {'Moto (jusqu\'à 15 kg)':'Moto','Tricycle (15–100 kg)':'Tricycle','Camionnette (jusqu\'à 500 kg)':'Camionnette','Camion cargo (500 kg+)':'Cargo'};
+  const docsManquants = LIVR_DOCS_CONFIG.filter(d => !LIVR_DOCS[d.key] || LIVR_DOCS[d.key].erreur);
+  if (docsManquants.length) {
+    toast('Documents manquants : ' + docsManquants.map(d => d.label).join(', '), 'erreur');
+    return;
+  }
+  if (LIVR_DOCS_CONFIG.some(d => LIVR_DOCS[d.key]?.uploading)) {
+    toast('⏳ Envoi des documents en cours, patientez…', 'erreur');
+    return;
+  }
+  const typeMap ={'Moto (jusqu\'à 15 kg)':'Moto','Tricycle (15–100 kg)':'Tricycle','Camionnette (jusqu\'à 500 kg)':'Camionnette','Camion cargo (500 kg+)':'Cargo'};
   const icoMap = {'Moto':'🛵','Tricycle':'🛺','Camionnette':'🚐','Cargo':'🚚'};
   const tarifMap = {'Moto':1000,'Tricycle':1500,'Camionnette':8000,'Cargo':15000};
   const type = typeMap[vehicle] || 'Moto';
@@ -21661,9 +21856,18 @@ async function inscrireLivreur() {
     return;
   }
   if (r && r.data && r.data[0]) newL.id = r.data[0].id;
-  toast(`🛵 Candidature de "${SESSION.prenom}" acceptée ! Vous apparaissez dans la liste des livreurs. ✅`);
+  const rDocs = await DAO_PERSIST.livreurDocuments({
+    userId: SESSION.id, docCni: LIVR_DOCS.cni.path, docPermis: LIVR_DOCS.permis.path,
+    docCarteGrise: LIVR_DOCS.carteGrise.path, docAssurance: LIVR_DOCS.assurance.path
+  });
+  if (rDocs && rDocs.error) {
+    toast('⚠️ Candidature enregistrée, mais l\'envoi des documents a échoué — contactez le support', 'erreur');
+  } else {
+    toast(`🛵 Candidature de "${SESSION.prenom}" acceptée ! Vous apparaissez dans la liste des livreurs. ✅`);
+  }
   ['livr-reg-nom','livr-reg-tel'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   livrSupprimerPhoto();
+  effacerDocumentsLivreur();
   effacerBrouillonLivreur();
   renderLivreurs();
   livrTab('livr-livreurs');
