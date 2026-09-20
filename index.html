@@ -3399,6 +3399,22 @@
     return { ok: true, data: r.data };
   };
 
+  // Génération de texte par IA (edge function generer-texte-ia, réservée
+  // aux admins) — la clé de l'API IA reste un secret côté serveur, jamais
+  // exposée au client.
+  window.genererTexteIA = async function(type, contexte) {
+    if (MODE !== 'remote') return { ok: false, error: 'Fonction indisponible en mode démo local' };
+    const token = (typeof _supa !== 'undefined') ? _supa.auth.getAccessToken() : null;
+    if (!token) return { ok: false, error: 'Session admin expirée, reconnectez-vous' };
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/generer-texte-ia',
+      { type, contexte }, { Authorization: 'Bearer ' + token });
+    if (r.error || !r.data || !r.data.success) {
+      const msg = (r.data && r.data.error) || r.error?.message || 'Échec de la génération IA';
+      return { ok: false, error: msg };
+    }
+    return { ok: true, texte: r.data.texte };
+  };
+
   // Incrémente usages d'un code promo — en RPC (SECURITY DEFINER) car promos
   // n'est modifiable que par un admin via RLS : un PATCH direct depuis le
   // compte de l'utilisateur qui publie serait toujours rejeté.
@@ -8360,7 +8376,12 @@ const CGU_DATE    = '2026-05-16';
         <div class="admin-section-titre">Créer une bannière</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px">
           <div class="form-group" style="margin:0"><label>Annonceur *</label><input type="text" id="pub-annonceur" placeholder="Ex: Nestlé CI, CFAO…" oninput="majPubPreview()"></div>
-          <div class="form-group" style="margin:0"><label>Slogan *</label><input type="text" id="pub-slogan" placeholder="Votre message publicitaire" oninput="majPubPreview()"></div>
+          <div class="form-group" style="margin:0"><label>Slogan *</label>
+            <div style="display:flex;gap:6px">
+              <input type="text" id="pub-slogan" placeholder="Votre message publicitaire" oninput="majPubPreview()" style="flex:1">
+              <button type="button" onclick="genererSloganBanniereIA()" title="Générer avec l'IA" style="flex-shrink:0;padding:0 12px;border:1.5px solid var(--vert);border-radius:var(--radius);background:var(--vert-pale);color:var(--vert);font-size:13px;cursor:pointer" id="pub-slogan-ia-btn">🤖</button>
+            </div>
+          </div>
           <div class="form-group" style="margin:0"><label>Lien destination</label><input type="url" id="pub-lien" placeholder="https://…"></div>
           <div class="form-group" style="margin:0"><label>Couleur fond</label><input type="color" id="pub-couleur" value="#0D5C35" style="height:42px;border-radius:var(--radius);border:1.5px solid var(--gris-mid);width:100%;cursor:pointer" oninput="majPubPreview()"></div>
           <div class="form-group" style="margin:0">
@@ -13348,6 +13369,10 @@ function adminEditerAnnonce(id) {
       <div class="form-group"><label>Catégorie</label><input type="text" id="aea-cat" value="${escapeHtml(a.cat||'')}"></div>
       <div class="form-group"><label>Prix (FCFA)</label><input type="number" id="aea-valeur" value="${a.valeur||0}" min="0" step="100"></div>
       <div class="form-group"><label>Ville</label><input type="text" id="aea-ville" value="${escapeHtml(a.ville||'')}"></div>
+      <div class="form-group"><label>Description</label>
+        <textarea id="aea-desc" rows="3" style="width:100%;resize:vertical">${escapeHtml(a.desc||'')}</textarea>
+        <button type="button" onclick="genererDescriptionAnnonceIA(${id})" title="Générer avec l'IA" style="margin-top:6px;padding:6px 12px;border:1.5px solid var(--vert);border-radius:var(--radius);background:var(--vert-pale);color:var(--vert);font-size:12px;cursor:pointer" id="aea-desc-ia-btn">🤖 Générer avec l'IA</button>
+      </div>
       <div class="form-group"><label>Statut</label>
         <select id="aea-statut">
           <option value="attente"${a.statut==='attente'?' selected':''}>En attente</option>
@@ -13366,20 +13391,36 @@ function adminEditerAnnonce(id) {
   div.classList.add('open');
 }
 
+async function genererDescriptionAnnonceIA(id) {
+  const titre = document.getElementById('aea-titre').value.trim();
+  if (!titre) { toast('Renseignez d\'abord le titre', 'erreur'); return; }
+  const cat = document.getElementById('aea-cat').value.trim();
+  const valeur = document.getElementById('aea-valeur').value;
+  const btn = document.getElementById('aea-desc-ia-btn');
+  const avant = btn.textContent;
+  btn.textContent = '⏳ Génération…'; btn.disabled = true;
+  const r = await window.genererTexteIA('description-annonce', { titre, categorie: cat, prix: valeur });
+  btn.textContent = avant; btn.disabled = false;
+  if (!r.ok) { toast(r.error, 'erreur'); return; }
+  document.getElementById('aea-desc').value = r.texte;
+  toast('✅ Description générée par l\'IA');
+}
+
 async function adminSauvegarderAnnonce(id) {
   const a = DAO._local.annonces.find(x => x.id === id);
   if (!a) return;
-  const avant = { titre: a.titre, cat: a.cat, valeur: a.valeur, ville: a.ville, statut: a.statut };
+  const avant = { titre: a.titre, cat: a.cat, valeur: a.valeur, ville: a.ville, statut: a.statut, desc: a.desc };
   const titre = document.getElementById('aea-titre').value.trim();
   const cat = document.getElementById('aea-cat').value.trim();
   const valeur = parseInt(document.getElementById('aea-valeur').value) || 0;
   const ville = document.getElementById('aea-ville').value.trim();
   const statut = document.getElementById('aea-statut').value;
+  const desc = document.getElementById('aea-desc').value.trim();
   if (!titre) { toast('Le titre est obligatoire', 'erreur'); return; }
-  Object.assign(a, { titre, cat, valeur, ville, statut });
+  Object.assign(a, { titre, cat, valeur, ville, statut, desc });
   document.getElementById('modal-admin-edit-annonce')?.remove();
   renderAdmin();
-  const r = await DAO_PERSIST.annonceMaj(id, { titre, cat, valeur, ville, statut });
+  const r = await DAO_PERSIST.annonceMaj(id, { titre, cat, valeur, ville, statut, desc_txt: desc });
   if (r && r.error) {
     Object.assign(a, avant);
     renderAdmin();
@@ -17191,6 +17232,20 @@ function majPubPreview() {
   // Démarrer le diaporama dans l'aperçu
   if (_banTimers['preview']) { clearTimeout(_banTimers['preview']); delete _banTimers['preview']; }
   requestAnimationFrame(() => startSlideshow('preview', { photos: pubPhotosData, video: pubVideoData }));
+}
+
+async function genererSloganBanniereIA() {
+  const annonceur = document.getElementById('pub-annonceur').value.trim();
+  if (!annonceur) { toast('Renseignez d\'abord le nom de l\'annonceur', 'erreur'); return; }
+  const btn = document.getElementById('pub-slogan-ia-btn');
+  const avant = btn.textContent;
+  btn.textContent = '⏳'; btn.disabled = true;
+  const r = await window.genererTexteIA('slogan-banniere', { annonceur });
+  btn.textContent = avant; btn.disabled = false;
+  if (!r.ok) { toast(r.error, 'erreur'); return; }
+  document.getElementById('pub-slogan').value = r.texte;
+  majPubPreview();
+  toast('✅ Slogan généré par l\'IA');
 }
 
 async function creerBanniere() {
