@@ -13390,13 +13390,15 @@ function renderMessagerie() {
   if (!SESSION) { goScreen('screen-login'); return; }
   document.querySelector('.msg-layout')?.classList.remove('msg-chat-actif'); // repart sur la liste (mobile)
   const list = document.getElementById('msg-list');
-  const convItems = DAO._local.conversations.map(c=>`
-    <div class="msg-conv-item" data-conv-id="${escapeHtml(String(c.id))}" data-conv-nom="${escapeHtml(c.nom)}">
-      <div class="msg-conv-nom">${escapeHtml(c.nom)}</div>
-      <div style="font-size:11px;color:var(--gris-text);margin-bottom:2px">${escapeHtml(c.annonce)}</div>
-      <div class="msg-conv-apercu">${escapeHtml(c.dernierMsg)}</div>
-    </div>
-  `).join('');
+  const convItems = DAO._local.conversations.length
+    ? DAO._local.conversations.map(c=>`
+      <div class="msg-conv-item" data-conv-id="${escapeHtml(String(c.id))}" data-conv-nom="${escapeHtml(c.nom)}">
+        <div class="msg-conv-nom">${escapeHtml(c.nom)}</div>
+        <div style="font-size:11px;color:var(--gris-text);margin-bottom:2px">${escapeHtml(c.annonce)}</div>
+        <div class="msg-conv-apercu">${escapeHtml(c.dernierMsg)}</div>
+      </div>
+    `).join('')
+    : `<div style="padding:24px 16px;color:var(--gris-text);font-size:13px;text-align:center">Aucune conversation pour l'instant.<br>Contactez un vendeur depuis une annonce pour démarrer une discussion.</div>`;
   list.innerHTML = `<div style="padding:16px;font-weight:600;border-bottom:1px solid var(--gris-mid);font-size:14px">Conversations</div>${convItems}`;
 
   // Délégation d'événement — pas d'attribut onclick avec données utilisateur (anti-XSS)
