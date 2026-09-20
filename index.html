@@ -6266,8 +6266,8 @@
           <div style="font-family:var(--font-titre);font-size:22px;font-weight:700;color:#7F1D1D;margin-bottom:4px">Devenir livreur partenaire</div>
           <div style="font-size:13px;color:var(--gris-text);margin-bottom:20px">Gagnez de l'argent avec votre moto, tricycle ou camion</div>
           <div class="form-row">
-            <div class="form-group"><label>Prénom et Nom *</label><input type="text" id="livr-reg-nom" placeholder="Kouassi Jean"></div>
-            <div class="form-group"><label>Téléphone *</label><input type="tel" id="livr-reg-tel" placeholder="+225 07 XX XX XX XX"></div>
+            <div class="form-group"><label>Prénom et Nom *</label><input type="text" id="livr-reg-nom" placeholder="Kouassi Jean" onchange="sauvegarderBrouillonLivreur()"></div>
+            <div class="form-group"><label>Téléphone *</label><input type="tel" id="livr-reg-tel" placeholder="+225 07 XX XX XX XX" onchange="sauvegarderBrouillonLivreur()"></div>
           </div>
           <div class="form-group"><label>Type de véhicule *</label>
             <select id="livr-reg-vehicle">
@@ -6292,8 +6292,8 @@
           <div class="form-group">
             <label>Votre photo (visage bien visible) *</label>
             <div style="font-size:12px;color:var(--gris-text);margin:-2px 0 8px">Elle sera montrée aux clients pour qu'ils vous identifient facilement à la livraison.</div>
-            <input type="file" id="livr-reg-photo-input" accept="image/*" capture="user" style="display:none" onchange="livrChargerPhoto(this)">
-            <div id="livr-reg-photo-zone" onclick="document.getElementById('livr-reg-photo-input').click()" style="display:flex;align-items:center;gap:12px;border:2px dashed rgba(220,38,38,.3);border-radius:var(--radius);padding:14px;cursor:pointer;background:#FEF2F2">
+            <input type="file" id="livr-reg-photo-input" accept="image/*" style="display:none" onchange="livrChargerPhoto(this)">
+            <div id="livr-reg-photo-zone" onclick="sauvegarderBrouillonLivreur();document.getElementById('livr-reg-photo-input').click()" style="display:flex;align-items:center;gap:12px;border:2px dashed rgba(220,38,38,.3);border-radius:var(--radius);padding:14px;cursor:pointer;background:#FEF2F2">
               <div style="width:52px;height:52px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:1.5px solid rgba(220,38,38,.2)">📷</div>
               <div>
                 <div style="font-size:13px;font-weight:700;color:#7F1D1D">Ajouter ma photo</div>
@@ -21072,6 +21072,7 @@ function livrTab(id) {
   const section = document.getElementById(id);
   if (section) section.classList.add('actif');
   document.querySelectorAll('.livr-tab').forEach(t => { if (t.getAttribute('onclick')?.includes(id)) t.classList.add('actif'); });
+  if (id === 'livr-devenir' && typeof restaurerBrouillonLivreur === 'function') restaurerBrouillonLivreur();
 }
 
 function selLivrType(type) {
@@ -21509,6 +21510,54 @@ async function livrAccepterContrOffre(livraisonId) {
   await livrRafraichirHistorique();
 }
 
+// ── Brouillon d'inscription livreur ──
+// Sur mobile, ouvrir l'appareil photo (input file) met l'onglet en arrière-
+// plan pendant que l'appli caméra tourne ; sur un téléphone peu puissant,
+// l'OS tue parfois le processus du navigateur pour libérer de la mémoire,
+// ce qui se voit comme "l'application se ferme" au retour de la photo et
+// fait perdre tout ce qui avait été saisi. On sauvegarde donc les champs
+// avant d'ouvrir la caméra pour pouvoir les restaurer si l'onglet redémarre.
+const LIVR_BROUILLON_KEY = 'lg_livreur_brouillon';
+
+function sauvegarderBrouillonLivreur() {
+  try {
+    const zones = Array.from(document.querySelectorAll('#livr-devenir input[type=checkbox]')).map(cb => cb.checked);
+    localStorage.setItem(LIVR_BROUILLON_KEY, JSON.stringify({
+      nom: document.getElementById('livr-reg-nom')?.value || '',
+      tel: document.getElementById('livr-reg-tel')?.value || '',
+      vehicle: document.getElementById('livr-reg-vehicle')?.value || '',
+      dispo: document.getElementById('livr-reg-dispo')?.value || '',
+      zones,
+    }));
+  } catch (e) { /* localStorage indisponible (navigation privée...) — tant pis */ }
+}
+
+function restaurerBrouillonLivreur() {
+  let brouillon = null;
+  try { brouillon = JSON.parse(localStorage.getItem(LIVR_BROUILLON_KEY) || 'null'); } catch (e) {}
+  if (!brouillon) return;
+  const nomEl = document.getElementById('livr-reg-nom');
+  const telEl = document.getElementById('livr-reg-tel');
+  if (nomEl && !nomEl.value) nomEl.value = brouillon.nom || '';
+  if (telEl && !telEl.value) telEl.value = brouillon.tel || '';
+  const vehicleEl = document.getElementById('livr-reg-vehicle');
+  if (vehicleEl && brouillon.vehicle) vehicleEl.value = brouillon.vehicle;
+  const dispoEl = document.getElementById('livr-reg-dispo');
+  if (dispoEl && brouillon.dispo) dispoEl.value = brouillon.dispo;
+  if (Array.isArray(brouillon.zones)) {
+    document.querySelectorAll('#livr-devenir input[type=checkbox]').forEach((cb, i) => {
+      if (brouillon.zones[i] !== undefined) cb.checked = brouillon.zones[i];
+    });
+  }
+  if (brouillon.nom || brouillon.tel) {
+    toast('📋 Brouillon restauré — ajoutez à nouveau votre photo pour continuer', 'info');
+  }
+}
+
+function effacerBrouillonLivreur() {
+  try { localStorage.removeItem(LIVR_BROUILLON_KEY); } catch (e) {}
+}
+
 // ── Photo d'identification du livreur (obligatoire à l'inscription) ──
 let LIVR_REG_PHOTO = null; // { src, file, uploading, erreur, uploaded }
 
@@ -21615,6 +21664,7 @@ async function inscrireLivreur() {
   toast(`🛵 Candidature de "${SESSION.prenom}" acceptée ! Vous apparaissez dans la liste des livreurs. ✅`);
   ['livr-reg-nom','livr-reg-tel'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   livrSupprimerPhoto();
+  effacerBrouillonLivreur();
   renderLivreurs();
   livrTab('livr-livreurs');
 }
