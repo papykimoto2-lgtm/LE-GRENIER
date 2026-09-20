@@ -3057,6 +3057,18 @@
   //  PERSISTANCE — écrit vers Supabase en parallèle du cache local
   // ══════════════════════════════════════════════════════════════
   const DAO_PERSIST = {
+    async utilisateurMaj(id, patch) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/utilisateurs?id=eq.' + encodeURIComponent(id), patch, { Prefer: 'return=minimal' });
+      if (r.error) console.error('[persist] utilisateur maj', r.error);
+      return r;
+    },
+    async configurationMaj(cle, valeur) {
+      if (MODE !== 'remote') return { error: null };
+      const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/configuration?on_conflict=cle', { cle, valeur: String(valeur) }, { Prefer: 'resolution=merge-duplicates,return=minimal' });
+      if (r.error) console.error('[persist] configuration maj', r.error);
+      return r;
+    },
     async annonce(record) {
       if (MODE !== 'remote') return { data: null, error: null };
       const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/annonces', {
@@ -7360,7 +7372,7 @@ const CGU_DATE    = '2026-05-16';
           <div class="form-group"><label>Email</label><input type="email" id="profil-email" value="kouassi@exemple.ci"></div>
           <div class="form-group"><label>Téléphone</label><input type="tel" id="profil-tel" value="+225 07 00 00 00 00"></div>
           <div class="form-group"><label>Ville</label><input type="text" id="profil-ville" value="Cocody, Abidjan"></div>
-          <div class="form-group"><label>Nouveau mot de passe (laisser vide = inchangé)</label><input type="password" placeholder="••••••••"></div>
+          <div class="form-group"><label>Nouveau mot de passe (laisser vide = inchangé)</label><input type="password" id="profil-password" placeholder="••••••••"></div>
           <button class="btn btn-primary" onclick="sauverProfil()">Sauvegarder</button>
         </div>
       </div>
@@ -12814,14 +12826,36 @@ function renderMesPaiements(typeFilter) {
   }).join('');
 }
 
-function sauverProfil() {
+async function sauverProfil() {
   if (!SESSION) return;
-  SESSION.prenom = (document.getElementById('profil-nom')?.value||'').split(' ')[0] || SESSION.prenom;
-  SESSION.nom    = (document.getElementById('profil-nom')?.value||'').split(' ').slice(1).join(' ') || SESSION.nom;
+  const avant = { prenom: SESSION.prenom, nom: SESSION.nom, email: SESSION.email, tel: SESSION.tel, ville: SESSION.ville };
+  const nomComplet = (document.getElementById('profil-nom')?.value||'').trim();
+  SESSION.prenom = nomComplet.split(' ')[0] || SESSION.prenom;
+  SESSION.nom    = nomComplet.split(' ').slice(1).join(' ') || SESSION.nom;
   SESSION.email  = document.getElementById('profil-email')?.value || SESSION.email;
   SESSION.tel    = document.getElementById('profil-tel')?.value   || SESSION.tel;
   SESSION.ville  = document.getElementById('profil-ville')?.value || SESSION.ville;
   renderDashboard();
+
+  const r = await DAO_PERSIST.utilisateurMaj(SESSION.id, {
+    prenom: SESSION.prenom, nom: SESSION.nom, email: SESSION.email,
+    tel: SESSION.tel, ville: SESSION.ville, photo: SESSION.photo || null
+  });
+  if (r && r.error) {
+    Object.assign(SESSION, avant);
+    renderDashboard();
+    toast('Échec : profil non enregistré, réessayez', 'erreur');
+    return;
+  }
+
+  const nouveauMdp = document.getElementById('profil-password')?.value;
+  if (nouveauMdp) {
+    const { error: errPwd } = await _supa.auth.updateUser({ password: nouveauMdp });
+    if (errPwd) { toast('Profil enregistré, mais le mot de passe n\'a pas pu être changé', 'erreur'); return; }
+    document.getElementById('profil-password').value = '';
+    toast('✅ Profil et mot de passe mis à jour');
+    return;
+  }
   toast('✅ Profil sauvegardé avec succès');
 }
 
@@ -12831,23 +12865,40 @@ function chargerPhotoProf(input) {
   if (f.size > 5*1024*1024) { toast('Image trop grande (max 5 Mo)', 'erreur'); return; }
   if (!f.type.startsWith('image/')) { toast('Format non supporté', 'erreur'); return; }
   const r = new FileReader();
-  r.onload = e => {
+  r.onload = async e => {
     const src = e.target.result;
+    const avant = SESSION.photo;
     SESSION.photo = src;
     _majAvatarPartout(src);
     document.getElementById('btn-suppr-photo').style.display = 'inline-flex';
+    const res = await DAO_PERSIST.utilisateurMaj(SESSION.id, { photo: src });
+    if (res && res.error) {
+      SESSION.photo = avant;
+      _majAvatarPartout(avant, SESSION.prenom[0]+(SESSION.nom?.[0]||''));
+      toast('Échec : photo non enregistrée, réessayez', 'erreur');
+      return;
+    }
     toast('✅ Photo de profil mise à jour');
   };
   r.readAsDataURL(f);
   input.value = '';
 }
 
-function supprimerPhotoProf() {
+async function supprimerPhotoProf() {
   if (!confirm('Supprimer la photo de profil ?')) return;
+  const avant = SESSION.photo;
   SESSION.photo = null;
   const initiales = SESSION.prenom[0]+(SESSION.nom?.[0]||'');
   _majAvatarPartout(null, initiales);
   document.getElementById('btn-suppr-photo').style.display = 'none';
+  const res = await DAO_PERSIST.utilisateurMaj(SESSION.id, { photo: null });
+  if (res && res.error) {
+    SESSION.photo = avant;
+    _majAvatarPartout(avant, initiales);
+    document.getElementById('btn-suppr-photo').style.display = 'inline-flex';
+    toast('Échec : suppression non enregistrée, réessayez', 'erreur');
+    return;
+  }
   toast('Photo supprimée');
 }
 
@@ -17378,6 +17429,22 @@ window.ADMIN_PROFIL = {
   virementActif: false,
 };
 
+// Charge le profil admin + numéros de paiement depuis Supabase (source de
+// vérité partagée) — appelé au démarrage pour tous les visiteurs, car ces
+// numéros sont utilisés site-wide (PAY_METHODES, WhatsApp admin), pas
+// seulement dans le panneau admin.
+window.chargerProfilAdminDepuisSupabase = async function() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote') return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/configuration?cle=eq.admin_profil_json&select=valeur');
+    if (!r.error && r.data && r.data[0] && r.data[0].valeur) {
+      Object.assign(window.ADMIN_PROFIL, JSON.parse(r.data[0].valeur));
+      if (typeof window.apSyncPayMethodes === 'function') window.apSyncPayMethodes();
+      if (window.ADMIN_PROFIL.tel) window._ADMIN_WA = formaterTelWhatsApp(window.ADMIN_PROFIL.tel);
+    }
+  } catch (e) { console.error('[admin profil] chargement échoué', e); }
+};
+
 window.renderAdminProfil = function() {
   const p = window.ADMIN_PROFIL;
   const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
@@ -17455,7 +17522,7 @@ window.renderAdminProfil = function() {
   apUpdatePayBadge();
 };
 
-window.sauvegarderProfilAdmin = function() {
+window.sauvegarderProfilAdmin = async function() {
   const get = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   const chk = id => { const el = document.getElementById(id); return el ? el.checked : false; };
   const p = window.ADMIN_PROFIL;
@@ -17518,16 +17585,29 @@ window.sauvegarderProfilAdmin = function() {
   }
   apUpdatePayBadge();
 
-  // ── Sync numéros MoMo → CFG (source unique de vérité) ──
+  // ── Sync numéros MoMo → CFG (cache local IndexedDB, secours hors-ligne) ──
   if (p.wave)   { CFG.wave_numero   = p.wave;   }
   if (p.orange) { CFG.orange_numero = p.orange; }
   if (p.mtn)    { CFG.mtn_numero    = p.mtn;    }
   if (p.moov)   { CFG.moov_numero   = p.moov;   }
   sauvegarderCFG(Object.assign({}, CFG));  // persister silencieusement
 
+  // ── Persistance Supabase (source de vérité partagée entre appareils) ──
+  // Ne couvre que window.ADMIN_PROFIL (identité, entreprise, numéros de
+  // réception Mobile Money, virement bancaire — déjà montrés aux clients
+  // lors du paiement, donc sans caractère secret). PAYMENT_CONFIG reste
+  // volontairement local : ses clés d'API de passerelle (CinetPay,
+  // PayDunya...) ne doivent jamais atterrir dans une table lisible
+  // publiquement comme `configuration` — elles n'ont leur place que dans
+  // un vrai backend, comme l'indique déjà le mode démo ci-dessus.
   const st = document.getElementById('ap-save-status');
-  if (st) { st.style.display = 'inline'; setTimeout(() => st.style.display = 'none', 3000); }
-  toast('Profil enregistré');
+  const rCfg = await DAO_PERSIST.configurationMaj('admin_profil_json', JSON.stringify(p));
+  if (rCfg && rCfg.error) {
+    toast('Profil enregistré localement, mais la synchronisation serveur a échoué', 'erreur');
+  } else {
+    if (st) { st.style.display = 'inline'; setTimeout(() => st.style.display = 'none', 3000); }
+    toast('✅ Profil enregistré');
+  }
 };
 
 // Met à jour le badge de statut du système de paiement dans l'onglet admin
@@ -23753,6 +23833,8 @@ if (document.readyState === 'loading') {
       }
       syncCFGUI();
       startAdRotation();
+      // Supabase = source de vérité partagée ; écrase le cache local IndexedDB.
+      if (typeof window.chargerProfilAdminDepuisSupabase === 'function') window.chargerProfilAdminDepuisSupabase();
     });
   });
 } else {
@@ -23767,6 +23849,7 @@ if (document.readyState === 'loading') {
     }
     syncCFGUI();
     startAdRotation();
+    if (typeof window.chargerProfilAdminDepuisSupabase === 'function') window.chargerProfilAdminDepuisSupabase();
   });
 }
 </script>
