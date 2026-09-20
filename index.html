@@ -8829,10 +8829,10 @@ const CGU_DATE    = '2026-05-16';
           <span id="ap-api-badge" style="font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700"></span>
         </div>
         <div style="font-size:12px;color:var(--gris-text);margin-bottom:16px;background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:10px 14px;line-height:1.7">
-          ⚠️ <strong>Important :</strong> Les clés <em>secrètes</em> ne doivent <strong>jamais</strong> être saisies ici — elles restent côté backend (Supabase Edge Function). Saisissez uniquement les identifiants <strong>publics</strong> fournis par votre prestataire dans son tableau de bord marchand.
+          ⚠️ <strong>Important :</strong> Aucune clé — publique ou secrète — ne se saisit ici. Le backend de paiement est intégré à l'application (Edge Functions Supabase <code>paiement</code> / <code>paiement-webhook</code>) et détient ses propres identifiants, configurés une fois pour toutes comme <strong>secrets Supabase</strong> (Project Settings → Edge Functions → Secrets) : <code>CINETPAY_API_KEY</code>, <code>CINETPAY_SITE_ID</code>. Rien de tout cela ne transite jamais par le navigateur.
         </div>
 
-        <!-- Mode + Backend -->
+        <!-- Mode -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
           <div>
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gris-text);margin-bottom:6px">Mode de fonctionnement</label>
@@ -8840,7 +8840,7 @@ const CGU_DATE    = '2026-05-16';
               <option value="demo">DEMO — Simulation (aucun argent réel)</option>
               <option value="production">PRODUCTION — Paiements réels</option>
             </select>
-            <div style="font-size:11px;color:var(--gris-text);margin-top:4px">Basculez en PRODUCTION uniquement après avoir configuré votre backend et testé en DEMO.</div>
+            <div style="font-size:11px;color:var(--gris-text);margin-top:4px">Basculez en PRODUCTION uniquement après avoir configuré les secrets CinetPay côté Supabase et testé en DEMO.</div>
           </div>
           <div>
             <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gris-text);margin-bottom:6px">Prestataire par défaut</label>
@@ -8850,25 +8850,6 @@ const CGU_DATE    = '2026-05-16';
               <option value="wave">Wave Business</option>
               <option value="flutterwave">Flutterwave</option>
             </select>
-          </div>
-        </div>
-
-        <!-- URL Backend -->
-        <div style="margin-bottom:16px">
-          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gris-text);margin-bottom:6px">URL de votre Backend (Supabase Edge Function)</label>
-          <input id="ap-pay-backend" type="url" placeholder="https://VOTRE-PROJET.supabase.co/functions/v1/paiement" style="width:100%;padding:9px 12px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
-          <div style="font-size:11px;color:var(--gris-text);margin-top:4px">C'est l'URL unique que votre backend expose pour recevoir les demandes de paiement.</div>
-        </div>
-
-        <!-- URLs Retour & Webhook -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-          <div>
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gris-text);margin-bottom:6px">URL de retour après paiement</label>
-            <input id="ap-pay-return" type="url" placeholder="https://grenier.ci/merci" style="width:100%;padding:9px 12px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
-          </div>
-          <div>
-            <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gris-text);margin-bottom:6px">URL Webhook (confirmation automatique)</label>
-            <input id="ap-pay-notify" type="url" placeholder="https://PROJET.supabase.co/functions/v1/webhook-paiement" style="width:100%;padding:9px 12px;border:1.5px solid var(--gris-mid);border-radius:var(--radius);font-size:13px;font-family:var(--font-corps);outline:none">
           </div>
         </div>
 
@@ -8888,14 +8869,7 @@ const CGU_DATE    = '2026-05-16';
               </div>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ap-cinetpay-actif" onchange="apUpdatePayBadge()"> Actif</label>
             </div>
-            <div style="margin-bottom:8px">
-              <label style="display:block;font-size:10px;font-weight:700;color:var(--gris-text);margin-bottom:3px">SITE ID (public)</label>
-              <input id="ap-cinetpay-siteid" type="text" placeholder="Ex : 1234567" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris-mid);border-radius:8px;font-size:12px;font-family:var(--font-corps);outline:none">
-            </div>
-            <div>
-              <label style="display:block;font-size:10px;font-weight:700;color:var(--gris-text);margin-bottom:3px">API KEY (publique)</label>
-              <input id="ap-cinetpay-apikey" type="text" placeholder="Ex : cle-publique-cinetpay" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris-mid);border-radius:8px;font-size:12px;font-family:var(--font-corps);outline:none">
-            </div>
+            <div style="font-size:11px;color:var(--gris-text)">SITE_ID / API_KEY : secrets Supabase <code>CINETPAY_SITE_ID</code> / <code>CINETPAY_API_KEY</code> (jamais ici).</div>
             <div style="margin-top:8px;font-size:10px;color:#0052CC">🔗 <a href="https://cinetpay.com" target="_blank" style="color:#0052CC;text-decoration:underline">Ouvrir compte CinetPay →</a></div>
           </div>
 
@@ -8911,14 +8885,7 @@ const CGU_DATE    = '2026-05-16';
               </div>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ap-paydunya-actif" onchange="apUpdatePayBadge()"> Actif</label>
             </div>
-            <div style="margin-bottom:8px">
-              <label style="display:block;font-size:10px;font-weight:700;color:var(--gris-text);margin-bottom:3px">MASTER KEY (publique)</label>
-              <input id="ap-paydunya-masterkey" type="text" placeholder="Ex : pdnya_pub_xxxxx" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris-mid);border-radius:8px;font-size:12px;font-family:var(--font-corps);outline:none">
-            </div>
-            <div>
-              <label style="display:block;font-size:10px;font-weight:700;color:var(--gris-text);margin-bottom:3px">TOKEN (public)</label>
-              <input id="ap-paydunya-token" type="text" placeholder="Ex : token-public-paydunya" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris-mid);border-radius:8px;font-size:12px;font-family:var(--font-corps);outline:none">
-            </div>
+            <div style="font-size:11px;color:var(--gris-text)">⚠️ Pas encore implémenté côté serveur (CinetPay uniquement pour l'instant).</div>
             <div style="margin-top:8px;font-size:10px;color:#E53935">🔗 <a href="https://paydunya.com" target="_blank" style="color:#E53935;text-decoration:underline">Ouvrir compte PayDunya →</a></div>
           </div>
 
@@ -8934,10 +8901,7 @@ const CGU_DATE    = '2026-05-16';
               </div>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ap-wave-api-actif" onchange="apUpdatePayBadge()"> Actif</label>
             </div>
-            <div>
-              <label style="display:block;font-size:10px;font-weight:700;color:var(--gris-text);margin-bottom:3px">MERCHANT ID (public)</label>
-              <input id="ap-wave-merchantid" type="text" placeholder="Ex : wave_merchant_xxxxxx" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris-mid);border-radius:8px;font-size:12px;font-family:var(--font-corps);outline:none">
-            </div>
+            <div style="font-size:11px;color:var(--gris-text)">⚠️ Pas encore implémenté côté serveur (CinetPay uniquement pour l'instant).</div>
             <div style="margin-top:8px;font-size:10px;color:#0052CC">🔗 <a href="https://www.wave.com/en/business/" target="_blank" style="color:#0052CC;text-decoration:underline">Ouvrir compte Wave Business →</a></div>
           </div>
 
@@ -8953,10 +8917,7 @@ const CGU_DATE    = '2026-05-16';
               </div>
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ap-flutterwave-actif" onchange="apUpdatePayBadge()"> Actif</label>
             </div>
-            <div>
-              <label style="display:block;font-size:10px;font-weight:700;color:var(--gris-text);margin-bottom:3px">PUBLIC KEY (commence par FLWPUBK_)</label>
-              <input id="ap-flutterwave-pubkey" type="text" placeholder="FLWPUBK_TEST-xxxxxxxx" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris-mid);border-radius:8px;font-size:12px;font-family:var(--font-corps);outline:none">
-            </div>
+            <div style="font-size:11px;color:var(--gris-text)">⚠️ Pas encore implémenté côté serveur (CinetPay uniquement pour l'instant).</div>
             <div style="margin-top:8px;font-size:10px;color:#F76B1C">🔗 <a href="https://flutterwave.com" target="_blank" style="color:#F76B1C;text-decoration:underline">Ouvrir compte Flutterwave →</a></div>
           </div>
         </div>
@@ -12111,46 +12072,23 @@ function syncCFGUI() {
 const PAYMENT_CONFIG = {
 
   // 'demo'       = paiements simules (aucun argent reel) — etat actuel
-  // 'production' = paiements reels via le backend
+  // 'production' = paiements reels via le backend (Edge Function Supabase
+  // "paiement", livree avec l'appli — aucune URL a configurer ici)
   MODE: 'demo',
-
-  // URL unique de votre backend (Edge Function Supabase ou autre).
-  // C'est le backend qui choisit/contacte le bon prestataire.
-  // Exemple : https://VOTRE-PROJET.supabase.co/functions/v1/paiement
-  BACKEND_URL: '',
 
   // Prestataire par defaut si aucun n'est impose par canal (voir ROUTAGE)
   PRESTATAIRE_DEFAUT: 'cinetpay',
 
   // ── PRESTATAIRES DISPONIBLES ──
-  // Activez ceux que vous avez. Mettez uniquement les ID PUBLICS.
-  // 'actif: false' = le backend ne l'utilisera pas.
+  // 'actif' ne sert qu'a l'affichage admin (routage/etat) — voir ROUTAGE.
+  // Aucune clé/secret ici : le backend (edge function "paiement") détient
+  // ses propres identifiants serveur (secrets Supabase CINETPAY_API_KEY /
+  // CINETPAY_SITE_ID, etc.). `actif` ne sert qu'à l'affichage admin.
   PRESTATAIRES: {
-    cinetpay: {
-      nom: 'CinetPay',
-      actif: false,
-      // Identifiants publics CinetPay
-      SITE_ID: '',
-      API_KEY: '',
-    },
-    paydunya: {
-      nom: 'PayDunya',
-      actif: false,
-      // Cle publique / master key PayDunya (publique)
-      MASTER_KEY: '',
-      TOKEN: '',
-    },
-    wave: {
-      nom: 'Wave Business',
-      actif: false,
-      // Wave fonctionne surtout via le backend ; rien de public ici
-      MERCHANT_ID: '',
-    },
-    flutterwave: {
-      nom: 'Flutterwave',
-      actif: false,
-      PUBLIC_KEY: '',   // cle publique FLW (commence par FLWPUBK_)
-    },
+    cinetpay:    { nom: 'CinetPay',       actif: false },
+    paydunya:    { nom: 'PayDunya',       actif: false },
+    wave:        { nom: 'Wave Business',  actif: false },
+    flutterwave: { nom: 'Flutterwave',    actif: false },
   },
 
   // ── ROUTAGE PAR CANAL ──
@@ -12165,10 +12103,6 @@ const PAYMENT_CONFIG = {
     carte:  'auto',
   },
 
-  // URLs de retour / notification (communes a tous les prestataires)
-  RETURN_URL: '',   // page de retour apres paiement
-  NOTIFY_URL: '',   // URL backend qui recoit le webhook de confirmation
-
   // Devise, pays, langue
   DEVISE: 'XOF',
   PAYS: 'CI',
@@ -12176,10 +12110,12 @@ const PAYMENT_CONFIG = {
 };
 
 // Indique si le systeme peut encaisser reellement
+// Le backend de paiement est une Edge Function Supabase fixe, livrée avec
+// l'appli (pas une URL que l'admin doit renseigner) : il suffit de passer
+// MODE sur 'production' une fois les secrets CINETPAY_API_KEY / CINETPAY_SITE_ID
+// configurés côté Supabase.
 function paiementEstEnProduction() {
-  return PAYMENT_CONFIG.MODE === 'production'
-      && !!PAYMENT_CONFIG.BACKEND_URL
-      && PAYMENT_CONFIG.BACKEND_URL.length > 0;
+  return PAYMENT_CONFIG.MODE === 'production';
 }
 
 // Determine quel prestataire utiliser pour un canal donne (wave/orange/mtn/moov/carte)
@@ -12216,12 +12152,14 @@ let payMethodeActive = 'wave';
 let otpTimer = null;
 let otpSecondes = 120;
 
-function ouvrirModalPaiement(montant, libelle, onSuccess) {
+function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   payMethodeActive = 'wave';
   window._payOnSuccess = onSuccess || null;
   // Memoriser pour le paiement reel (production)
   window._payMontantCourant = montant;
   window._payLibelleCourant = libelle || 'Commission publication';
+  window._payTypeCourant = (opts && opts.type) || 'commission';
+  window._payMetadataCourant = (opts && opts.metadata) || null;
   // Mettre à jour l'affichage
   document.getElementById('pay-montant-display').textContent = fmtFCFA(montant);
   document.getElementById('pay-annonce-display').textContent = libelle || 'Commission publication';
@@ -12492,68 +12430,37 @@ function payTraiter() {
 async function lancerPaiementReel() {
   const montant = window._payMontantCourant || 0;
   const libelle = window._payLibelleCourant || 'Paiement Le Grenier CI';
-  const ref = 'TXN' + Date.now().toString().slice(-10).toUpperCase();
 
   // Canal choisi par le client (wave / orange / mtn / moov / carte)
   const canal = (PAY_METHODES[payMethodeActive] || {}).type === 'carte'
     ? 'carte' : payMethodeActive;
 
-  // Le frontend indique le prestataire souhaite ; le backend reste maitre
-  const cleP = choisirPrestataire(canal);
-  const presta = PAYMENT_CONFIG.PRESTATAIRES[cleP] || {};
-
-  // Payload UNIFIE — identique quel que soit le prestataire.
-  // On ne transmet QUE des identifiants publics.
+  // Payload UNIFIE — le frontend n'envoie JAMAIS de clé secrète de
+  // prestataire (api_key/master_key/token...). Le backend (edge function
+  // "paiement") détient ses propres identifiants serveur et calcule
+  // lui-même la commission due — jamais une valeur envoyée par le client.
+  // `annonce` n'est que du CONTENU (titre/photos/description...), utilisé
+  // par le backend pour créer l'annonce UNE FOIS le paiement confirmé par
+  // le webhook du prestataire — jamais avant, jamais depuis le navigateur.
   const payload = {
-    prestataire:    cleP,                 // cinetpay / paydunya / wave / flutterwave
-    prestataire_id: {                     // ID publics du prestataire choisi
-      site_id:     presta.SITE_ID    || '',
-      api_key:     presta.API_KEY    || '',
-      master_key:  presta.MASTER_KEY || '',
-      token:       presta.TOKEN      || '',
-      public_key:  presta.PUBLIC_KEY || '',
-      merchant_id: presta.MERCHANT_ID|| '',
-    },
     montant:     montant,
-    devise:      PAYMENT_CONFIG.DEVISE,
-    pays:        PAYMENT_CONFIG.PAYS,
-    langue:      PAYMENT_CONFIG.LANG,
     canal:       canal,
     description: libelle,
-    reference:   ref,
-    client: {
-      nom:   SESSION ? ((SESSION.prenom||'') + ' ' + (SESSION.nom||'')).trim() : 'Client',
-      tel:   document.getElementById('pay-numero-mm')?.value || (SESSION && SESSION.tel) || '',
-      email: (SESSION && SESSION.email) || '',
-    },
-    return_url: PAYMENT_CONFIG.RETURN_URL,
-    notify_url: PAYMENT_CONFIG.NOTIFY_URL,
+    type:        window._payTypeCourant || 'commission',
+    tel:         document.getElementById('pay-numero-mm')?.value || (SESSION && SESSION.tel) || '',
+    return_url:  window.location.origin + window.location.pathname,
+    annonce:     window._payMetadataCourant || depotEnCours || null,
   };
 
   try {
-    const data = await new Promise((resolve, reject) => {
-      const x = new XMLHttpRequest();
-      x.open('POST', PAYMENT_CONFIG.BACKEND_URL, true);
-      x.setRequestHeader('Content-Type', 'application/json');
-      x.onload = () => {
-        if (x.status < 200 || x.status >= 300) return reject(new Error('Backend HTTP ' + x.status));
-        try { resolve(JSON.parse(x.responseText)); } catch (e) { reject(e); }
-      };
-      x.onerror = () => reject(new Error('Erreur réseau backend paiement'));
-      x.send(JSON.stringify(payload));
-    });
-
-    // Le backend renvoie une URL de paiement unifiee, quel que soit le prestataire
-    if (data && data.payment_url) {
-      window._payRefEnAttente = ref;
-      window.location.href = data.payment_url;
-      return;
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement', payload);
+    if (r.error || !r.data || !r.data.payment_url) {
+      throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Reponse backend invalide');
     }
-
-    throw new Error('Reponse backend invalide : pas de payment_url');
-
+    window._payRefEnAttente = r.data.reference;
+    window.location.href = r.data.payment_url;
   } catch (err) {
-    console.error('[PAIEMENT] Echec (' + cleP + ') :', err);
+    console.error('[PAIEMENT] Echec :', err);
     payShowEtape(1);
     toast('Paiement indisponible pour le moment. Reessayez.', 'erreur');
   }
@@ -12564,19 +12471,34 @@ async function lancerPaiementReel() {
 async function verifierStatutPaiement(reference) {
   if (!paiementEstEnProduction()) return null;
   try {
-    return await new Promise((resolve) => {
-      const x = new XMLHttpRequest();
-      x.open('GET', PAYMENT_CONFIG.BACKEND_URL + '/statut?ref=' + encodeURIComponent(reference), true);
-      x.onload = () => {
-        if (x.status < 200 || x.status >= 300) return resolve(null);
-        try { resolve(JSON.parse(x.responseText)); } catch (e) { resolve(null); }
-      };
-      x.onerror = () => resolve(null);
-      x.send();
-    });   // { statut: 'paye' | 'echec' | 'en_attente', ... }
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/paiement/statut?ref=' + encodeURIComponent(reference));
+    if (r.error) return null;
+    return r.data;   // { statut: 'paye' | 'echec' | 'en_attente', ... }
   } catch (e) {
     console.error('[PAIEMENT] Verif statut echouee :', e);
     return null;
+  }
+}
+
+// ── Retour de paiement reel (CinetPay etc.) — la page se recharge avec
+// ?paiement_ref=... dans l'URL apres redirection par le prestataire.
+// La creation de l'annonce/l'activation de l'abonnement a deja ete faite
+// cote serveur par le webhook ; on informe juste l'utilisateur du resultat.
+async function verifierRetourPaiementReel() {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('paiement_ref');
+  if (!ref) return;
+  history.replaceState(null, '', window.location.pathname);
+  const statut = await verifierStatutPaiement(ref);
+  if (!statut) return;
+  if (statut.statut === 'paye') {
+    toast('✅ Paiement confirmé' + (statut.annonce_titre ? ' — ' + statut.annonce_titre : '') + ' !', 'succes');
+    await _adminRafraichirCache(['paiements', 'annonces', 'abonnements']).catch(() => {});
+    appliquerFiltres();
+  } else if (statut.statut === 'echec') {
+    toast('❌ Le paiement a échoué ou a été annulé.', 'erreur');
+  } else {
+    toast('⏳ Paiement en cours de confirmation, revenez dans quelques instants.', 'info');
   }
 }
 
@@ -17690,9 +17612,11 @@ async function souscrirePlan(nom, prix) {
   if (prix === 0) { toast('Vous êtes déjà sur le plan gratuit'); return; }
   if (!SESSION) { goScreen('screen-login'); document.getElementById('modal-plans')?.classList.remove('open'); return; }
   document.getElementById('modal-plans')?.classList.remove('open');
+  const _debutAbo = new Date().toISOString().slice(0,10);
+  const _finAbo   = new Date(Date.now() + 30*24*3600*1000).toISOString().slice(0,10);
   ouvrirModalPaiement(prix, `Abonnement Grenier ${nom} — 1 mois`, async () => {
-    const debut = new Date().toISOString().slice(0,10);
-    const fin   = new Date(Date.now() + 30*24*3600*1000).toISOString().slice(0,10);
+    const debut = _debutAbo;
+    const fin   = _finAbo;
     const ref   = 'ABO' + Date.now().toString().slice(-8).toUpperCase();
     const moyen = PAY_METHODES[payMethodeActive]?.nom || 'Wave';
 
@@ -17727,7 +17651,7 @@ async function souscrirePlan(nom, prix) {
     if (rPay && rPay.data && rPay.data[0]) paiement.id = rPay.data[0].id;
 
     toast(`✅ Paiement reçu ! Abonnement ${nom} en attente de validation (sous 24h).`);
-  });
+  }, { type: 'abonnement', metadata: { plan: nom, debut: _debutAbo, fin: _finAbo } });
 }
 
 // ── Mise à jour adminTab pour inclure les nouveaux onglets ──
@@ -18054,21 +17978,16 @@ window.renderAdminProfil = function() {
     const selOpt = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
     selOpt('ap-pay-mode',    pc.MODE || 'demo');
     selOpt('ap-pay-defaut',  pc.PRESTATAIRE_DEFAUT || 'cinetpay');
-    set('ap-pay-backend',    pc.BACKEND_URL || '');
-    set('ap-pay-return',     pc.RETURN_URL  || '');
-    set('ap-pay-notify',     pc.NOTIFY_URL  || '');
     const cp = pc.PRESTATAIRES || {};
     const chkVal = (id, val) => { const el = document.getElementById(id); if(el) el.checked = !!val; };
+    // Les identifiants (SITE_ID/API_KEY/MASTER_KEY/TOKEN/MERCHANT_ID/PUBLIC_KEY)
+    // ne sont plus gérés ici : ce sont des secrets serveur (Supabase Edge
+    // Functions), jamais exposés au navigateur. Seul l'état "actif" reste
+    // affiché à titre indicatif.
     chkVal('ap-cinetpay-actif',     cp.cinetpay   && cp.cinetpay.actif);
-    set('ap-cinetpay-siteid',       (cp.cinetpay   && cp.cinetpay.SITE_ID)     || '');
-    set('ap-cinetpay-apikey',       (cp.cinetpay   && cp.cinetpay.API_KEY)     || '');
     chkVal('ap-paydunya-actif',     cp.paydunya   && cp.paydunya.actif);
-    set('ap-paydunya-masterkey',    (cp.paydunya   && cp.paydunya.MASTER_KEY)  || '');
-    set('ap-paydunya-token',        (cp.paydunya   && cp.paydunya.TOKEN)       || '');
     chkVal('ap-wave-api-actif',     cp.wave       && cp.wave.actif);
-    set('ap-wave-merchantid',       (cp.wave       && cp.wave.MERCHANT_ID)     || '');
     chkVal('ap-flutterwave-actif',  cp.flutterwave && cp.flutterwave.actif);
-    set('ap-flutterwave-pubkey',    (cp.flutterwave && cp.flutterwave.PUBLIC_KEY) || '');
     const rt = pc.ROUTAGE || {};
     selOpt('ap-route-wave',   rt.wave   || 'auto');
     selOpt('ap-route-orange', rt.orange || 'auto');
@@ -18121,19 +18040,12 @@ window.sauvegarderProfilAdmin = async function() {
     const gChk = id => { const el = document.getElementById(id); return el ? el.checked : false; };
     PAYMENT_CONFIG.MODE               = gSel('ap-pay-mode')   || 'demo';
     PAYMENT_CONFIG.PRESTATAIRE_DEFAUT = gSel('ap-pay-defaut') || 'cinetpay';
-    PAYMENT_CONFIG.BACKEND_URL        = gSel('ap-pay-backend').trim();
-    PAYMENT_CONFIG.RETURN_URL         = gSel('ap-pay-return').trim();
-    PAYMENT_CONFIG.NOTIFY_URL         = gSel('ap-pay-notify').trim();
+    // Secrets de passerelle : configurés côté serveur (Supabase Edge
+    // Functions), jamais saisis ni transmis depuis ce panneau.
     PAYMENT_CONFIG.PRESTATAIRES.cinetpay.actif      = gChk('ap-cinetpay-actif');
-    PAYMENT_CONFIG.PRESTATAIRES.cinetpay.SITE_ID    = gSel('ap-cinetpay-siteid').trim();
-    PAYMENT_CONFIG.PRESTATAIRES.cinetpay.API_KEY    = gSel('ap-cinetpay-apikey').trim();
     PAYMENT_CONFIG.PRESTATAIRES.paydunya.actif      = gChk('ap-paydunya-actif');
-    PAYMENT_CONFIG.PRESTATAIRES.paydunya.MASTER_KEY = gSel('ap-paydunya-masterkey').trim();
-    PAYMENT_CONFIG.PRESTATAIRES.paydunya.TOKEN      = gSel('ap-paydunya-token').trim();
     PAYMENT_CONFIG.PRESTATAIRES.wave.actif          = gChk('ap-wave-api-actif');
-    PAYMENT_CONFIG.PRESTATAIRES.wave.MERCHANT_ID    = gSel('ap-wave-merchantid').trim();
     PAYMENT_CONFIG.PRESTATAIRES.flutterwave.actif   = gChk('ap-flutterwave-actif');
-    PAYMENT_CONFIG.PRESTATAIRES.flutterwave.PUBLIC_KEY = gSel('ap-flutterwave-pubkey').trim();
     PAYMENT_CONFIG.ROUTAGE.wave   = gSel('ap-route-wave');
     PAYMENT_CONFIG.ROUTAGE.orange = gSel('ap-route-orange');
     PAYMENT_CONFIG.ROUTAGE.mtn    = gSel('ap-route-mtn');
@@ -18172,15 +18084,14 @@ window.apUpdatePayBadge = function() {
   const badge = document.getElementById('ap-api-badge');
   if (!badge || typeof PAYMENT_CONFIG === 'undefined') return;
   const mode = (document.getElementById('ap-pay-mode') || {}).value || PAYMENT_CONFIG.MODE || 'demo';
-  const backend = ((document.getElementById('ap-pay-backend') || {}).value || PAYMENT_CONFIG.BACKEND_URL || '').trim();
   const actifs = ['ap-cinetpay-actif','ap-paydunya-actif','ap-wave-api-actif','ap-flutterwave-actif']
     .filter(id => { const el = document.getElementById(id); return el && el.checked; });
-  if (mode === 'production' && backend && actifs.length > 0) {
+  if (mode === 'production' && actifs.length > 0) {
     badge.textContent = '🟢 PRODUCTION ACTIVE';
     badge.style.background = '#D1FAE5';
     badge.style.color = '#065F46';
     badge.style.border = '1px solid #6EE7B7';
-  } else if (actifs.length > 0 && backend) {
+  } else if (actifs.length > 0) {
     badge.textContent = '🟡 CONFIGURÉ — MODE DEMO';
     badge.style.background = '#FEF3C7';
     badge.style.color = '#92400E';
@@ -21657,6 +21568,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if (typeof restaurerSessionExistante === 'function') {
     try { await restaurerSessionExistante(); }
     catch (e) { console.warn('[INIT] restauration de session échouée', e); }
+  }
+  // Retour depuis un paiement reel (CinetPay etc.) : ?paiement_ref=... dans l'URL.
+  if (typeof verifierRetourPaiementReel === 'function') {
+    try { await verifierRetourPaiementReel(); }
+    catch (e) { console.warn('[INIT] verification retour paiement echouee', e); }
   }
   if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
   if (typeof window.enregistrerVisite === 'function') window.enregistrerVisite('accueil');
