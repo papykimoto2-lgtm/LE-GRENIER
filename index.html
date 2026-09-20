@@ -13219,6 +13219,14 @@ const COORDS_VILLES = {
   'Zone 4':            {lat:5.2900, lng:-3.9950},
   'Vridi':             {lat:5.2667, lng:-4.0167},
   'Kouté':             {lat:5.3500, lng:-4.1200},
+  // ── Périphérie du Grand Abidjan (aligné sur VILLES_ABIDJAN) ──
+  'Grand-Bassam':      {lat:5.2131, lng:-3.7381},
+  'Dabou':             {lat:5.3197, lng:-4.3775},
+  'Jacqueville':       {lat:5.2058, lng:-4.4131},
+  'Bonoua':            {lat:5.2733, lng:-3.5975},
+  'Alépé':             {lat:5.5000, lng:-3.6833},
+  'Azaguié':           {lat:5.6289, lng:-4.0956},
+  'Sikensi':           {lat:5.6417, lng:-4.5875},
   // ── Côte d'Ivoire — intérieur (aligné sur VILLES_INTERIEUR) ──
   'Bouaké':            {lat:7.6881, lng:-5.0283},
   'Daloa':             {lat:6.8770, lng:-6.4502},
@@ -21138,7 +21146,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     'Cocody','Plateau','Marcory','Yopougon','Adjamé','Abobo',
     'Koumassi','Port-Bouët','Treichville','Riviera','Bingerville',
     'Songon','Anyama','Attécoubé','Williamsville','Deux-Plateaux',
-    'Angré','Riviera Palmeraie','Zone 4','Vridi','Kouté'
+    'Angré','Riviera Palmeraie','Zone 4','Vridi','Kouté',
+    // Périphérie du Grand Abidjan (communes limitrophes, hors district)
+    'Grand-Bassam','Dabou','Jacqueville','Bonoua','Alépé','Azaguié','Sikensi'
   ];
 
   const VILLES_INTERIEUR = [
