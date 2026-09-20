@@ -17424,7 +17424,7 @@ function renderAdminAbonnements() {
         <div class="plan-nom">${p.nom}</div>
         <div class="plan-prix">${p.prix === 0 ? 'Gratuit' : fmtFCFA(p.prix)} <span>${p.prix > 0 ? '/mois' : ''}</span></div>
         <div class="plan-features" style="font-size:11px">
-          ${p.features.map(f=>`<div class="plan-feature">${f}</div>`).join('')}
+          ${(p.features||[]).map(f=>`<div class="plan-feature">${f}</div>`).join('')}
         </div>
         <div style="font-size:11px;color:var(--gris-text);margin-bottom:10px">
           ${DAO._local.abonnements.filter(a=>a.plan===p.nom&&a.statut==='actif').length} abonné(s)
