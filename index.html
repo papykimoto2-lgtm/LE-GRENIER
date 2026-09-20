@@ -19478,30 +19478,31 @@ let LIVR_TYPE = 'moto';
 let LIVR_GEO = { dep: null, arr: null };         // {lat,lng} précis, si le client a utilisé le bouton GPS
 let LIVR_GEO_INVITE = { dep: null, arr: null };  // idem pour le formulaire invité
 
+// Géolocalise puis reverse-géocode via Nominatim (fonctionne n'importe où
+// dans le monde — Le Grenier n'est pas limité à Abidjan/la Côte d'Ivoire),
+// au lieu de se limiter aux ~19 quartiers d'Abidjan connus localement.
 function _captureGeoAdresse(inputId, btnId, store, champ) {
+  if (!navigator.geolocation) { toast('Géolocalisation non disponible sur cet appareil', 'erreur'); return; }
   const btn = document.getElementById(btnId);
   if (btn) { btn.disabled = true; btn.dataset.txt = btn.textContent; btn.textContent = '⏳'; }
   const input = document.getElementById(inputId);
-  localiserVille().then(({ coords, ville, precisionM, fiable }) => {
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    const precisionM = pos.coords.accuracy || null;
+    const fiable = precisionM != null && precisionM <= 3000;
     store[champ] = coords;
-    if (input) input.value = `${ville} (position GPS)`;
+    if (input) input.value = '⏳ Localisation…';
+    const libelle = await _reverseGeocode(coords.lat, coords.lng);
+    if (input) input.value = libelle;
     if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt.includes('GPS') ? '✅ GPS' : '✅'; btn.style.color = fiable ? 'var(--vert)' : '#B8791A'; }
     const precisionTxt = precisionM != null ? ` (précision ~${Math.round(precisionM/1000)||'<1'} km)` : '';
-    toast(fiable ? `📡 Position détectée : ${ville}` : `📡 Position approximative — ${ville}${precisionTxt}. Vérifiez et corrigez si besoin.`, 'info');
+    toast(fiable ? `📡 Position détectée : ${libelle}` : `📡 Position approximative${precisionTxt} — modifiez le texte si besoin`, 'info');
     const anchor = input ? (input.closest('.adresse-flex-row') || input.parentElement || input) : null;
-    if (!fiable && anchor) {
-      injecterCorrectionZone(anchor, (v) => {
-        store[champ] = COORDS_VILLES[v];
-        if (input) input.value = v;
-        retirerCorrectionZone(anchor);
-      });
-    } else if (anchor) {
-      retirerCorrectionZone(anchor);
-    }
-  }).catch(reason => {
+    if (anchor) retirerCorrectionZone(anchor);
+  }, () => {
     if (btn) { btn.disabled = false; btn.textContent = btn.dataset.txt; }
-    toast(reason === 'unsupported' ? 'Géolocalisation non disponible sur cet appareil' : 'Position indisponible. Vérifiez les autorisations de localisation.', 'erreur');
-  });
+    toast('Position indisponible. Vérifiez les autorisations de localisation.', 'erreur');
+  }, { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true });
 }
 function captureGeoLivrDep()    { _captureGeoAdresse('livr-depart', 'livr-depart-gps-btn', LIVR_GEO, 'dep'); }
 function captureGeoLivrArr()    { _captureGeoAdresse('livr-arrivee', 'livr-arrivee-gps-btn', LIVR_GEO, 'arr'); }
@@ -19515,8 +19516,12 @@ let CARTE_ADR_MAP = null;
 let CARTE_ADR_MARKER = null;
 let _carteAdrCible = null; // { inputId, store, champ }
 
-// Reverse-géocodage via Nominatim (adresse lisible) avec repli sur le
-// quartier connu le plus proche si l'appel échoue (hors-ligne, etc.).
+// Reverse-géocodage via Nominatim (adresse lisible, n'importe où dans le
+// monde). En cas d'échec (hors-ligne...), replie sur le quartier d'Abidjan
+// connu le plus proche uniquement s'il est vraiment proche (l'app ne
+// connaît que la Côte d'Ivoire localement) — sinon affiche juste les
+// coordonnées brutes plutôt qu'un nom de quartier trompeur à l'autre bout
+// du monde.
 async function _reverseGeocode(lat, lng) {
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fr`;
@@ -19525,8 +19530,8 @@ async function _reverseGeocode(lat, lng) {
     const d = await r.json();
     if (d && d.display_name) return _libelleCourtAdresse(d.display_name);
   } catch (e) {}
-  const { ville } = villeLaPlusProche({ lat, lng });
-  return `${ville} (position sur la carte)`;
+  const { ville, dist } = villeLaPlusProche({ lat, lng });
+  return dist <= 50 ? `${ville} (position sur la carte)` : `Position (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 }
 
 function ouvrirCarteAdresse(inputId, btnId, store, champ) {
@@ -19573,12 +19578,13 @@ async function confirmerCarteAdresse() {
 // ══════════════════════════════════════════
 // SAISIE INTUITIVE D'ADRESSE — autocomplétion via Nominatim (OpenStreetMap)
 // ══════════════════════════════════════════
-// API publique gratuite, sans clé. Usage raisonnable respecté : une
+// API publique gratuite, sans clé. Résultats mondiaux (Le Grenier n'est
+// pas limité à Abidjan/la Côte d'Ivoire). Usage raisonnable respecté : une
 // recherche déclenchée seulement après une pause de frappe (600 ms), la
-// requête précédente encore en vol est annulée, résultats limités à la
-// Côte d'Ivoire. Sélectionner une suggestion mémorise ses coordonnées
-// précises (même mécanisme que le bouton GPS) pour la recherche de
-// livreur sur carte ; modifier le texte à la main invalide la coordonnée.
+// requête précédente encore en vol est annulée. Sélectionner une suggestion
+// mémorise ses coordonnées précises (même mécanisme que le bouton GPS) pour
+// la recherche de livreur sur carte ; modifier le texte à la main invalide
+// la coordonnée.
 let _geoAcTimer = null;
 let _geoAcController = null;
 
@@ -19614,7 +19620,7 @@ async function _rechercherAdresse(q, list, input, store, champ) {
   if (_geoAcController) _geoAcController.abort();
   _geoAcController = new AbortController();
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ci&accept-language=fr&q=${encodeURIComponent(q)}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=fr&q=${encodeURIComponent(q)}`;
     const r = await fetch(url, { signal: _geoAcController.signal });
     if (!r.ok) throw new Error('nominatim_http_' + r.status);
     const data = await r.json();
