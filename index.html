@@ -18062,6 +18062,31 @@ window.chargerProfilAdminDepuisSupabase = async function() {
   } catch (e) { console.error('[admin profil] chargement échoué', e); }
 };
 
+// Charge la config des passerelles de paiement (MODE, prestataire par
+// défaut, prestataires actifs, routage) depuis Supabase. Ne contient
+// JAMAIS de clé/secret (CINETPAY_API_KEY, CINETPAY_SITE_ID... restent
+// exclusivement des secrets Edge Function, jamais envoyés au navigateur) —
+// uniquement des indicateurs, donc sans risque à stocker dans
+// `configuration`, au même titre que admin_profil_json.
+window.chargerPaymentConfigDepuisSupabase = async function() {
+  if (typeof MODE === 'undefined' || MODE !== 'remote') return;
+  if (typeof PAYMENT_CONFIG === 'undefined') return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/configuration?cle=eq.payment_config_json&select=valeur');
+    if (!r.error && r.data && r.data[0] && r.data[0].valeur) {
+      const s = JSON.parse(r.data[0].valeur);
+      if (s.MODE) PAYMENT_CONFIG.MODE = s.MODE;
+      if (s.PRESTATAIRE_DEFAUT) PAYMENT_CONFIG.PRESTATAIRE_DEFAUT = s.PRESTATAIRE_DEFAUT;
+      if (s.PRESTATAIRES) Object.keys(s.PRESTATAIRES).forEach(k => {
+        if (PAYMENT_CONFIG.PRESTATAIRES[k]) PAYMENT_CONFIG.PRESTATAIRES[k].actif = !!s.PRESTATAIRES[k].actif;
+      });
+      if (s.ROUTAGE) Object.assign(PAYMENT_CONFIG.ROUTAGE, s.ROUTAGE);
+    }
+    if (typeof window.renderAdminProfil === 'function') window.renderAdminProfil();
+    else if (typeof window.apUpdatePayBadge === 'function') window.apUpdatePayBadge();
+  } catch (e) { console.error('[payment config] chargement échoué', e); }
+};
+
 window.renderAdminProfil = function() {
   const p = window.ADMIN_PROFIL;
   const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
@@ -18198,16 +18223,30 @@ window.sauvegarderProfilAdmin = async function() {
   sauvegarderCFG(Object.assign({}, CFG));  // persister silencieusement
 
   // ── Persistance Supabase (source de vérité partagée entre appareils) ──
-  // Ne couvre que window.ADMIN_PROFIL (identité, entreprise, numéros de
-  // réception Mobile Money, virement bancaire — déjà montrés aux clients
-  // lors du paiement, donc sans caractère secret). PAYMENT_CONFIG reste
-  // volontairement local : ses clés d'API de passerelle (CinetPay,
-  // PayDunya...) ne doivent jamais atterrir dans une table lisible
-  // publiquement comme `configuration` — elles n'ont leur place que dans
-  // un vrai backend, comme l'indique déjà le mode démo ci-dessus.
+  // window.ADMIN_PROFIL (identité, entreprise, numéros Mobile Money,
+  // virement bancaire) part sous la clé admin_profil_json.
+  // PAYMENT_CONFIG (MODE, prestataire par défaut, prestataires actifs,
+  // routage) part sous payment_config_json — AUCUNE clé/secret de
+  // passerelle n'y transite (CINETPAY_API_KEY / CINETPAY_SITE_ID restent
+  // exclusivement des secrets Edge Function côté serveur, jamais présents
+  // dans PAYMENT_CONFIG côté navigateur).
   const st = document.getElementById('ap-save-status');
   const rCfg = await DAO_PERSIST.configurationMaj('admin_profil_json', JSON.stringify(p));
-  if (rCfg && rCfg.error) {
+  let rPay = { error: null };
+  if (typeof PAYMENT_CONFIG !== 'undefined') {
+    rPay = await DAO_PERSIST.configurationMaj('payment_config_json', JSON.stringify({
+      MODE: PAYMENT_CONFIG.MODE,
+      PRESTATAIRE_DEFAUT: PAYMENT_CONFIG.PRESTATAIRE_DEFAUT,
+      PRESTATAIRES: {
+        cinetpay:    { actif: PAYMENT_CONFIG.PRESTATAIRES.cinetpay.actif },
+        paydunya:    { actif: PAYMENT_CONFIG.PRESTATAIRES.paydunya.actif },
+        wave:        { actif: PAYMENT_CONFIG.PRESTATAIRES.wave.actif },
+        flutterwave: { actif: PAYMENT_CONFIG.PRESTATAIRES.flutterwave.actif },
+      },
+      ROUTAGE: PAYMENT_CONFIG.ROUTAGE,
+    }));
+  }
+  if ((rCfg && rCfg.error) || (rPay && rPay.error)) {
     toast('Profil enregistré localement, mais la synchronisation serveur a échoué', 'erreur');
   } else {
     if (st) { st.style.display = 'inline'; setTimeout(() => st.style.display = 'none', 3000); }
@@ -24745,6 +24784,7 @@ if (document.readyState === 'loading') {
       startAdRotation();
       // Supabase = source de vérité partagée ; écrase le cache local IndexedDB.
       if (typeof window.chargerProfilAdminDepuisSupabase === 'function') window.chargerProfilAdminDepuisSupabase();
+      if (typeof window.chargerPaymentConfigDepuisSupabase === 'function') window.chargerPaymentConfigDepuisSupabase();
       if (typeof window.chargerTarifsDepuisSupabase === 'function') window.chargerTarifsDepuisSupabase();
     });
   });
@@ -24761,6 +24801,7 @@ if (document.readyState === 'loading') {
     syncCFGUI();
     startAdRotation();
     if (typeof window.chargerProfilAdminDepuisSupabase === 'function') window.chargerProfilAdminDepuisSupabase();
+    if (typeof window.chargerPaymentConfigDepuisSupabase === 'function') window.chargerPaymentConfigDepuisSupabase();
     if (typeof window.chargerTarifsDepuisSupabase === 'function') window.chargerTarifsDepuisSupabase();
   });
 }
