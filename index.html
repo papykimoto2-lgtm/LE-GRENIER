@@ -12963,16 +12963,17 @@ function renderDashboard() {
     const t = r.type, id = r.id;
     const btnEdit = `<button class="btn btn-sm" onclick="modifierAnnonce('${t}',${id})" style="background:var(--vert);color:#fff;padding:4px 8px;font-size:12px;margin-right:4px">✏️</button>`;
     const btnDelete = `<button class="btn btn-danger btn-sm" onclick="supprimerAnnonce('${t}',${id})" style="padding:4px 8px;font-size:12px">🗑</button>`;
+    const btnBoost = (t==='marché' && r.statut==='en-ligne') ? `<button class="btn btn-sm" onclick="Boost.open(${id})" style="background:#f59e0b;color:#1f1300;padding:4px 8px;font-size:12px;margin-right:4px">⚡</button>` : '';
     const statusClass = r.statut==='en-ligne'?'badge-en-ligne':r.statut==='attente'?'badge-attente':'badge-expiree';
     return `<tr>
       <td style="max-width:200px">
-        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.ico} ${r.titre}</div>
+        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.ico} ${r.titre}${(t==='marché'&&Boost.isBoosted(id))?' ⚡':''}</div>
         <div style="font-size:11px;color:var(--gris-text);margin-top:1px">${typeBadge[r.type]||''} ${r.soustitre}</div>
       </td>
       <td style="font-weight:600;color:var(--vert);white-space:nowrap">${r.valeur}</td>
       <td><span class="badge-statut ${statusClass}">${r.statut}</span></td>
       <td>${r.vues||0}</td>
-      <td style="white-space:nowrap">${btnEdit}${btnDelete}</td>
+      <td style="white-space:nowrap">${btnBoost}${btnEdit}${btnDelete}</td>
     </tr>`
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--gris-text);padding:20px">Aucune publication</td></tr>';
 
@@ -25284,5 +25285,98 @@ window.addEventListener('load', () => {
 })();
 </script>
 
+<script>
+const Boost=(()=>{
+  let plans=[],act=new Map(),ov=null;
+  const fmt=n=>(Number(n)||0).toLocaleString('fr-FR')+' FCFA';
+  const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+  const rerender=()=>{try{if(DAO._local&&DAO._local.annonces&&DAO._local.annonces.length)appliquerFiltres()}catch(e){}};
+  async function refresh(){
+    try{const r=await _supa.rpc('get_boosts_actifs');if(!r.error&&Array.isArray(r.data))act=new Map(r.data.map(b=>[Number(b.annonce_id),b]))}catch(e){}
+  }
+  async function loadPlans(){
+    if(plans.length)return;
+    try{const r=await _supa.rpc('get_boost_plans');if(!r.error&&Array.isArray(r.data))plans=r.data}catch(e){}
+  }
+  const later=()=>[0,5000,15000].forEach(d=>setTimeout(async()=>{await refresh();rerender()},d));
+  const isBoosted=id=>act.has(Number(id));
+  const sortBoosted=l=>l.map((a,i)=>({a,i,p:(act.get(Number(a.id))||{}).priority||0})).sort((x,y)=>y.p-x.p||x.i-y.i).map(x=>x.a);
+  function close(){if(ov){ov.remove();ov=null}}
+  async function open(id){
+    if(typeof SESSION==='undefined'||!SESSION){toast('Connectez-vous pour booster une annonce.','erreur');return}
+    const a=DAO._local.annonces.find(x=>x.id===id);
+    await loadPlans();
+    if(!plans.length){toast('Offres de boost indisponibles.','erreur');return}
+    close();
+    let sel=plans[Math.min(1,plans.length-1)].code;
+    ov=el('div','boost-ov');
+    const box=el('div','boost-box');
+    box.setAttribute('role','dialog');
+    const h=el('div','boost-h');
+    h.append(el('h3',null,'⚡ Booster mon annonce'));
+    const x=el('button','boost-x','×');x.type='button';x.onclick=close;h.append(x);
+    box.append(h,el('p','boost-sub',(a?'« '+a.titre+' » passe':'Votre annonce passe')+' en tête des résultats.'));
+    const list=el('div');
+    const go=el('button','boost-go');go.type='button';
+    const items=plans.map(p=>{
+      const b=el('button','boost-plan');b.type='button';
+      const l=el('span');l.append(el('b',null,p.label),el('small',null,p.duration_days+' jours en tête, avec badge'));
+      b.append(l,el('strong',null,fmt(p.price_fcfa)));
+      b.onclick=()=>{sel=p.code;sync()};
+      list.append(b);return{b,p};
+    });
+    const sync=()=>{
+      items.forEach(({b,p})=>b.setAttribute('aria-checked',String(p.code===sel)));
+      go.textContent='Payer '+fmt(plans.find(p=>p.code===sel).price_fcfa);
+    };
+    go.onclick=()=>{
+      const c=plans.find(p=>p.code===sel);
+      close();
+      ouvrirModalPaiement(c.price_fcfa,'Boost '+c.label+(a?' — '+a.titre:''),()=>{
+        if(paiementEstEnProduction()){toast('⚡ Paiement reçu, activation du boost…','info');later()}
+        else toast('Mode démo : aucun boost activé.','info');
+      },{type:'boost',metadata:{annonce_id:id,boost_plan:c.code}});
+    };
+    box.append(list,go);ov.append(box);
+    ov.addEventListener('click',e=>{if(e.target===ov)close()});
+    document.body.append(ov);sync();
+  }
+  const css=el('style');
+  css.textContent=`.boost-badge{position:absolute;top:8px;right:8px;z-index:2;background:#f59e0b;color:#1f1300;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px}
+.boost-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:99999}
+.boost-box{background:#fff;color:#1f1300;width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:18px;max-height:90vh;overflow:auto}
+@media(min-width:600px){.boost-ov{align-items:center}.boost-box{border-radius:16px}}
+.boost-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.boost-h h3{margin:0;font-size:18px}
+.boost-x{background:none;border:0;font-size:24px;line-height:1;cursor:pointer;color:inherit;padding:4px 8px}
+.boost-sub{margin:0 0 12px;color:#5b5140;font-size:14px}
+.boost-plan{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;text-align:left;border:2px solid #e7e2d6;background:#fff;border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;font:inherit;color:inherit}
+.boost-plan[aria-checked="true"]{border-color:#f59e0b;background:#fffbeb}
+.boost-plan b{display:block}.boost-plan small{color:#6b6250}
+.boost-go{width:100%;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;background:#f59e0b;color:#1f1300;cursor:pointer;margin-top:4px}
+.boost-plan:focus-visible,.boost-go:focus-visible,.boost-x:focus-visible{outline:3px solid #1f1300;outline-offset:2px}`;
+  document.head.append(css);
+
+  const _rg=renderGrille;
+  renderGrille=function(list){
+    list=sortBoosted(list);
+    _rg(list);
+    const g=document.getElementById('grille-annonces');
+    if(!g)return;
+    [...g.querySelectorAll('.card-annonce')].forEach((c,i)=>{
+      const a=list[i],im=c.querySelector('.card-img');
+      if(a&&im&&isBoosted(a.id))im.append(el('div','boost-badge','⚡ Boostée'));
+    });
+  };
+  const _vr=verifierRetourPaiementReel;
+  verifierRetourPaiementReel=async function(){
+    const back=new URLSearchParams(location.search).get('paiement_ref');
+    await _vr();
+    if(back)later();
+  };
+  refresh().then(rerender);
+  return{open,close,refresh,isBoosted,sortBoosted};
+})();
+</script>
 </body>
 </html>
