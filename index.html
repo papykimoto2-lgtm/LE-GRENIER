@@ -7805,7 +7805,7 @@ const ENTREPRISE = {
         <div class="form-row">
           <div class="form-group">
             <label>Catégorie *</label>
-            <select id="depot-cat">
+            <select id="depot-cat" onchange="onDepotCatChange()">
               <option value="">-- Choisir --</option>
               <option>Électronique</option><option>Mobilier</option><option>Vêtements</option>
               <option>Électroménager</option><option>Livres</option><option>Véhicules</option><option>Divers</option>
@@ -7864,6 +7864,22 @@ const ENTREPRISE = {
           <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
             <button type="button" id="depot-gps-btn" class="btn btn-outline btn-sm" onclick="captureGeoDepot('depot-gps-btn','depot-gps-label')" style="padding:6px 14px;font-size:13px">Préciser ma position GPS</button>
             <span id="depot-gps-label" style="font-size:12px;color:var(--gris-text)">Optionnel · améliore la proximité</span>
+          </div>
+        </div>
+        <!-- ── Géopositionnement précis (Résidences & Logements : vente villas, appartements, terrains...) ── -->
+        <div class="form-group" id="depot-geo-precise-group" style="display:none">
+          <label>Position exacte sur la carte <span style="font-weight:400;color:var(--gris-text)">(recommandé pour la vente d'un bien immobilier)</span></label>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button type="button" id="depot-map-pick-btn" class="btn btn-outline btn-sm" onclick="ouvrirPositionPreciseDepot()" style="padding:6px 14px;font-size:13px">🗺️ Placer sur la carte</button>
+            <span id="depot-geo-precise-label" style="font-size:12px;color:var(--gris-text)">Aucune position précise placée</span>
+          </div>
+        </div>
+        <!-- ── Délimitation du terrain (polygone de bornage) — catégorie Terrain uniquement ── -->
+        <div class="form-group" id="depot-terrain-group" style="display:none">
+          <label>Délimitation du terrain <span style="font-weight:400;color:var(--gris-text)">(contour / bornage, pour affichage sur la carte)</span></label>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button type="button" id="depot-polygon-btn" class="btn btn-outline btn-sm" onclick="ouvrirDelimitationTerrain()" style="padding:6px 14px;font-size:13px">✏️ Délimiter sur la carte</button>
+            <span id="depot-polygon-label" style="font-size:12px;color:var(--gris-text)">Aucun contour tracé</span>
           </div>
         </div>
         <div class="form-group">
@@ -9402,6 +9418,7 @@ const ENTREPRISE = {
       </div>
       <div class="modal-prix" id="modal-prix"></div>
       <div class="badge-etat" id="modal-etat"></div>
+      <div id="modal-map-terrain" style="display:none;height:180px;border-radius:var(--radius);overflow:hidden;margin-bottom:12px;border:1px solid var(--gris-mid)"></div>
       <div class="modal-desc" id="modal-desc"></div>
       <div class="vendeur-info">
         <div class="avatar" id="modal-avatar">?</div>
@@ -12037,7 +12054,34 @@ function ouvrirAnnonce(id) {
   document.getElementById('modal-titre').textContent = a.titre;
   const dist = GEO.userCoords ? distanceKm(GEO.userCoords, coordsAnnonce(a)) : null;
   const distTxt = dist !== null ? ` · 📡 ${dist < 1 ? '< 1 km' : Math.round(dist)+' km de vous'}` : '';
-  document.getElementById('modal-cat-lieu').textContent = `${a.cat} · 📍 ${a.ville}${distTxt}`;
+  const surfTxt = a.surfaceM2 ? ` · 📐 ${formaterSurface(a.surfaceM2)}` : '';
+  document.getElementById('modal-cat-lieu').textContent = `${a.cat} · 📍 ${a.ville}${surfTxt}${distTxt}`;
+
+  // ── Mini-carte : position précise ou polygone du terrain (Résidences & Logements) ──
+  const mapBox = document.getElementById('modal-map-terrain');
+  if (mapBox) {
+    if (_modalMapTerrain) { _modalMapTerrain.remove(); _modalMapTerrain = null; }
+    const hasPoly = a.polygon && a.polygon.length >= 3;
+    const hasGeo  = a.lat != null && a.lng != null;
+    if (a.typeTab === 'tab-logement' && (hasPoly || hasGeo)) {
+      mapBox.style.display = 'block';
+      mapBox.innerHTML = '';
+      setTimeout(() => {
+        _modalMapTerrain = L.map(mapBox, { zoomControl:false, attributionControl:false, scrollWheelZoom:false });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(_modalMapTerrain);
+        if (hasPoly) {
+          const poly = L.polygon(a.polygon.map(p=>[p.lat,p.lng]), { color:'#D4921E', weight:2, fillColor:'#D4921E', fillOpacity:.25 }).addTo(_modalMapTerrain);
+          _modalMapTerrain.fitBounds(poly.getBounds(), { padding:[16,16] });
+        } else {
+          _modalMapTerrain.setView([a.lat, a.lng], 15);
+          L.marker([a.lat, a.lng]).addTo(_modalMapTerrain);
+        }
+        _modalMapTerrain.invalidateSize();
+      }, 60);
+    } else {
+      mapBox.style.display = 'none';
+    }
+  }
 
   // ── Photos ──
   const photos = a.photos && a.photos.length ? a.photos : [];
@@ -12088,7 +12132,10 @@ function switchModalPhoto(idx) {
   imgEl.onclick = () => ouvrirPhotoViewer(idx);
 }
 
-function fermerModal() { document.getElementById('modal-annonce').classList.remove('open'); }
+function fermerModal() {
+  document.getElementById('modal-annonce').classList.remove('open');
+  if (_modalMapTerrain) { _modalMapTerrain.remove(); _modalMapTerrain = null; }
+}
 
 // ══════════════════════════════════════════
 //  MODE INVITÉ — Livraison sans compte
@@ -12627,6 +12674,7 @@ function payTraiter() {
         valeur: depotEnCours.valeur, etat: depotEnCours.etat,
         desc: depotEnCours.desc, ville: depotEnCours.ville,
         lat: depotEnCours.lat || null, lng: depotEnCours.lng || null,
+        polygon: depotEnCours.polygon || null, surfaceM2: depotEnCours.surfaceM2 || null,
         vendeurId: SESSION?.id || 1,
         statut: MODE === 'local' ? 'en-ligne' : 'attente', vues: 0,
         emoji: emojiCat(depotEnCours.cat),
@@ -12670,6 +12718,12 @@ function payTraiter() {
       document.getElementById('pay-success-ref').textContent = 'REF: ' + ref;
       depotEnCours = null;
       DEPOT_GEO = null;
+      DEPOT_GEO_PRECIS = null;
+      DEPOT_POLYGON = null;
+      const _lblGeoRAZ = document.getElementById('depot-geo-precise-label');
+      if (_lblGeoRAZ) _lblGeoRAZ.textContent = 'Aucune position précise placée';
+      const _lblPolyRAZ = document.getElementById('depot-polygon-label');
+      if (_lblPolyRAZ) _lblPolyRAZ.textContent = 'Aucun contour tracé';
       DEPOT_PHOTOS = [];
       renderHeroTop();
       majPhotosGrid();
@@ -12984,8 +13038,11 @@ function publierAnnonce() {
   const tauxComm = planUser ? planUser.limites.commission : CFG.comm_taux_gratuit;
   let commission = Math.round(valeur * tauxComm / 100);
   commission = Math.max(CFG.comm_min_fcfa, Math.min(CFG.comm_max_fcfa, commission));
+  // Position exacte placée sur la carte (dépôt logement/terrain) prioritaire sur le GPS approximatif
+  const geoFinal = DEPOT_GEO_PRECIS || DEPOT_GEO;
   depotEnCours = {titre,cat,etat,valeur,desc,ville,commission, photos: DEPOT_PHOTOS.map(p=>p.src), targetTab: typeAnnonce,
-    lat: DEPOT_GEO ? DEPOT_GEO.lat : null, lng: DEPOT_GEO ? DEPOT_GEO.lng : null};
+    lat: geoFinal ? geoFinal.lat : null, lng: geoFinal ? geoFinal.lng : null,
+    polygon: DEPOT_POLYGON, surfaceM2: DEPOT_POLYGON ? calculerSurfacePolygone(DEPOT_POLYGON) : null};
   ouvrirModalPaiement(commission, titre);
 }
 
@@ -16342,6 +16399,191 @@ function btDrawerTab(tabId, btBtnId, bdiId) {
 // ══════════════════════════════════════════
 
 // ══════════════════════════════════════════
+//  GÉOPOSITIONNEMENT PRÉCIS & POLYGONE TERRAIN
+//  (dépôt d'annonce — Résidences & Logements : vente
+//   villas, appartements, terrains avec bornage)
+// ══════════════════════════════════════════
+
+let DEPOT_GEO_PRECIS  = null;  // {lat,lng} placé manuellement sur la carte
+let DEPOT_POLYGON     = null;  // [{lat,lng}, ...] contour du terrain (bornage)
+let _modalMapTerrain  = null;  // instance Leaflet de la mini-carte en fiche détail
+let _mapPick          = null;  // instance Leaflet du sélecteur de position
+let _mapPickMarker    = null;
+let _mapPoly          = null;  // instance Leaflet du dessinateur de polygone
+let _mapPolyLayer     = null;  // L.polygon en cours de dessin
+let _mapPolyMarkers   = [];    // marqueurs des sommets en cours
+let _mapPolyPoints    = [];    // [{lat,lng}, ...] points en cours de tracé
+
+// Calcule la surface d'un polygone (mètres carrés) par projection locale + formule du lacet
+function calculerSurfacePolygone(points) {
+  if (!points || points.length < 3) return 0;
+  const R = 6378137; // rayon terrestre moyen (m)
+  const latRef = points[0].lat * Math.PI / 180;
+  const xy = points.map(p => ({
+    x: (p.lng * Math.PI / 180) * R * Math.cos(latRef),
+    y: (p.lat * Math.PI / 180) * R
+  }));
+  let aire = 0;
+  for (let i = 0; i < xy.length; i++) {
+    const j = (i + 1) % xy.length;
+    aire += xy[i].x * xy[j].y - xy[j].x * xy[i].y;
+  }
+  return Math.abs(aire / 2);
+}
+
+function formaterSurface(m2) {
+  if (!m2) return '0 m²';
+  if (m2 >= 10000) return (m2/10000).toLocaleString('fr-FR',{maximumFractionDigits:2}) + ' ha (' + Math.round(m2).toLocaleString('fr-FR') + ' m²)';
+  return Math.round(m2).toLocaleString('fr-FR') + ' m²';
+}
+
+function _depotCentreCarte() {
+  const ville = document.getElementById('depot-ville')?.value;
+  const c = (ville && typeof COORDS_VILLES !== 'undefined' && COORDS_VILLES[ville]) ? COORDS_VILLES[ville] : {lat:5.345, lng:-4.024};
+  return [c.lat, c.lng];
+}
+
+// ── Position exacte (marqueur unique déplaçable) ──
+function ouvrirPositionPreciseDepot() {
+  const panel = document.getElementById('geo-picker-panel');
+  if (!panel) return;
+  panel.classList.add('open');
+  setTimeout(() => {
+    if (!_mapPick) {
+      _mapPick = L.map('geo-picker-map', { zoomControl:true }).setView(_depotCentreCarte(), 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap', maxZoom: 19
+      }).addTo(_mapPick);
+      _mapPick.on('click', e => _depotPlacerMarqueur(e.latlng));
+    } else {
+      _mapPick.setView(_depotCentreCarte(), 14);
+    }
+    _mapPick.invalidateSize();
+    if (DEPOT_GEO_PRECIS) _depotPlacerMarqueur(DEPOT_GEO_PRECIS);
+  }, 100);
+}
+
+function _depotPlacerMarqueur(latlng) {
+  DEPOT_GEO_PRECIS = { lat: latlng.lat, lng: latlng.lng };
+  if (_mapPickMarker) _mapPick.removeLayer(_mapPickMarker);
+  _mapPickMarker = L.marker([latlng.lat, latlng.lng], { draggable:true }).addTo(_mapPick);
+  _mapPickMarker.on('dragend', () => {
+    const p = _mapPickMarker.getLatLng();
+    DEPOT_GEO_PRECIS = { lat: p.lat, lng: p.lng };
+  });
+}
+
+function confirmerPositionPreciseDepot() {
+  if (!DEPOT_GEO_PRECIS) { toast('Cliquez sur la carte pour placer un repère', 'erreur'); return; }
+  const lbl = document.getElementById('depot-geo-precise-label');
+  if (lbl) lbl.innerHTML = `✅ Position enregistrée (${DEPOT_GEO_PRECIS.lat.toFixed(5)}, ${DEPOT_GEO_PRECIS.lng.toFixed(5)})`;
+  fermerGeoPicker();
+}
+
+function effacerPositionPreciseDepot() {
+  DEPOT_GEO_PRECIS = null;
+  if (_mapPickMarker && _mapPick) { _mapPick.removeLayer(_mapPickMarker); _mapPickMarker = null; }
+  const lbl = document.getElementById('depot-geo-precise-label');
+  if (lbl) lbl.textContent = 'Aucune position précise placée';
+}
+
+function fermerGeoPicker() {
+  const panel = document.getElementById('geo-picker-panel');
+  if (panel) panel.classList.remove('open');
+}
+
+// ── Délimitation du terrain (polygone de bornage) ──
+function ouvrirDelimitationTerrain() {
+  const panel = document.getElementById('polygon-picker-panel');
+  if (!panel) return;
+  panel.classList.add('open');
+  setTimeout(() => {
+    if (!_mapPoly) {
+      _mapPoly = L.map('polygon-picker-map', { zoomControl:true }).setView(_depotCentreCarte(), 17);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap', maxZoom: 19
+      }).addTo(_mapPoly);
+      _mapPoly.on('click', e => polygoneAjouterPoint(e.latlng));
+    } else {
+      _mapPoly.setView(_depotCentreCarte(), 17);
+    }
+    _mapPoly.invalidateSize();
+    _mapPolyPoints = DEPOT_POLYGON ? DEPOT_POLYGON.map(p => ({lat:p.lat, lng:p.lng})) : [];
+    _polygoneRedessiner();
+  }, 100);
+}
+
+function polygoneAjouterPoint(latlng) {
+  _mapPolyPoints.push({ lat: latlng.lat, lng: latlng.lng });
+  _polygoneRedessiner();
+}
+
+function polygoneAnnulerDernier() {
+  _mapPolyPoints.pop();
+  _polygoneRedessiner();
+}
+
+function polygoneEffacerTout() {
+  _mapPolyPoints = [];
+  _polygoneRedessiner();
+}
+
+function _polygoneRedessiner() {
+  if (!_mapPoly) return;
+  if (_mapPolyLayer) { _mapPoly.removeLayer(_mapPolyLayer); _mapPolyLayer = null; }
+  _mapPolyMarkers.forEach(m => _mapPoly.removeLayer(m));
+  _mapPolyMarkers = [];
+  _mapPolyPoints.forEach((p,i) => {
+    const m = L.circleMarker([p.lat,p.lng], { radius:6, color:'#D4921E', fillColor:'#D4921E', fillOpacity:1 }).addTo(_mapPoly);
+    m.bindTooltip(String(i+1), { permanent:true, direction:'top', offset:[0,-8] });
+    _mapPolyMarkers.push(m);
+  });
+  if (_mapPolyPoints.length >= 2) {
+    _mapPolyLayer = L.polygon(_mapPolyPoints.map(p=>[p.lat,p.lng]), {
+      color:'#D4921E', weight:2, fillColor:'#D4921E', fillOpacity:.25
+    }).addTo(_mapPoly);
+  }
+  const info = document.getElementById('polygon-picker-info');
+  if (info) {
+    const surface = calculerSurfacePolygone(_mapPolyPoints);
+    info.textContent = _mapPolyPoints.length < 3
+      ? `${_mapPolyPoints.length} point(s) placé(s) — minimum 3 pour fermer le contour`
+      : `${_mapPolyPoints.length} points · Surface estimée : ${formaterSurface(surface)}`;
+  }
+}
+
+function polygoneTerminer() {
+  if (_mapPolyPoints.length < 3) { toast('Placez au moins 3 points pour fermer le contour du terrain', 'erreur'); return; }
+  DEPOT_POLYGON = _mapPolyPoints.map(p => ({lat:p.lat, lng:p.lng}));
+  // Le centroïde du polygone sert de position précise de l'annonce sur la carte générale
+  DEPOT_GEO_PRECIS = {
+    lat: DEPOT_POLYGON.reduce((s,p)=>s+p.lat,0) / DEPOT_POLYGON.length,
+    lng: DEPOT_POLYGON.reduce((s,p)=>s+p.lng,0) / DEPOT_POLYGON.length
+  };
+  const surface = calculerSurfacePolygone(DEPOT_POLYGON);
+  const lbl = document.getElementById('depot-polygon-label');
+  if (lbl) lbl.innerHTML = `✅ Contour tracé · ${formaterSurface(surface)}`;
+  const lblGeo = document.getElementById('depot-geo-precise-label');
+  if (lblGeo) lblGeo.innerHTML = `✅ Position déduite du contour du terrain`;
+  fermerPolygonPicker();
+}
+
+function effacerDelimitationTerrain() {
+  DEPOT_POLYGON = null;
+  _mapPolyPoints = [];
+  _polygoneRedessiner();
+  const lbl = document.getElementById('depot-polygon-label');
+  if (lbl) lbl.textContent = 'Aucun contour tracé';
+}
+
+function fermerPolygonPicker() {
+  const panel = document.getElementById('polygon-picker-panel');
+  if (panel) panel.classList.remove('open');
+}
+
+// ══════════════════════════════════════════
+
+// ══════════════════════════════════════════
 //  CARTE GÉOLOCALISATION — LEAFLET
 // ══════════════════════════════════════════
 
@@ -16428,10 +16670,27 @@ function renderMapMarkers() {
   // ── Annonces ──
   if (mapCouche === 'annonces' || mapCouche === 'tout') {
     DAO._local.annonces.filter(a => a.statut === 'en-ligne').forEach(a => {
-      const c = COORDS_VILLES[a.ville];
+      // Terrain avec contour de bornage tracé → polygone plutôt qu'un simple marqueur
+      if (a.polygon && a.polygon.length >= 3) {
+        const surfTxt = a.surfaceM2 ? ` · 📐 ${formaterSurface(a.surfaceM2)}` : '';
+        const poly = L.polygon(a.polygon.map(p=>[p.lat,p.lng]), {
+          color:'#D4921E', weight:2, fillColor:'#D4921E', fillOpacity:.25
+        }).addTo(MAP).bindPopup(`<div class="lf-popup">
+            <div class="lf-popup-titre">${a.emoji||'📐'} ${escapeHtml(a.titre)}</div>
+            <div class="lf-popup-sub">📍 ${a.ville} · ${a.cat}${surfTxt}</div>
+            <div class="lf-popup-prix">${fmtFCFA(a.valeur)}</div>
+            <button class="lf-popup-btn" onclick="fermerCarte();ouvrirAnnonce(${a.id})">Voir l'annonce →</button>
+          </div>`, { maxWidth: 220 });
+        mapMarkers.push(poly);
+        a.polygon.forEach(p => bounds.push([p.lat, p.lng]));
+        return;
+      }
+      // Position précise placée par le vendeur (logement/terrain), sinon coordonnées de ville (approx.)
+      const precis = (a.lat != null && a.lng != null) ? { lat:a.lat, lng:a.lng } : null;
+      const c = precis || COORDS_VILLES[a.ville];
       if (!c) return;
-      // Légère variation pour éviter superposition
-      const jitter = {lat: c.lat + (Math.random()-.5)*0.008, lng: c.lng + (Math.random()-.5)*0.008};
+      // Légère variation pour éviter superposition — inutile si la position est précise
+      const jitter = precis ? c : {lat: c.lat + (Math.random()-.5)*0.008, lng: c.lng + (Math.random()-.5)*0.008};
       const popup = `<div class="lf-popup">
         <div class="lf-popup-titre">${a.emoji||'📦'} ${escapeHtml(a.titre)}</div>
         <div class="lf-popup-sub">📍 ${a.ville} · ${a.cat}</div>
@@ -22365,6 +22624,40 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   <div id="map-container"></div>
 </div>
 
+<!-- ═══ SÉLECTEUR DE POSITION PRÉCISE (dépôt d'annonce — vente logement/terrain) ═══ -->
+<div class="map-panel" id="geo-picker-panel">
+  <div class="map-header">
+    <button class="map-close" onclick="fermerGeoPicker()">✕</button>
+    <div class="map-header-titre">📍 Placer le bien sur la carte</div>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:8px 14px;font-size:12px;font-weight:700;border-radius:8px;white-space:nowrap" onclick="effacerPositionPreciseDepot()">Effacer</button>
+  </div>
+  <div class="map-filters">
+    <span style="font-size:12px;color:var(--gris-text)">Cliquez (ou touchez) l'emplacement exact du bien sur la carte, puis confirmez. Le repère peut être glissé pour l'ajuster.</span>
+  </div>
+  <div id="geo-picker-map" style="flex:1;min-height:0"></div>
+  <div style="padding:12px 16px;flex-shrink:0;border-top:1px solid var(--gris-mid)">
+    <button class="btn btn-or w-full" style="padding:12px" onclick="confirmerPositionPreciseDepot()">✅ Confirmer cette position</button>
+  </div>
+</div>
+
+<!-- ═══ DÉLIMITATION DU TERRAIN — TRACÉ POLYGONE (dépôt d'annonce — vente de terrain) ═══ -->
+<div class="map-panel" id="polygon-picker-panel">
+  <div class="map-header">
+    <button class="map-close" onclick="fermerPolygonPicker()">✕</button>
+    <div class="map-header-titre">✏️ Délimiter le terrain</div>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:8px 14px;font-size:12px;font-weight:700;border-radius:8px;white-space:nowrap" onclick="polygoneAnnulerDernier()">↩ Annuler point</button>
+  </div>
+  <div class="map-filters" style="flex-direction:column;align-items:flex-start;gap:4px;white-space:normal">
+    <span style="font-size:12px;color:var(--gris-text)">Cliquez sur chaque angle du terrain dans l'ordre du bornage (minimum 3 points).</span>
+    <span id="polygon-picker-info" style="font-size:12px;font-weight:700;color:var(--or)">0 point(s) placé(s) — minimum 3 pour fermer le contour</span>
+  </div>
+  <div id="polygon-picker-map" style="flex:1;min-height:0"></div>
+  <div style="padding:12px 16px;flex-shrink:0;border-top:1px solid var(--gris-mid);display:flex;gap:10px">
+    <button class="btn btn-outline" style="flex:1;padding:12px" onclick="polygoneEffacerTout()">Effacer tout</button>
+    <button class="btn btn-or" style="flex:1;padding:12px" onclick="polygoneTerminer()">✅ Terminer le contour</button>
+  </div>
+</div>
+
 <!-- ═══ CONTACT BOTTOM SHEET ═══ -->
 <div class="contact-overlay" id="contact-overlay" onclick="fermerContact()"></div>
 <div class="contact-sheet" id="contact-sheet">
@@ -23223,6 +23516,22 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     } else if (mode === 'annonceur') {
       if (titreInput) titreInput.placeholder = 'Ex: Promo Ramadan — Boutique Adjoua';
     }
+
+    // Géoposition précise / polygone terrain : uniquement pertinent pour Résidences & Logements
+    if (typeof window.onDepotCatChange === 'function') window.onDepotCatChange();
+  };
+
+  // Affiche/masque les blocs "position précise sur la carte" et "délimitation du
+  // terrain (polygone)" selon le type d'annonce et la catégorie sélectionnés.
+  // Vente d'un logement/terrain (onglet Résidences & Logements) → position précise
+  // toujours proposée ; le tracé du polygone n'apparaît que pour la catégorie Terrain.
+  window.onDepotCatChange = function() {
+    const tabId = document.getElementById('depot-type')?.value;
+    const cat   = document.getElementById('depot-cat')?.value;
+    const gGeo  = document.getElementById('depot-geo-precise-group');
+    const gPoly = document.getElementById('depot-terrain-group');
+    if (gGeo)  gGeo.style.display  = (tabId === 'tab-logement') ? '' : 'none';
+    if (gPoly) gPoly.style.display = (tabId === 'tab-logement' && cat === 'Terrain') ? '' : 'none';
   };
 
   // Lancer après chargement DOM complet
