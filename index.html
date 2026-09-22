@@ -23,6 +23,27 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  // ── Filet de sécurité global : une erreur JS ne doit jamais faire planter
+  // ou geler silencieusement toute l'application côté utilisateur. ──
+  window.addEventListener('error', function(e) {
+    try {
+      console.error('Erreur JS non interceptée:', e.error || e.message, e.filename+':'+e.lineno);
+      if (window._toastPret && typeof toast === 'function') {
+        toast('⚠️ ' + (e.message || 'Erreur inattendue') , 'erreur');
+      }
+    } catch(_) {}
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    try {
+      const msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason);
+      console.error('Promesse rejetée non interceptée:', e.reason);
+      if (window._toastPret && typeof toast === 'function') {
+        toast('⚠️ ' + msg, 'erreur');
+      }
+    } catch(_) {}
+  });
+</script>
 <style>
   /* Empêche le zoom automatique de Safari iOS/iPadOS au focus d'un champ.
      Nécessaire en !important : de nombreux champs de tout le site portent
@@ -3053,6 +3074,7 @@
       tel: row.tel, ville: row.ville, role: row.role, note: Number(row.note) || 0,
       nbAvis: row.nb_avis || 0, verifie: row.verifie, statut: row.statut || 'valide',
       entreprise: row.entreprise, secteur: row.secteur,
+      adminPermissions: row.admin_permissions || null,
       dateInscription: (row.created_at || '').slice(0, 10),
       dateValidation: row.date_validation ? row.date_validation.slice(0, 10) : null,
       validePar: row.valide_par || null
@@ -7887,16 +7909,36 @@ const ENTREPRISE = {
           <div class="upload-zone" id="upload-zone" onclick="document.getElementById('depot-photos').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropPhotos(event)">
             <span class="upload-zone-ico">📷</span>
             <div class="upload-zone-titre">Glissez vos photos ici ou cliquez</div>
-            <div class="upload-zone-sub">JPG, PNG, WEBP — max 5 Mo · jusqu'à 5 photos</div>
+            <div class="upload-zone-sub">JPG, PNG, WEBP — max 50 Mo · jusqu'à 5 photos</div>
             <div class="upload-btn-row"><span class="upload-btn">Depuis la galerie</span><span class="upload-btn">Prendre une photo</span></div>
           </div>
-          <input type="file" id="depot-photos" multiple accept="image/*" capture="environment" style="display:none" onchange="ajouterPhotos(this.files)">
+          <input type="file" id="depot-photos" multiple accept="image/*" style="display:none" onchange="ajouterPhotos(this.files)">
           <div id="photos-grid" class="photos-grid" style="display:none"></div>
           <div id="photos-count-bar" class="photo-count-bar" style="display:none">
             <span><strong id="photos-count">0</strong> / 5 photo(s)</span>
             <span style="color:var(--or);font-size:11px">⭐ Photo principale en premier</span>
           </div>
           <div id="photos-manquante" style="display:none;font-size:12px;color:var(--rouge);margin-top:4px">Ajoutez au moins 1 photo</div>
+        </div>
+        <div class="form-group">
+          <label>Vidéo <span style="font-weight:400;color:var(--gris-text)">(optionnelle · 1 vidéo max · 150 Mo)</span></label>
+          <div class="upload-zone" id="upload-zone-video" onclick="document.getElementById('depot-video').click()" style="min-height:70px;padding:14px">
+            <span class="upload-zone-ico">🎥</span>
+            <div class="upload-zone-titre">Ajouter une vidéo de présentation</div>
+            <div class="upload-zone-sub">MP4, MOV, WEBM — max 150 Mo</div>
+          </div>
+          <input type="file" id="depot-video" accept="video/*" style="display:none" onchange="ajouterVideoDepot(this.files)">
+          <div id="depot-video-preview" style="display:none;margin-top:8px;position:relative;max-width:280px">
+            <video id="depot-video-player" controls playsinline webkit-playsinline preload="metadata" style="width:100%;border-radius:var(--radius);background:#000;display:block"></video>
+            <button type="button" onclick="supprimerVideoDepot()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:13px">✕</button>
+            <div id="depot-video-status" style="font-size:11px;color:var(--gris-text);margin-top:4px"></div>
+          </div>
+        </div>
+        <!-- ── Documents légaux (vente logement/terrain — exigences Côte d'Ivoire) ── -->
+        <div class="form-group" id="depot-docs-legaux-group" style="display:none">
+          <label>Documents légaux du bien <span style="font-weight:400;color:var(--gris-text)">(exigés pour une vente immobilière en Côte d'Ivoire)</span></label>
+          <div id="depot-docs-legaux-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div style="font-size:11px;color:var(--gris-text);margin-top:6px">📌 Les documents marqués * sont indispensables pour publier une annonce de vente immobilière. Formats acceptés : image ou PDF, max 15 Mo. Transmis à l'équipe de vérification, non visibles publiquement.</div>
         </div>
         <div class="separator"></div>
         <div style="font-weight:600;font-size:15px;margin-bottom:6px">Paiement de la commission</div>
@@ -8107,6 +8149,7 @@ const ENTREPRISE = {
       <button class="ann-nav-btn" onclick="annTab(this,'ann-tarifs')">Tarifs</button>
       <button class="ann-nav-btn" onclick="annTab(this,'ann-facturation')">Facturation</button>
     </div>
+    <button id="ann-retour-admin-btn" class="btn btn-outline" style="display:none;color:#fff;border-color:rgba(255,255,255,.45);font-size:13px;margin-right:8px" onclick="retourAdminDepuisAnnonceur()">← Retour Admin</button>
     <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.45);font-size:13px" onclick="deconnecterAnnonceur()">← Déconnexion</button>
   </div>
 
@@ -8596,7 +8639,10 @@ const ENTREPRISE = {
     <!-- TAB USERS -->
     <div id="admin-users" class="hidden">
       <div class="admin-section">
-        <div class="admin-section-titre">Membres inscrits</div>
+        <div class="admin-section-titre" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <span>Membres inscrits</span>
+          <button class="btn btn-or btn-sm" onclick="adminCreerUser()" style="padding:6px 14px;font-size:13px">+ Nouvel utilisateur</button>
+        </div>
         <table class="table">
           <thead><tr><th>Nom</th><th>Email</th><th>Ville</th><th>Téléphone</th><th>Annonces</th><th>Actions</th></tr></thead>
           <tbody id="admin-users-tbody"></tbody>
@@ -11459,7 +11505,35 @@ async function seConnecterAnnonceur() {
 }
 
 function deconnecterAnnonceur() {
+  if (_annApercuAdmin) { retourAdminDepuisAnnonceur(); return; }
   seDeconnecter();
+}
+
+// ── Aperçu admin de l'espace annonceur (développement/support) ──
+// Permet à un compte admin de consulter l'espace d'un annonceur sans
+// connaître son mot de passe. Ne remplace pas la session admin (SESSION) :
+// seule SESSION_ANN change, donc "Retour Admin" restaure l'écran admin
+// sans déconnecter le compte admin.
+let _annApercuAdmin = false;
+
+function adminVoirEspaceAnnonceur(id) {
+  const u = DAO._local.utilisateurs.find(x => x.id === id && x.role === 'annonceur');
+  if (!u) { toast('Compte annonceur introuvable', 'erreur'); return; }
+  _annApercuAdmin = true;
+  SESSION_ANN = u;
+  goScreen('screen-annonceur');
+  renderAnnTableau();
+  const btn = document.getElementById('ann-retour-admin-btn');
+  if (btn) btn.style.display = '';
+}
+
+function retourAdminDepuisAnnonceur() {
+  _annApercuAdmin = false;
+  SESSION_ANN = null;
+  const btn = document.getElementById('ann-retour-admin-btn');
+  if (btn) btn.style.display = 'none';
+  goScreen('screen-admin');
+  if (typeof renderAdmin === 'function') renderAdmin();
 }
 
 // ── Inscription annonceur — même circuit que sInscrire() : fiche en attente,
@@ -12675,6 +12749,7 @@ function payTraiter() {
         desc: depotEnCours.desc, ville: depotEnCours.ville,
         lat: depotEnCours.lat || null, lng: depotEnCours.lng || null,
         polygon: depotEnCours.polygon || null, surfaceM2: depotEnCours.surfaceM2 || null,
+        video: depotEnCours.video || null, docsLegaux: depotEnCours.docsLegaux || null,
         vendeurId: SESSION?.id || 1,
         statut: MODE === 'local' ? 'en-ligne' : 'attente', vues: 0,
         emoji: emojiCat(depotEnCours.cat),
@@ -12720,10 +12795,13 @@ function payTraiter() {
       DEPOT_GEO = null;
       DEPOT_GEO_PRECIS = null;
       DEPOT_POLYGON = null;
+      DEPOT_VIDEO = null;
+      DEPOT_DOCS_LEGAUX = {};
       const _lblGeoRAZ = document.getElementById('depot-geo-precise-label');
       if (_lblGeoRAZ) _lblGeoRAZ.textContent = 'Aucune position précise placée';
       const _lblPolyRAZ = document.getElementById('depot-polygon-label');
       if (_lblPolyRAZ) _lblPolyRAZ.textContent = 'Aucun contour tracé';
+      majVideoPreviewDepot();
       DEPOT_PHOTOS = [];
       renderHeroTop();
       majPhotosGrid();
@@ -13034,15 +13112,31 @@ function publierAnnonce() {
   }
   if (DEPOT_PHOTOS.some(p => p.uploading)) { toast('⏳ Envoi des photos en cours, patientez…', 'erreur'); return; }
   if (DEPOT_PHOTOS.some(p => p.erreur)) { toast('⚠️ Une photo n\'a pas pu être envoyée — retirez-la ou réessayez', 'erreur'); return; }
+  if (DEPOT_VIDEO && DEPOT_VIDEO.uploading) { toast('⏳ Envoi de la vidéo en cours, patientez…', 'erreur'); return; }
+  if (DEPOT_VIDEO && DEPOT_VIDEO.erreur) { toast('⚠️ La vidéo n\'a pas pu être envoyée — retirez-la ou réessayez', 'erreur'); return; }
+  // Vente d'un logement/terrain (Côte d'Ivoire) : documents légaux obligatoires avant publication
+  if (typeAnnonce === 'tab-logement') {
+    const manquants = _docsLegauxManquants();
+    if (manquants.length) {
+      toast('Documents légaux manquants : ' + manquants.join(', '), 'erreur');
+      return;
+    }
+    if (Object.values(DEPOT_DOCS_LEGAUX).some(d => d.uploading)) { toast('⏳ Envoi des documents en cours, patientez…', 'erreur'); return; }
+    if (Object.values(DEPOT_DOCS_LEGAUX).some(d => d.erreur)) { toast('⚠️ Un document n\'a pas pu être envoyé — réessayez', 'erreur'); return; }
+  }
   const planUser = getPlanUser(SESSION?.id);
   const tauxComm = planUser ? planUser.limites.commission : CFG.comm_taux_gratuit;
   let commission = Math.round(valeur * tauxComm / 100);
   commission = Math.max(CFG.comm_min_fcfa, Math.min(CFG.comm_max_fcfa, commission));
   // Position exacte placée sur la carte (dépôt logement/terrain) prioritaire sur le GPS approximatif
   const geoFinal = DEPOT_GEO_PRECIS || DEPOT_GEO;
+  const docsLegauxPourEnvoi = {};
+  Object.keys(DEPOT_DOCS_LEGAUX).forEach(k => { docsLegauxPourEnvoi[k] = { nom: DEPOT_DOCS_LEGAUX[k].nom, src: DEPOT_DOCS_LEGAUX[k].src }; });
   depotEnCours = {titre,cat,etat,valeur,desc,ville,commission, photos: DEPOT_PHOTOS.map(p=>p.src), targetTab: typeAnnonce,
     lat: geoFinal ? geoFinal.lat : null, lng: geoFinal ? geoFinal.lng : null,
-    polygon: DEPOT_POLYGON, surfaceM2: DEPOT_POLYGON ? calculerSurfacePolygone(DEPOT_POLYGON) : null};
+    polygon: DEPOT_POLYGON, surfaceM2: DEPOT_POLYGON ? calculerSurfacePolygone(DEPOT_POLYGON) : null,
+    video: DEPOT_VIDEO ? DEPOT_VIDEO.src : null,
+    docsLegaux: (typeAnnonce === 'tab-logement' && Object.keys(docsLegauxPourEnvoi).length) ? docsLegauxPourEnvoi : null};
   ouvrirModalPaiement(commission, titre);
 }
 
@@ -14200,6 +14294,7 @@ function toast(msg, type='success') {
   t.className = 'toast show' + (type==='erreur'?' erreur':type==='info'?' info':'');
   setTimeout(()=>t.classList.remove('show'),3000);
 }
+window._toastPret = true;
 
 // ─── CARROUSEL ───
 function scrollCarrousel(dir) {
@@ -16584,6 +16679,176 @@ function fermerPolygonPicker() {
 // ══════════════════════════════════════════
 
 // ══════════════════════════════════════════
+//  VIDÉO DE PRÉSENTATION & DOCUMENTS LÉGAUX
+//  (dépôt d'annonce — vente de logements et terrains, Côte d'Ivoire)
+// ══════════════════════════════════════════
+
+let DEPOT_VIDEO = null; // {src, file, nom, uploading, erreur} ou null
+
+function ajouterVideoDepot(files) {
+  try {
+    if (!files || !files.length) return;
+    const f = files[0];
+    if (!f.type.startsWith('video/')) { toast('Merci de sélectionner un fichier vidéo', 'erreur'); return; }
+    if (f.size > 150 * 1024 * 1024) { toast('La vidéo dépasse 150 Mo', 'erreur'); return; }
+    DEPOT_VIDEO = { src: URL.createObjectURL(f), file: f, nom: f.name, uploading: true };
+    majVideoPreviewDepot();
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined' && DAO.uploadPhoto) {
+      const path = `${SESSION?.id || 'anon'}/video-${Date.now()}-${f.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(f, path).then(r => {
+        if (!DEPOT_VIDEO) return; // supprimée entre-temps
+        DEPOT_VIDEO.uploading = false;
+        if (r.error || !r.data) { DEPOT_VIDEO.erreur = true; toast("⚠️ Échec de l'envoi de la vidéo", 'erreur'); }
+        else { DEPOT_VIDEO.src = r.data.publicUrl; DEPOT_VIDEO.uploaded = true; }
+        majVideoPreviewDepot();
+      }).catch(err => {
+        console.error('ajouterVideoDepot upload', err);
+        if (DEPOT_VIDEO) { DEPOT_VIDEO.uploading = false; DEPOT_VIDEO.erreur = true; }
+        toast("⚠️ Échec de l'envoi de la vidéo", 'erreur');
+        majVideoPreviewDepot();
+      });
+    } else {
+      DEPOT_VIDEO.uploading = false;
+    }
+    const input = document.getElementById('depot-video');
+    if (input) input.value = '';
+  } catch (err) {
+    console.error('ajouterVideoDepot', err);
+    toast("⚠️ Impossible de charger cette vidéo", 'erreur');
+  }
+}
+
+function supprimerVideoDepot() {
+  if (DEPOT_VIDEO && DEPOT_VIDEO.src && DEPOT_VIDEO.src.startsWith('blob:')) URL.revokeObjectURL(DEPOT_VIDEO.src);
+  DEPOT_VIDEO = null;
+  majVideoPreviewDepot();
+}
+
+function majVideoPreviewDepot() {
+  const zone = document.getElementById('upload-zone-video');
+  const preview = document.getElementById('depot-video-preview');
+  const player = document.getElementById('depot-video-player');
+  const status = document.getElementById('depot-video-status');
+  if (!preview || !player) return;
+  if (!DEPOT_VIDEO) {
+    if (zone) zone.style.display = 'flex';
+    preview.style.display = 'none';
+    player.removeAttribute('src');
+    return;
+  }
+  if (zone) zone.style.display = 'none';
+  preview.style.display = 'block';
+  player.src = DEPOT_VIDEO.src;
+  if (status) status.textContent = DEPOT_VIDEO.uploading ? '⏳ Envoi en cours…' : (DEPOT_VIDEO.erreur ? "⚠️ Échec de l'envoi — réessayez" : '✅ Vidéo prête');
+}
+
+// ── Documents légaux requis en Côte d'Ivoire pour une vente immobilière ──
+// Terrain : Titre Foncier / ACD-ACP / attestation villageoise (conservation foncière,
+// AGEF/Direction du Domaine Urbain, autorité villageoise selon le régime foncier),
+// plan de bornage, certificat de non-litige (mairie/sous-préfecture).
+// Bâti (villa, appartement, bureau, commerce) : titre de propriété, permis de
+// construire, certificat de conformité (direction régionale de la construction).
+// Dans tous les cas : pièce d'identité du vendeur.
+const DOCS_LEGAUX_IMMO = {
+  'Terrain': [
+    { key:'titre_propriete',       label:"Titre Foncier (TF), Arrêté de Concession Définitive/Provisoire (ACD/ACP) ou attestation villageoise", requis:true },
+    { key:'plan_bornage',          label:'Plan de bornage / plan de situation du terrain', requis:true },
+    { key:'certificat_non_litige', label:'Certificat de non-litige / non-lotissement (mairie ou sous-préfecture)', requis:false },
+    { key:'quittance_taxe',        label:'Quittance de la taxe foncière à jour', requis:false },
+    { key:'piece_identite',        label:"Pièce d'identité du vendeur (CNI, passeport ou attestation d'identité)", requis:true },
+  ],
+  'default': [
+    { key:'titre_propriete',       label:'Titre Foncier (TF), ACD ou attestation de propriété du bâti', requis:true },
+    { key:'permis_construire',     label:'Permis de construire', requis:false },
+    { key:'certificat_conformite', label:"Certificat de conformité / attestation d'habitabilité", requis:false },
+    { key:'piece_identite',        label:"Pièce d'identité du vendeur (CNI, passeport ou attestation d'identité)", requis:true },
+  ]
+};
+
+let DEPOT_DOCS_LEGAUX = {}; // { [key]: {src,file,nom,uploading,erreur} }
+
+function renderDocsLegauxList() {
+  const cont = document.getElementById('depot-docs-legaux-list');
+  if (!cont) return;
+  const cat = document.getElementById('depot-cat')?.value;
+  const liste = DOCS_LEGAUX_IMMO[cat] || DOCS_LEGAUX_IMMO['default'];
+  cont.innerHTML = liste.map(d => `
+    <div class="depot-doc-row" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1.5px dashed var(--gris-mid);border-radius:var(--radius)">
+      <span style="font-size:18px">📄</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600;line-height:1.3">${d.label}${d.requis ? ' <span style="color:var(--rouge)">*</span>' : ' <span style="font-weight:400;color:var(--gris-text)">(recommandé)</span>'}</div>
+        <div style="font-size:11px;color:var(--gris-text)" id="doc-status-${d.key}">Non ajouté</div>
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" style="padding:5px 10px;font-size:12px;flex-shrink:0" onclick="document.getElementById('doc-input-${d.key}').click()">📎 Ajouter</button>
+      <input type="file" id="doc-input-${d.key}" accept="image/*,application/pdf" style="display:none" onchange="ajouterDocLegal('${d.key}', this.files)">
+    </div>`).join('');
+  // Réafficher le statut des documents déjà ajoutés (ex: retour au formulaire après une erreur)
+  Object.keys(DEPOT_DOCS_LEGAUX).forEach(k => majStatutDocLegal(k));
+}
+
+function ajouterDocLegal(key, files) {
+  try {
+    if (!files || !files.length) return;
+    const f = files[0];
+    const okType = f.type.startsWith('image/') || f.type === 'application/pdf';
+    if (!okType) { toast('Formats acceptés : image (JPG/PNG) ou PDF', 'erreur'); return; }
+    if (f.size > 15 * 1024 * 1024) { toast(`${f.name} dépasse 15 Mo`, 'erreur'); return; }
+    DEPOT_DOCS_LEGAUX[key] = { src: URL.createObjectURL(f), file: f, nom: f.name, uploading: true };
+    majStatutDocLegal(key);
+    if (typeof MODE !== 'undefined' && MODE === 'remote' && typeof DAO !== 'undefined' && DAO.uploadPhoto) {
+      const path = `${SESSION?.id || 'anon'}/doc-${key}-${Date.now()}-${f.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      DAO.uploadPhoto(f, path).then(r => {
+        if (!DEPOT_DOCS_LEGAUX[key]) return; // retiré entre-temps
+        DEPOT_DOCS_LEGAUX[key].uploading = false;
+        if (r.error || !r.data) { DEPOT_DOCS_LEGAUX[key].erreur = true; toast(`⚠️ Échec de l'envoi de ${f.name}`, 'erreur'); }
+        else { DEPOT_DOCS_LEGAUX[key].src = r.data.publicUrl; DEPOT_DOCS_LEGAUX[key].uploaded = true; }
+        majStatutDocLegal(key);
+      }).catch(err => {
+        console.error('ajouterDocLegal upload', err);
+        if (DEPOT_DOCS_LEGAUX[key]) { DEPOT_DOCS_LEGAUX[key].uploading = false; DEPOT_DOCS_LEGAUX[key].erreur = true; }
+        toast(`⚠️ Échec de l'envoi de ${f.name}`, 'erreur');
+        majStatutDocLegal(key);
+      });
+    } else {
+      DEPOT_DOCS_LEGAUX[key].uploading = false;
+      majStatutDocLegal(key);
+    }
+    const input = document.getElementById(`doc-input-${key}`);
+    if (input) input.value = '';
+  } catch (err) {
+    console.error('ajouterDocLegal', err);
+    toast('⚠️ Impossible de charger ce document', 'erreur');
+  }
+}
+
+function supprimerDocLegal(key) {
+  const d = DEPOT_DOCS_LEGAUX[key];
+  if (d && d.src && d.src.startsWith('blob:')) URL.revokeObjectURL(d.src);
+  delete DEPOT_DOCS_LEGAUX[key];
+  majStatutDocLegal(key);
+}
+
+function majStatutDocLegal(key) {
+  const el = document.getElementById(`doc-status-${key}`);
+  if (!el) return;
+  const d = DEPOT_DOCS_LEGAUX[key];
+  if (!d) { el.innerHTML = 'Non ajouté'; el.style.color = 'var(--gris-text)'; return; }
+  if (d.uploading) { el.innerHTML = '⏳ Envoi en cours…'; el.style.color = 'var(--gris-text)'; return; }
+  if (d.erreur) { el.innerHTML = "⚠️ Échec de l'envoi — réessayez"; el.style.color = 'var(--rouge)'; return; }
+  el.innerHTML = `✅ ${escapeHtml(d.nom)} <button type="button" onclick="supprimerDocLegal('${key}')" style="background:none;border:none;color:var(--rouge);cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px">retirer</button>`;
+  el.style.color = 'var(--vert)';
+}
+
+// Documents obligatoires manquants pour la catégorie sélectionnée (bloque la publication)
+function _docsLegauxManquants() {
+  const cat = document.getElementById('depot-cat')?.value;
+  const liste = DOCS_LEGAUX_IMMO[cat] || DOCS_LEGAUX_IMMO['default'];
+  return liste.filter(d => d.requis && !DEPOT_DOCS_LEGAUX[d.key]).map(d => d.label);
+}
+
+// ══════════════════════════════════════════
+
+// ══════════════════════════════════════════
 //  CARTE GÉOLOCALISATION — LEAFLET
 // ══════════════════════════════════════════
 
@@ -18235,7 +18500,50 @@ async function _adminRafraichirCache(cles) {
   }));
 }
 
+// ══════════════════════════════════════════════════════════════
+//  ADMIN — PERMISSIONS GRANULAIRES (comptes admin restreints)
+//  Un compte admin sans `adminPermissions` défini (undefined/null) reste
+//  un super-admin à accès total (rétrocompatible avec les comptes admin
+//  existants). Un compte créé avec une liste (même vide) de permissions
+//  est un admin restreint : il ne voit et n'atteint que ces sections
+//  (le Tableau de bord reste toujours accessible).
+// ══════════════════════════════════════════════════════════════
+const ADMIN_PERMISSIONS_LISTE = [
+  { key:'admin-annonces',     label:'Annonces (modération)' },
+  { key:'admin-users',        label:'Utilisateurs' },
+  { key:'admin-paiements',    label:'Paiements' },
+  { key:'admin-litiges',      label:'Litiges' },
+  { key:'admin-promos',       label:'Codes Promo' },
+  { key:'admin-pub',          label:'Publicités' },
+  { key:'admin-abonnements',  label:'Abonnements' },
+  { key:'admin-finances',     label:'Finances' },
+  { key:'admin-livraisons',   label:'Livraisons' },
+  { key:'admin-inscriptions', label:'Inscriptions' },
+  { key:'admin-profil',       label:'Profil & Paiements' },
+  { key:'admin-tarifs',       label:'Tarifs & Plans' },
+  { key:'admin-visibilite',   label:'Visibilité' },
+  { key:'admin-contenus',     label:'Contenus' },
+  { key:'admin-assistant-ia', label:'Assistant IA' },
+];
+
+function adminAPermission(tabId) {
+  if (tabId === 'admin-dash') return true;
+  const perms = SESSION?.adminPermissions;
+  if (!Array.isArray(perms)) return true; // super-admin : pas de restriction définie
+  return perms.includes(tabId);
+}
+
+// Masque les onglets de navigation admin non autorisés pour le compte connecté
+function appliquerPermissionsAdminNav() {
+  document.querySelectorAll('.admin-nav-btn').forEach(btn => {
+    const m = (btn.getAttribute('onclick') || '').match(/adminTab\(this,\s*'([^']+)'/);
+    if (!m) return;
+    btn.style.display = adminAPermission(m[1]) ? '' : 'none';
+  });
+}
+
 async function adminTab(el, tabId) {
+  if (!adminAPermission(tabId)) { toast('⛔ Accès non autorisé à cette section', 'erreur'); return; }
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
   el.classList.add('actif');
   document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
@@ -19039,7 +19347,8 @@ window.insConfirmerValidation = async function() {
           id: _insValiderUser._supabaseId, prenom: _insValiderUser.prenom, nom: _insValiderUser.nom,
           email: _insValiderUser.email, tel: _insValiderUser.tel, ville: _insValiderUser.ville,
           role: _insValiderUser.role || 'user', statut: 'valide', note: 0, nbAvis: 0,
-          entreprise: _insValiderUser.entreprise, secteur: _insValiderUser.secteur
+          entreprise: _insValiderUser.entreprise, secteur: _insValiderUser.secteur,
+          adminPermissions: _insValiderUser.adminPermissions || null
         });
       }
 
@@ -19086,6 +19395,7 @@ window.insConfirmerValidation = async function() {
       ville: _insValiderUser.ville,
       role: _insValiderUser.role || 'user',
       entreprise: _insValiderUser.entreprise, secteur: _insValiderUser.secteur,
+      adminPermissions: _insValiderUser.adminPermissions || null,
       mdpTemp: mdp,
       mdpChange: false,
       note: 0, nbAvis: 0
@@ -19777,6 +20087,7 @@ const _renderAdminOrig = typeof renderAdmin === 'function' ? renderAdmin : null;
 function renderAdmin() {
   // Render standard admin tables
   if (!DB || !SESSION) return;
+  if (typeof appliquerPermissionsAdminNav === 'function') appliquerPermissionsAdminNav();
   const annonces = DAO._local.annonces;
   const users = DAO._local.utilisateurs;
   const paiements = DAO._local.paiements;
@@ -19810,7 +20121,7 @@ function renderAdmin() {
   if (utbody) utbody.innerHTML = users.filter(u=>u.role!=='admin').map(u=>{
     const nb=annonces.filter(a=>a.vendeurId===u.id).length;
     const plan=getPlanUser(u.id);
-    return `<tr><td><strong>${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}</strong>${u.verifie?'<span style="color:var(--vert);font-size:11px;margin-left:4px">✅</span>':''}<br><span style="font-size:11px;color:var(--gris-text)">${plan.ico} ${plan.nom}</span></td><td style="font-size:13px">${u.email}</td><td>${u.ville||'—'}</td><td style="font-size:13px">${u.tel||'—'}</td><td>${nb}</td><td><button class="btn btn-sm" onclick="adminEditerUser(${u.id})" style="font-size:11px;padding:3px 8px;background:var(--bleu);color:#fff;border:none;margin-right:4px">✏️</button><button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="adminSupprimerUser(${u.id})">🗑</button></td></tr>`
+    return `<tr><td><strong>${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}</strong>${u.verifie?'<span style="color:var(--vert);font-size:11px;margin-left:4px">✅</span>':''}<br><span style="font-size:11px;color:var(--gris-text)">${plan.ico} ${plan.nom}</span></td><td style="font-size:13px">${u.email}</td><td>${u.ville||'—'}</td><td style="font-size:13px">${u.tel||'—'}</td><td>${nb}</td><td>${u.role==='annonceur'?`<button class="btn btn-sm" onclick="adminVoirEspaceAnnonceur(${u.id})" style="font-size:11px;padding:3px 8px;background:var(--or);color:#fff;border:none;margin-right:4px" title="Voir son espace annonceur">🏢 Voir espace</button>`:''}<button class="btn btn-sm" onclick="adminEditerUser(${u.id})" style="font-size:11px;padding:3px 8px;background:var(--bleu);color:#fff;border:none;margin-right:4px">✏️</button><button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="adminSupprimerUser(${u.id})">🗑</button></td></tr>`
   }).join('');
   // Paiements
   const ptbody = document.getElementById('admin-paiements-tbody');
@@ -19860,7 +20171,7 @@ function adminEditerUser(id) {
       <div class="form-group"><label>Ville</label><input type="text" id="aeu-ville" value="${escapeHtml(u.ville||'')}"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group"><label>Rôle</label>
-          <select id="aeu-role">
+          <select id="aeu-role" onchange="_aeuMajChampsRole()">
             <option value="user"${u.role==='user'?' selected':''}>Utilisateur</option>
             <option value="livreur"${u.role==='livreur'?' selected':''}>Livreur</option>
             <option value="annonceur"${u.role==='annonceur'?' selected':''}>Annonceur</option>
@@ -19875,6 +20186,14 @@ function adminEditerUser(id) {
           </select>
         </div>
       </div>
+      <div id="aeu-admin-perms-group" style="display:none">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:6px">
+          <input type="checkbox" id="aeu-admin-restreint" ${Array.isArray(u.adminPermissions)?' checked':''} onchange="_aeuMajChampsRole()"> Accès restreint (sinon accès total — super-admin)
+        </label>
+        <div id="aeu-admin-perms-liste" style="display:none;margin-top:8px;grid-template-columns:1fr 1fr;gap:6px;max-height:160px;overflow-y:auto;border:1px solid var(--gris-mid);border-radius:var(--radius);padding:10px">
+          ${ADMIN_PERMISSIONS_LISTE.map(p => `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="aeu-perm-cb" value="${p.key}"${(Array.isArray(u.adminPermissions)&&u.adminPermissions.includes(p.key))?' checked':''}> ${p.label}</label>`).join('')}
+        </div>
+      </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:6px"><input type="checkbox" id="aeu-verifie"${u.verifie?' checked':''}> Compte vérifié (badge ✅)</label>
       <div style="display:flex;gap:10px;margin-top:18px">
         <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-admin-edit-user').remove()">Annuler</button>
@@ -19884,12 +20203,23 @@ function adminEditerUser(id) {
   div.addEventListener('click', e => { if (e.target === div) div.remove(); });
   document.body.appendChild(div);
   div.classList.add('open');
+  _aeuMajChampsRole();
+}
+
+// Affiche/masque le bloc "permissions admin" selon le rôle et l'option "accès restreint"
+function _aeuMajChampsRole() {
+  const role = document.getElementById('aeu-role')?.value;
+  const gAdm = document.getElementById('aeu-admin-perms-group');
+  const gList = document.getElementById('aeu-admin-perms-liste');
+  const restreint = document.getElementById('aeu-admin-restreint')?.checked;
+  if (gAdm) gAdm.style.display = (role === 'admin') ? '' : 'none';
+  if (gList) gList.style.display = (role === 'admin' && restreint) ? 'grid' : 'none';
 }
 
 async function adminSauvegarderUser(id) {
   const u = DAO._local.utilisateurs.find(x => x.id === id);
   if (!u) return;
-  const avant = { prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel, ville: u.ville, role: u.role, statut: u.statut, verifie: u.verifie };
+  const avant = { prenom: u.prenom, nom: u.nom, email: u.email, tel: u.tel, ville: u.ville, role: u.role, statut: u.statut, verifie: u.verifie, adminPermissions: u.adminPermissions };
   const prenom = document.getElementById('aeu-prenom').value.trim();
   const nom = document.getElementById('aeu-nom').value.trim();
   const email = document.getElementById('aeu-email').value.trim();
@@ -19898,9 +20228,14 @@ async function adminSauvegarderUser(id) {
   const role = document.getElementById('aeu-role').value;
   const statut = document.getElementById('aeu-statut').value;
   const verifie = document.getElementById('aeu-verifie').checked;
+  let adminPermissions = null; // null = accès total (super-admin)
+  if (role === 'admin' && document.getElementById('aeu-admin-restreint')?.checked) {
+    adminPermissions = Array.from(document.querySelectorAll('.aeu-perm-cb:checked')).map(cb => cb.value);
+  }
   if (!prenom || !email) { toast('Prénom et email sont obligatoires', 'erreur'); return; }
   if (u.id === SESSION.id && role !== 'admin') { toast('Vous ne pouvez pas retirer votre propre rôle admin', 'erreur'); return; }
-  Object.assign(u, { prenom, nom, email, tel, ville, role, statut, verifie });
+  if (u.id === SESSION.id && Array.isArray(adminPermissions)) { toast('Vous ne pouvez pas restreindre vos propres accès admin', 'erreur'); return; }
+  Object.assign(u, { prenom, nom, email, tel, ville, role, statut, verifie, adminPermissions });
   document.getElementById('modal-admin-edit-user')?.remove();
   const rafraichir = () => {
     renderAdmin();
@@ -19909,7 +20244,7 @@ async function adminSauvegarderUser(id) {
     if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
   };
   rafraichir();
-  const r = await DAO_PERSIST.utilisateurMaj(id, { prenom, nom, email, tel, ville, role, statut, verifie });
+  const r = await DAO_PERSIST.utilisateurMaj(id, { prenom, nom, email, tel, ville, role, statut, verifie, admin_permissions: adminPermissions });
   if (r && r.error) {
     Object.assign(u, avant);
     rafraichir();
@@ -19917,6 +20252,133 @@ async function adminSauvegarderUser(id) {
     return;
   }
   toast('✅ Utilisateur mis à jour');
+}
+
+// ── Admin : créer un nouvel utilisateur ──
+// Réutilise le circuit existant "inscription en attente → validation admin"
+// (voir sInscrire()/insConfirmerValidation) plutôt que de créer un compte
+// Supabase Auth directement depuis le navigateur admin — ce qui éviterait
+// les risques de sécurité/format et resterait cohérent avec le reste de
+// l'app. La fiche est créée ici, puis la modale de validation s'ouvre
+// aussitôt pour générer le mot de passe et activer le compte.
+function adminCreerUser() {
+  const existing = document.getElementById('modal-admin-creer-user');
+  if (existing) existing.remove();
+  const div = document.createElement('div');
+  div.id = 'modal-admin-creer-user';
+  div.className = 'modal-overlay';
+  div.style.zIndex = '480';
+  div.innerHTML = `
+    <div style="background:#fff;border-radius:var(--radius-lg);max-width:460px;width:92vw;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:88vh;overflow-y:auto">
+      <div style="font-family:var(--font-titre);font-size:18px;font-weight:700;margin-bottom:4px">Nouvel utilisateur</div>
+      <div style="font-size:12px;color:var(--gris-text);margin-bottom:14px">La fiche est créée « en attente » — l'étape suivante (Valider et envoyer MDP) génère le mot de passe et active le compte.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Prénom <span style="color:var(--rouge)">*</span></label><input type="text" id="acu-prenom"></div>
+        <div class="form-group"><label>Nom <span style="color:var(--rouge)">*</span></label><input type="text" id="acu-nom"></div>
+      </div>
+      <div class="form-group"><label>Email <span style="color:var(--rouge)">*</span></label><input type="email" id="acu-email"></div>
+      <div class="form-group"><label>Téléphone</label><input type="tel" id="acu-tel" placeholder="+225 ..."></div>
+      <div class="form-group"><label>Ville</label><input type="text" id="acu-ville"></div>
+      <div class="form-group"><label>Rôle</label>
+        <select id="acu-role" onchange="_acuMajChampsRole()">
+          <option value="user">Utilisateur</option>
+          <option value="livreur">Livreur</option>
+          <option value="annonceur">Annonceur</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group" id="acu-entreprise-group" style="display:none">
+        <label>Entreprise <span style="color:var(--rouge)">*</span></label><input type="text" id="acu-entreprise">
+        <label style="margin-top:8px">Secteur</label><input type="text" id="acu-secteur">
+      </div>
+      <div id="acu-admin-perms-group" style="display:none">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:6px">
+          <input type="checkbox" id="acu-admin-restreint" onchange="_acuMajChampsRole()"> Accès restreint (sinon accès total — super-admin)
+        </label>
+        <div id="acu-admin-perms-liste" style="display:none;margin-top:8px;grid-template-columns:1fr 1fr;gap:6px;max-height:160px;overflow-y:auto;border:1px solid var(--gris-mid);border-radius:var(--radius);padding:10px">
+          ${ADMIN_PERMISSIONS_LISTE.map(p => `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="acu-perm-cb" value="${p.key}"> ${p.label}</label>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-admin-creer-user').remove()">Annuler</button>
+        <button class="btn btn-primary" style="flex:1" onclick="adminEnregistrerNouvelUtilisateur()">Créer</button>
+      </div>
+    </div>`;
+  div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  div.classList.add('open');
+  _acuMajChampsRole();
+}
+
+function _acuMajChampsRole() {
+  const role = document.getElementById('acu-role')?.value;
+  const gEnt = document.getElementById('acu-entreprise-group');
+  const gAdm = document.getElementById('acu-admin-perms-group');
+  const gList = document.getElementById('acu-admin-perms-liste');
+  const restreint = document.getElementById('acu-admin-restreint')?.checked;
+  if (gEnt) gEnt.style.display = (role === 'annonceur') ? '' : 'none';
+  if (gAdm) gAdm.style.display = (role === 'admin') ? '' : 'none';
+  if (gList) gList.style.display = (role === 'admin' && restreint) ? 'grid' : 'none';
+}
+
+async function adminEnregistrerNouvelUtilisateur() {
+  const prenom = document.getElementById('acu-prenom').value.trim();
+  const nom    = document.getElementById('acu-nom').value.trim();
+  const email  = document.getElementById('acu-email').value.trim();
+  const tel    = document.getElementById('acu-tel').value.trim();
+  const ville  = document.getElementById('acu-ville').value.trim();
+  const role   = document.getElementById('acu-role').value;
+  if (!prenom || !nom || !email) { toast('Prénom, nom et email sont obligatoires', 'erreur'); return; }
+  const doublon = (window.DB_INSCRIPTIONS||[]).find(x=>x.email===email) || DAO._local.utilisateurs.find(x=>x.email===email);
+  if (doublon) { toast('Cet email est déjà utilisé', 'erreur'); return; }
+
+  let entreprise = null, secteur = null;
+  if (role === 'annonceur') {
+    entreprise = document.getElementById('acu-entreprise').value.trim();
+    secteur = document.getElementById('acu-secteur').value.trim();
+    if (!entreprise) { toast("Le nom de l'entreprise est requis pour un compte annonceur", 'erreur'); return; }
+  }
+
+  let adminPermissions = null; // null = accès total (super-admin)
+  if (role === 'admin' && document.getElementById('acu-admin-restreint')?.checked) {
+    adminPermissions = Array.from(document.querySelectorAll('.acu-perm-cb:checked')).map(cb => cb.value);
+  }
+
+  const now = new Date();
+  const newUser = {
+    id: Date.now(),
+    prenom, nom, email, tel, ville,
+    role, statut: 'attente',
+    mdpTemp: null, mdpChange: false,
+    dateInscription: now.toISOString().slice(0,10),
+    entreprise, secteur, adminPermissions,
+    creePar: (typeof SESSION !== 'undefined' && SESSION) ? ((SESSION.prenom||'')+' '+(SESSION.nom||'')).trim() || 'Admin' : 'Admin',
+  };
+
+  if (!window.DB_INSCRIPTIONS) window.DB_INSCRIPTIONS = [];
+  window.DB_INSCRIPTIONS.unshift(newUser);
+
+  if (typeof MODE !== 'undefined' && MODE === 'remote') {
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/utilisateurs', {
+      prenom, nom, email, tel, ville, role, statut: 'attente',
+      entreprise, secteur, admin_permissions: adminPermissions
+    }, { Prefer: 'return=representation' });
+    if (r.error) {
+      const idx = window.DB_INSCRIPTIONS.indexOf(newUser);
+      if (idx >= 0) window.DB_INSCRIPTIONS.splice(idx, 1);
+      toast("Échec : la fiche n'a pas pu être enregistrée", 'erreur');
+      return;
+    }
+    if (r.data && r.data[0]) newUser._supabaseId = r.data[0].id;
+  }
+
+  document.getElementById('modal-admin-creer-user')?.remove();
+  toast('✅ Fiche créée — validez-la pour activer le compte et envoyer le mot de passe');
+  if (typeof renderAdminInscriptions === 'function') renderAdminInscriptions();
+  if (typeof insRafraichir === 'function') insRafraichir();
+  const nav = document.querySelector('.admin-nav-btn[onclick*="admin-inscriptions"]');
+  if (nav) await adminTab(nav, 'admin-inscriptions');
+  if (typeof window.insOuvrirValider === 'function') window.insOuvrirValider(newUser.id);
 }
 
 // ══════════════════════════════════════════
@@ -23530,8 +23992,15 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const cat   = document.getElementById('depot-cat')?.value;
     const gGeo  = document.getElementById('depot-geo-precise-group');
     const gPoly = document.getElementById('depot-terrain-group');
+    const gDocs = document.getElementById('depot-docs-legaux-group');
     if (gGeo)  gGeo.style.display  = (tabId === 'tab-logement') ? '' : 'none';
     if (gPoly) gPoly.style.display = (tabId === 'tab-logement' && cat === 'Terrain') ? '' : 'none';
+    if (gDocs) {
+      gDocs.style.display = (tabId === 'tab-logement') ? '' : 'none';
+      if (tabId === 'tab-logement' && typeof renderDocsLegauxList === 'function') {
+        try { renderDocsLegauxList(); } catch (err) { console.error('renderDocsLegauxList', err); }
+      }
+    }
   };
 
   // Lancer après chargement DOM complet
