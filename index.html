@@ -148,6 +148,9 @@
   .nav-logo{display:flex;align-items:center;gap:12px;padding:0;line-height:1;cursor:pointer;text-decoration:none}
   .pub-zone-nav{flex:1;min-width:0;max-width:700px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:10px}
   .pub-zone-nav:empty{display:none}
+  .pub-zone-inline{display:none;margin:0 16px 14px}
+  .pub-zone-inline.visible{display:block}
+  .pub-zone-inline .banner-pub,.pub-zone-inline .banner-pub-solo{margin:0;width:100%}
   .pub-zone-nav .banner-pub,.pub-zone-nav .banner-pub-solo{width:100%;height:160px;border-radius:10px;margin:0;font-size:13px;box-shadow:none}
   .pub-zone-nav .banner-pub-slogan{font-size:13px;line-height:1.35;-webkit-line-clamp:2}
   .pub-zone-nav .banner-pub-annonceur{font-size:11px;opacity:.85;letter-spacing:.04em}
@@ -3991,6 +3994,7 @@ document.addEventListener('keydown', function(ev) {
 
   <!-- TAB MARCHÉ -->
   <div id="tab-marche">
+  <div id="pub-zone-global" class="pub-zone-inline"></div>
   <!-- Bannière guest -->
   <div class="guest-banner" id="guest-banner-marche">
     <div class="guest-banner-ico"></div>
@@ -4192,6 +4196,7 @@ document.addEventListener('keydown', function(ev) {
        TAB PETITS BOULOTS
   ════════════════════════════ -->
   <div id="tab-boulots" style="display:none">
+  <div id="pub-zone-boulots" class="pub-zone-inline"></div>
   <!-- Bannière guest -->
   <div class="guest-banner" id="guest-banner-boulots">
     <div class="guest-banner-ico"></div>
@@ -4283,6 +4288,7 @@ document.addEventListener('keydown', function(ev) {
        TAB INFO & FORMATION
   ════════════════════════════ -->
   <div id="tab-info" style="display:none">
+  <div id="pub-zone-info" class="pub-zone-inline"></div>
   
     <!-- Bannière guest -->
     <div class="guest-banner" id="guest-banner-info">
@@ -4654,6 +4660,7 @@ document.addEventListener('keydown', function(ev) {
        TAB NOUNOU & SERVANTS
   ════════════════════════════ -->
   <div id="tab-nounou" style="display:none">
+  <div id="pub-zone-nounou" class="pub-zone-inline"></div>
   
     <!-- Bannière guest -->
     <div class="guest-banner" id="guest-banner-nounou">
@@ -4734,6 +4741,7 @@ document.addEventListener('keydown', function(ev) {
        TAB COLIS & ENVOIS
   ════════════════════════════ -->
   <div id="tab-colis" style="display:none">
+  <div id="pub-zone-colis" class="pub-zone-inline"></div>
   <!-- Bannière guest -->
   <div class="guest-banner" id="guest-banner-colis">
     <div class="guest-banner-ico"></div>
@@ -5109,6 +5117,7 @@ document.addEventListener('keydown', function(ev) {
        TAB AUTO & LOCATION
   ════════════════════════════ -->
   <div id="tab-auto" style="display:none">
+  <div id="pub-zone-auto" class="pub-zone-inline"></div>
   <!-- Bannière guest -->
   <div class="guest-banner" id="guest-banner-auto">
     <div class="guest-banner-ico"></div>
@@ -5456,6 +5465,7 @@ document.addEventListener('keydown', function(ev) {
        TAB DONS & GRATUIT
   ════════════════════════════ -->
   <div id="tab-dons" style="display:none">
+  <div id="pub-zone-dons" class="pub-zone-inline"></div>
   <!-- Bannière guest -->
   <div class="guest-banner" id="guest-banner-dons">
     <div class="guest-banner-ico"></div>
@@ -5681,6 +5691,7 @@ document.addEventListener('keydown', function(ev) {
        TAB BEAUTÉ & RDV
   ════════════════════════════ -->
   <div id="tab-beaute" style="display:none">
+  <div id="pub-zone-beaute" class="pub-zone-inline"></div>
   
     <!-- Bannière guest -->
     <div class="guest-banner" id="guest-banner-beaute" style="--vert:#E91E8C;--vert-vif:#FF4DAE;--vert-pale:#FDE8F4;border-color:rgba(233,30,140,.3)">
@@ -5849,6 +5860,7 @@ document.addEventListener('keydown', function(ev) {
        TAB RÉSIDENCES MEUBLÉES
   ════════════════════════════ -->
   <div id="tab-logement" style="display:none">
+    <div id="pub-zone-logement" class="pub-zone-inline"></div>
     <!-- Bannière guest -->
     <div class="guest-banner" id="guest-banner-logement" style="--vert:#1E3A5F;--vert-vif:#2563EB;--vert-pale:#EBF3FF;border-color:rgba(37,99,235,.3)">
       <div class="guest-banner-ico"></div>
@@ -6047,6 +6059,7 @@ document.addEventListener('keydown', function(ev) {
        TAB MAQUIS & RESTAURATION
   ════════════════════════════ -->
   <div id="tab-resto" style="display:none">
+    <div id="pub-zone-resto" class="pub-zone-inline"></div>
     
 
     <div class="resto-hero">
@@ -6178,6 +6191,7 @@ document.addEventListener('keydown', function(ev) {
        TAB LIVRAISON
   ════════════════════════════ -->
   <div id="tab-livraison" style="display:none">
+    <div id="pub-zone-livraison" class="pub-zone-inline"></div>
     
 
     <div class="livr-hero">
@@ -17261,9 +17275,10 @@ function buildBannerHTML(b, zoneId) {
   const _promoLiee = (typeof DB !== 'undefined' && DAO._local.promos)
     ? DAO._local.promos.find(p => p.banniereId === b.id && p.actif && new Date(p.expiry) >= new Date() && p.usages < p.maxUsages)
     : null;
+  let badgePromo = '';
   if (_promoLiee) {
     const typeLabel = {pct:'-'+_promoLiee.valeur+'%', fixe:'-'+_promoLiee.valeur+' F', gratuit:'Gratuit', parrainage:'-'+_promoLiee.valeur+'%'}[_promoLiee.type] || '';
-    html += `<div style="position:absolute;top:8px;left:8px;background:linear-gradient(135deg,var(--or),var(--or-vif));color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:10;box-shadow:0 2px 8px rgba(212,146,30,.4)">Code <strong>${_promoLiee.code}</strong> ${typeLabel}</div>`;
+    badgePromo = `<div style="position:absolute;top:8px;left:8px;background:linear-gradient(135deg,var(--or),var(--or-vif));color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:10;box-shadow:0 2px 8px rgba(212,146,30,.4)">Code <strong>${escapeHtml(_promoLiee.code)}</strong> ${typeLabel}</div>`;
   }
   const hasMedia = (b.photos && b.photos.length > 0) || b.video;
   const couleur = b.couleur || '#0D5C35';
@@ -17278,6 +17293,7 @@ function buildBannerHTML(b, zoneId) {
       <div class="banner-pub banner-pub-solo" id="bp-${zoneId}"
            style="background:linear-gradient(135deg,${couleur} 0%,${couleur}BB 100%);color:#fff;--bp-color:${couleur}"
            onclick="cliquerBanniere(${b.id})" role="button" aria-label="Publicité : ${annonceur}">
+        ${badgePromo}
         ${b.logo ? `<div class="banner-pub-logo"><img src="${b.logo}" alt="${annonceur}"></div>` : ''}
         <div style="flex:1;min-width:0">
           <div class="banner-pub-annonceur">${annonceur}</div>
@@ -17311,6 +17327,7 @@ function buildBannerHTML(b, zoneId) {
     <div class="banner-pub" id="bp-${zoneId}"
          style="background:linear-gradient(135deg,${couleur} 0%,${couleur}BB 100%);color:#fff;--bp-color:${couleur}"
          onclick="cliquerBanniere(${b.id})" role="button" aria-label="Publicité : ${annonceur}">
+      ${badgePromo}
       <div class="banner-pub-left">
         ${b.logo ? `<div class="banner-pub-logo"><img src="${b.logo}" alt="${annonceur}"></div>` : ''}
         <div>
@@ -17383,30 +17400,60 @@ function startSlideshow(zoneId, b) {
   scheduleNext();
 }
 
+// Correspondance onglet du site ↔ zone de ciblage choisie par l'annonceur
+// (voir la liste des zones dans editBanniere()/ouvrirDepotPub()).
+const ZONE_PAR_TAB = {
+  'tab-marche':'global', 'tab-boulots':'boulots', 'tab-info':'info', 'tab-nounou':'nounou',
+  'tab-colis':'colis', 'tab-auto':'auto', 'tab-dons':'dons', 'tab-beaute':'beaute',
+  'tab-logement':'logement', 'tab-resto':'resto', 'tab-livraison':'livraison'
+};
+
 // ── Rendu bannières dans le site public ──
+// Diffusion ciblée : chaque onglet a sa propre zone (pub-zone-<zone>) qui ne
+// reçoit que les campagnes dont b.position correspond à cette zone. Le
+// bandeau global (pub-zone-nav, toujours visible dans l'en-tête) diffuse en
+// priorité les campagnes ciblant "hero" (visibilité maximale/sitewide) et,
+// à défaut, retombe sur l'ensemble des campagnes actives pour ne jamais
+// rester vide.
 function renderBannieresSite() {
-  // Arrêter tous les diaporamas en cours
   Object.keys(_banTimers).forEach(z => { clearTimeout(_banTimers[z]); clearInterval(_banTimers[z]); delete _banTimers[z]; });
 
   const today = new Date().toISOString().slice(0,10);
-  const actives = DAO._local.bannieres.filter(b => b.actif && b.debut <= today && b.fin >= today);
+  // statut==='valide' : défense en profondeur — seule une campagne réellement
+  // approuvée par l'admin doit pouvoir s'afficher, même si b.actif était vrai.
+  const actives = DAO._local.bannieres.filter(b => b.actif && b.statut === 'valide' && b.debut <= today && b.fin >= today);
 
-  const zones = ['nav'];
-  zones.forEach(zone => {
-    const el = document.getElementById('pub-zone-' + zone);
-    if (!el) return;
-    const zoneBans = actives.filter(b => b.actif && b.debut <= today && b.fin >= today); // toutes dans la nav
-    if (!zoneBans.length) { el.classList.remove('visible'); el.innerHTML = ''; return; }
-    const b = zoneBans[Math.floor(Math.random() * zoneBans.length)];
-    b.impressions = (b.impressions || 0) + 1;
-    el.classList.add('visible');
-    el.innerHTML = buildBannerHTML(b, zone);
-    // Démarrer le diaporama après rendu
-    const hasMedia = (b.photos && b.photos.length > 0) || b.video;
-    if (hasMedia) requestAnimationFrame(() => startSlideshow(zone, b));
+  const navPool = actives.filter(b => b.position === 'hero');
+  _rendreZonePub('nav', navPool.length ? navPool : actives);
+
+  const tabActif = Object.keys(ZONE_PAR_TAB).find(id => {
+    const e = document.getElementById(id);
+    return e && e.style.display !== 'none';
   });
+  const zoneActive = tabActif ? ZONE_PAR_TAB[tabActif] : null;
+  Object.values(ZONE_PAR_TAB).forEach(zone => {
+    if (zone === zoneActive) {
+      _rendreZonePub(zone, actives.filter(b => b.position === zone));
+    } else {
+      const el = document.getElementById('pub-zone-' + zone);
+      if (el) { el.classList.remove('visible'); el.innerHTML = ''; }
+    }
+  });
+
   // Toujours re-render les top cards après injection des bannières
   renderHeroTop();
+}
+
+function _rendreZonePub(zone, pool) {
+  const el = document.getElementById('pub-zone-' + zone);
+  if (!el) return;
+  if (!pool.length) { el.classList.remove('visible'); el.innerHTML = ''; return; }
+  const b = pool[Math.floor(Math.random() * pool.length)];
+  b.impressions = (b.impressions || 0) + 1;
+  el.classList.add('visible');
+  el.innerHTML = buildBannerHTML(b, zone);
+  const hasMedia = (b.photos && b.photos.length > 0) || b.video;
+  if (hasMedia) requestAnimationFrame(() => startSlideshow(zone, b));
 }
 
 function cliquerBanniere(id) {
