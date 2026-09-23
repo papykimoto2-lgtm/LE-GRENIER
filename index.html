@@ -3994,7 +3994,6 @@ document.addEventListener('keydown', function(ev) {
 
   <!-- TAB MARCHÉ -->
   <div id="tab-marche">
-  <div id="pub-zone-global" class="pub-zone-inline"></div>
   <!-- Bannière guest -->
   <div class="guest-banner" id="guest-banner-marche">
     <div class="guest-banner-ico"></div>
@@ -8665,7 +8664,7 @@ const ENTREPRISE = {
       <div class="admin-section">
         <div class="admin-section-titre">Historique des commissions</div>
         <table class="table">
-          <thead><tr><th>Date</th><th>Vendeur</th><th>Description</th><th>Type</th><th>Montant</th><th>Moyen</th><th>Statut</th><th>Réf.</th></tr></thead>
+          <thead><tr><th>Date</th><th>Vendeur</th><th>Description</th><th>Type</th><th>Montant</th><th>Moyen</th><th>Statut</th><th>Réf.</th><th>Actions</th></tr></thead>
           <tbody id="admin-paiements-tbody"></tbody>
         </table>
       </div>
@@ -17269,6 +17268,7 @@ function publierBesoin() {
 
 // ── Moteur diaporama bannières ──
 const _banTimers = {}; // stocke les intervalles par zone
+const _banZonesFermees = new Set(); // zones fermées via ✕ par l'utilisateur (session en cours)
 
 function buildBannerHTML(b, zoneId) {
   // Badge code promo lié à cette bannière
@@ -17401,20 +17401,23 @@ function startSlideshow(zoneId, b) {
 }
 
 // Correspondance onglet du site ↔ zone de ciblage choisie par l'annonceur
-// (voir la liste des zones dans editBanniere()/ouvrirDepotPub()).
+// (voir les boutons data-pos dans le formulaire "Nouvelle campagne", et la
+// liste dans editBanniere()). "hero" et "global" visent le bandeau nav,
+// visible sur toutes les pages ("Page d'accueil" et "Toutes les pages") ;
+// les autres zones sont propres à un onglet/catégorie précis.
 const ZONE_PAR_TAB = {
-  'tab-marche':'global', 'tab-boulots':'boulots', 'tab-info':'info', 'tab-nounou':'nounou',
+  'tab-boulots':'boulots', 'tab-info':'info', 'tab-nounou':'nounou',
   'tab-colis':'colis', 'tab-auto':'auto', 'tab-dons':'dons', 'tab-beaute':'beaute',
   'tab-logement':'logement', 'tab-resto':'resto', 'tab-livraison':'livraison'
 };
 
 // ── Rendu bannières dans le site public ──
-// Diffusion ciblée : chaque onglet a sa propre zone (pub-zone-<zone>) qui ne
-// reçoit que les campagnes dont b.position correspond à cette zone. Le
-// bandeau global (pub-zone-nav, toujours visible dans l'en-tête) diffuse en
-// priorité les campagnes ciblant "hero" (visibilité maximale/sitewide) et,
-// à défaut, retombe sur l'ensemble des campagnes actives pour ne jamais
-// rester vide.
+// Diffusion ciblée : chaque onglet catégorie a sa propre zone (pub-zone-<zone>)
+// qui ne reçoit que les campagnes dont b.position correspond à cette zone. Le
+// bandeau global (pub-zone-nav, toujours visible dans l'en-tête, sur toutes
+// les pages) diffuse en priorité les campagnes "hero" (page d'accueil), puis
+// "global" (toutes les pages) et, à défaut, retombe sur l'ensemble des
+// campagnes actives pour ne jamais rester vide.
 function renderBannieresSite() {
   Object.keys(_banTimers).forEach(z => { clearTimeout(_banTimers[z]); clearInterval(_banTimers[z]); delete _banTimers[z]; });
 
@@ -17423,8 +17426,10 @@ function renderBannieresSite() {
   // approuvée par l'admin doit pouvoir s'afficher, même si b.actif était vrai.
   const actives = DAO._local.bannieres.filter(b => b.actif && b.statut === 'valide' && b.debut <= today && b.fin >= today);
 
-  const navPool = actives.filter(b => b.position === 'hero');
-  _rendreZonePub('nav', navPool.length ? navPool : actives);
+  const navPool = actives.filter(b => b.position === 'hero').length ? actives.filter(b => b.position === 'hero')
+                : actives.filter(b => b.position === 'global').length ? actives.filter(b => b.position === 'global')
+                : actives;
+  _rendreZonePub('nav', navPool);
 
   const tabActif = Object.keys(ZONE_PAR_TAB).find(id => {
     const e = document.getElementById(id);
@@ -17447,9 +17452,19 @@ function renderBannieresSite() {
 function _rendreZonePub(zone, pool) {
   const el = document.getElementById('pub-zone-' + zone);
   if (!el) return;
-  if (!pool.length) { el.classList.remove('visible'); el.innerHTML = ''; return; }
+  if (_banZonesFermees.has(zone) || !pool.length) { el.classList.remove('visible'); el.innerHTML = ''; return; }
   const b = pool[Math.floor(Math.random() * pool.length)];
-  b.impressions = (b.impressions || 0) + 1;
+  if (typeof DAO !== 'undefined' && DAO.incrementerImpression) {
+    DAO.incrementerImpression(b.id).catch(err => console.error('incrementerImpression', err));
+  }
+  // Mode local : DAO.incrementerImpression mute déjà ce même objet en mémoire
+  // (via DB.bannieres, la même référence que DAO._local.bannieres) — un
+  // second incrément ici compterait deux fois. Mode remote : CACHE est une
+  // copie distincte du RPC serveur, donc on l'incrémente nous-mêmes pour un
+  // retour visuel immédiat dans l'admin.
+  if (typeof MODE === 'undefined' || MODE !== 'local') {
+    b.impressions = (b.impressions || 0) + 1;
+  }
   el.classList.add('visible');
   el.innerHTML = buildBannerHTML(b, zone);
   const hasMedia = (b.photos && b.photos.length > 0) || b.video;
@@ -17459,14 +17474,32 @@ function _rendreZonePub(zone, pool) {
 function cliquerBanniere(id) {
   const b = DAO._local.bannieres.find(x => x.id === id);
   if (!b) return;
-  b.clics = (b.clics || 0) + 1;
   if (b.lien && b.lien !== '#') window.open(b.lien, '_blank');
   toast(`Redirection vers ${b.annonceur}…`);
+  // Persistance en tâche de fond — ne doit jamais retarder window.open()
+  // (un await avant l'ouverture ferait bloquer les popups par le navigateur).
+  if (typeof DAO !== 'undefined' && DAO.incrementerClicBanniere) {
+    DAO.incrementerClicBanniere(id).catch(err => console.error('incrementerClicBanniere', err));
+  }
+  // Mode local : incrementerClicBanniere mute déjà ce même objet (DB.bannieres
+  // === DAO._local.bannieres) — un second incrément compterait deux fois.
+  // Mode remote : CACHE est une copie distincte du RPC serveur, on l'incrémente
+  // nous-mêmes pour un retour visuel immédiat.
+  if (typeof MODE === 'undefined' || MODE !== 'local') {
+    b.clics = (b.clics || 0) + 1;
+  }
 }
 
 function fermerBanniere(btn, id) {
-  btn.closest('.pub-zone').classList.remove('visible');
-  btn.closest('.pub-zone').innerHTML = '';
+  const zoneEl = btn.closest('[id^="pub-zone-"]');
+  if (!zoneEl) return;
+  zoneEl.classList.remove('visible');
+  zoneEl.innerHTML = '';
+  // Mémorise la fermeture pour la session en cours : la bannière ne
+  // réapparaît pas dans cette zone tant que l'onglet n'est pas rechangé
+  // ni la page rechargée (mais reste éligible ailleurs/plus tard).
+  const zone = zoneEl.id.replace('pub-zone-', '');
+  _banZonesFermees.add(zone);
 }
 
 // ── Admin : rendu onglet pub ──
@@ -18589,7 +18622,7 @@ function appliquerPermissionsAdminNav() {
 async function adminTab(el, tabId) {
   if (!adminAPermission(tabId)) { toast('⛔ Accès non autorisé à cette section', 'erreur'); return; }
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
-  el.classList.add('actif');
+  el?.classList.add('actif');
   document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
   if (tabId==='admin-contenus') chargerAdminContenus();
@@ -20181,10 +20214,11 @@ function renderAdmin() {
       <td><span style="background:var(--gris-clair);padding:2px 7px;border-radius:5px;font-size:11px">${typeIcos[type]||'💰'} ${type}</span></td>
       <td><strong style="color:var(--vert)">${fmtFCFA(montant)}</strong></td>
       <td style="font-size:12px">${p.moyen||p.passerelle||'—'}</td>
-      <td><span style="color:${p.statut==='confirmé'?'var(--vert)':'var(--or)'}">●</span> ${p.statut}</td>
+      <td><span style="color:${p.statut==='confirmé'?'var(--vert)':p.statut==='rembourse'?'var(--gris-text)':'var(--or)'}">●</span> ${p.statut}</td>
       <td style="font-family:monospace;font-size:10px;color:var(--gris-text)">${p.ref||'—'}</td>
+      <td>${p.statut==='confirmé'?`<button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px;color:var(--rouge);border-color:var(--rouge)" onclick="adminAllerRembourser(${p.id})">↩️ Rembourser</button>`:(p.statut==='rembourse'?`<span style="font-size:11px;color:var(--gris-text)">✓ remboursé</span>`:'—')}</td>
     </tr>`
-  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--gris-text)">Aucun paiement</td></tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--gris-text)">Aucun paiement</td></tr>';
   // Dashboard stratégique (KPIs + graphiques)
   renderStatsStrategiques();
 }
@@ -24281,7 +24315,7 @@ function renderAdminLitiges() {
 
   // Peupler select transactions
   const selPaiement = document.getElementById('lit-paiement');
-  if (selPaiement) selPaiement.innerHTML = DAO._local.paiements.map(p=>`<option value="${p.id}">${p.annonce} — ${fmtFCFA(p.commission||0)} (${p.statut})</option>`).join('');
+  if (selPaiement) selPaiement.innerHTML = DAO._local.paiements.filter(p => p.statut !== 'rembourse').map(p=>`<option value="${p.id}">${p.annonce} — ${fmtFCFA(p.commission||0)} (${p.statut})</option>`).join('');
 
   // Table dossiers
   renderLitigesTable();
@@ -24317,11 +24351,13 @@ async function ouvrirDossierLitige() {
   const motif = document.getElementById('lit-motif').value.trim()||'—';
   const montant = parseInt(document.getElementById('lit-montant').value)||0;
   const selP = document.getElementById('lit-paiement');
+  const paiementId = parseInt(selP?.value) || null;
   const annonce = selP?.options[selP.selectedIndex]?.text.split('—')[0].trim()||'—';
   const record = {
     id: DAO._local.litiges.length+1,
     date: new Date().toISOString().slice(0,10),
     type, vendeurId: SESSION?.id||1, annonce, montant, motif,
+    paiementId: paiementId || null,
     statut: 'en cours', decision: ''
   };
   DAO._local.litiges.push(record);
@@ -24386,23 +24422,54 @@ function resetFormLitAdmin() {
   document.getElementById('lit-feedback').innerHTML = '';
 }
 
+// Raccourci depuis le tableau Admin > Paiements : ouvre l'onglet Litiges
+// (qui porte déjà le flux de remboursement complet — remboursementDirectAdmin)
+// avec la transaction concernée pré-sélectionnée, plutôt que de dupliquer
+// un second circuit de remboursement.
+function adminAllerRembourser(paiementId) {
+  const p = DAO._local.paiements.find(x => x.id === paiementId);
+  if (!p) return;
+  if (p.statut === 'rembourse') { toast('Cette transaction est déjà remboursée', 'erreur'); return; }
+  adminTab(document.querySelector('.admin-nav-btn[onclick*="admin-litiges"]'), 'admin-litiges').then(() => {
+    if (typeof renderAdminLitiges === 'function') renderAdminLitiges();
+    const sel = document.getElementById('lit-paiement');
+    const montant = document.getElementById('lit-montant');
+    const motif = document.getElementById('lit-motif');
+    if (sel) sel.value = String(paiementId);
+    if (montant) montant.value = p.commission || p.valeur || 0;
+    if (motif) motif.focus();
+  });
+}
+
 async function resoudreLitige(id, decision) {
   const l = DAO._local.litiges.find(x => x.id === id);
   if (!l) return;
+  const paiement = l.paiementId ? DAO._local.paiements.find(p => p.id === l.paiementId) : null;
+  if (decision === 'résolu' && paiement && paiement.statut === 'rembourse') {
+    toast('Le paiement lié à ce dossier est déjà remboursé', 'erreur');
+    return;
+  }
   const avantStatut = l.statut, avantDecision = l.decision;
+  const avantStatutPaiement = paiement ? paiement.statut : null;
   l.statut = decision;
   l.decision = decision === 'résolu' ? 'Remboursement accordé par admin' : 'Demande refusée — motif insuffisant';
+  if (decision === 'résolu' && paiement) paiement.statut = 'rembourse';
   renderLitigesTable();
   renderAdminLitiges();
-  const r = await DAO_PERSIST.litigeMaj(id, { statut: l.statut, decision: l.decision });
-  if (r && r.error) {
+  if (typeof renderAdmin === 'function') renderAdmin();
+
+  const rLitige = await DAO_PERSIST.litigeMaj(id, { statut: l.statut, decision: l.decision });
+  const rPaiement = (decision === 'résolu' && paiement) ? await DAO_PERSIST.paiementMaj(paiement.id, { statut: 'rembourse' }) : null;
+  if ((rLitige && rLitige.error) || (rPaiement && rPaiement.error)) {
     l.statut = avantStatut; l.decision = avantDecision;
+    if (paiement) paiement.statut = avantStatutPaiement;
     renderLitigesTable();
     renderAdminLitiges();
+    if (typeof renderAdmin === 'function') renderAdmin();
     toast('Échec : décision non enregistrée', 'erreur');
     return;
   }
-  toast(decision === 'résolu' ? '✅ Remboursement accordé' : '❌ Dossier refusé');
+  toast(decision === 'résolu' ? '✅ Remboursement accordé' + (paiement ? ' — paiement marqué remboursé' : ' (aucun paiement lié à ce dossier)') : '❌ Dossier refusé');
 }
 
 // Appel initial quand l'admin se connecte
