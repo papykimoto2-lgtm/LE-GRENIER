@@ -13498,6 +13498,7 @@ function _majAvatarPartout(src, initiales) {
 // ══════════════════════════════════════════
 
 let _editPhotos = []; // photos en cours d'édition
+let _editVideo = null; // {src, file} vidéo en cours d'édition (annonce type 'marché'), ou null
 
 function modifierAnnonce(type, id) {
   if (!SESSION) return;
@@ -13523,6 +13524,9 @@ function _ouvrirModalEdit(type, id, data) {
   // Charger photos existantes
   _editPhotos = (data.photos || []).map(src => ({ src, file: null }));
   _majEditPhotosGrid();
+  // Charger vidéo existante (annonces type 'marché' — dépôt vendeur)
+  _editVideo = data.video ? { src: data.video, file: null } : null;
+  _majEditVideoPreview();
   // Stocker contexte
   document.getElementById('modal-edit-overlay').dataset.type = type;
   document.getElementById('modal-edit-overlay').dataset.id   = id;
@@ -13615,6 +13619,8 @@ function fermerModalEdit() {
   document.getElementById('modal-edit-overlay').style.display = 'none';
   document.body.style.overflow = '';
   _editPhotos = [];
+  if (_editVideo && _editVideo.src && _editVideo.src.startsWith('blob:')) URL.revokeObjectURL(_editVideo.src);
+  _editVideo = null;
 }
 
 function _majEditPhotosGrid() {
@@ -13647,6 +13653,39 @@ function editAjouterPhotos(input) {
   input.value = '';
 }
 
+function _majEditVideoPreview() {
+  const preview = document.getElementById('edit-video-preview');
+  const player = document.getElementById('edit-video-player');
+  const zone = document.getElementById('edit-video-upload-zone');
+  if (!preview || !player) return;
+  if (!_editVideo) {
+    preview.style.display = 'none';
+    player.removeAttribute('src');
+    if (zone) zone.style.display = '';
+    return;
+  }
+  preview.style.display = 'block';
+  player.src = _editVideo.src;
+  if (zone) zone.style.display = 'none';
+}
+
+function editAjouterVideo(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (!f.type.startsWith('video/')) { toast('Merci de sélectionner un fichier vidéo', 'erreur'); return; }
+  if (f.size > 150*1024*1024) { toast('La vidéo dépasse 150 Mo', 'erreur'); return; }
+  if (_editVideo && _editVideo.src && _editVideo.src.startsWith('blob:')) URL.revokeObjectURL(_editVideo.src);
+  _editVideo = { src: URL.createObjectURL(f), file: f };
+  _majEditVideoPreview();
+  input.value = '';
+}
+
+function editSupprimerVideo() {
+  if (_editVideo && _editVideo.src && _editVideo.src.startsWith('blob:')) URL.revokeObjectURL(_editVideo.src);
+  _editVideo = null;
+  _majEditVideoPreview();
+}
+
 function sauvegarderEdit() {
   const overlay = document.getElementById('modal-edit-overlay');
   const type = overlay.dataset.type;
@@ -13657,7 +13696,7 @@ function sauvegarderEdit() {
   let updates = {};
   if (type === 'marché') {
     if (!v('titre')||!v('cat')||!v('etat')||!v('valeur')) { toast('Remplissez les champs obligatoires (*)','erreur'); return; }
-    updates = { titre:v('titre'), cat:v('cat'), etat:v('etat'), valeur:parseFloat(v('valeur'))||0, ville:v('ville'), desc:v('desc'), photos:_editPhotos.map(p=>p.src) };
+    updates = { titre:v('titre'), cat:v('cat'), etat:v('etat'), valeur:parseFloat(v('valeur'))||0, ville:v('ville'), desc:v('desc'), photos:_editPhotos.map(p=>p.src), video:_editVideo?_editVideo.src:null };
     const idx = DAO._local.annonces.findIndex(a=>a.id===id);
     if (idx>=0) Object.assign(DAO._local.annonces[idx], updates);
   } else if (type === 'boulot') {
@@ -19714,6 +19753,7 @@ function calcStatsStrategiques() {
 
   const annoncesActives = annonces.filter(a => a.statut === 'en-ligne').length;
   const enAttente = annonces.filter(a => a.statut === 'attente').length;
+  const inscriptionsAttente = (window.DB_INSCRIPTIONS || []).filter(u => u.statut === 'attente').length;
 
   // ── Série temporelle 14 jours (revenus confirmés par jour) ──
   const jours = [];
@@ -19748,7 +19788,7 @@ function calcStatsStrategiques() {
   annonces.forEach(a => { const v = a.ville || 'Non précisé'; villeCount[v] = (villeCount[v]||0) + 1; });
   const topVilles = Object.entries(villeCount).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([label,value])=>({label,value}));
 
-  return { revenuTotal, gmv, commissions, mrr, annoncesActives, enAttente, totalUsers: users.length,
+  return { revenuTotal, gmv, commissions, mrr, annoncesActives, enAttente, inscriptionsAttente, totalUsers: users.length,
     serieRevenus, deltaRevenu, sources, parCategorie, topVilles };
 }
 
@@ -19876,6 +19916,11 @@ function renderStatsStrategiques() {
       <div class="stat-tile-label">En attente modération</div>
       <div class="stat-tile-val" style="color:${s.enAttente>0?'#B8791A':'inherit'}">${s.enAttente}</div>
       <div class="stat-tile-delta ${s.enAttente>0?'down':'up'}">${s.enAttente>0?'À traiter':'✅ Tout traité'}</div>
+    </div>
+    <div class="stat-tile" style="cursor:pointer" onclick="adminTab(document.querySelector('.admin-nav-btn[onclick*=admin-inscriptions]'),'admin-inscriptions')"><span class="stat-tile-ico">📝</span>
+      <div class="stat-tile-label">Inscriptions en attente</div>
+      <div class="stat-tile-val" style="color:${s.inscriptionsAttente>0?'#B8791A':'inherit'}">${s.inscriptionsAttente}</div>
+      <div class="stat-tile-delta ${s.inscriptionsAttente>0?'down':'up'}">${s.inscriptionsAttente>0?'À valider →':'✅ Tout traité'}</div>
     </div>
   </div>`;
 
@@ -26286,6 +26331,22 @@ window.addEventListener('load', () => {
           ➕ Ajouter / remplacer des photos (max 5 · 5 Mo)
         </div>
         <input type="file" id="edit-photos-input" multiple accept="image/*" style="display:none" onchange="editAjouterPhotos(this)">
+      </div>
+
+      <!-- Section Vidéo -->
+      <div style="margin-top:16px">
+        <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#374151;margin-bottom:10px">🎥 Vidéo</div>
+        <div id="edit-video-preview" style="display:none;margin-bottom:10px;position:relative;max-width:280px">
+          <video id="edit-video-player" controls playsinline webkit-playsinline preload="metadata" style="width:100%;border-radius:10px;background:#000;display:block"></video>
+          <button type="button" onclick="editSupprimerVideo()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:13px">✕</button>
+        </div>
+        <div id="edit-video-upload-zone" onclick="document.getElementById('edit-video-input').click()"
+             style="border:2px dashed #d1d5db;border-radius:10px;padding:16px;text-align:center;cursor:pointer;background:#f9fafb;font-size:13px;color:#6b7280;transition:.2s"
+             onmouseover="this.style.borderColor='var(--vert)';this.style.background='#f0fdf4'"
+             onmouseout="this.style.borderColor='#d1d5db';this.style.background='#f9fafb'">
+          ➕ Ajouter / remplacer la vidéo (1 max · 150 Mo)
+        </div>
+        <input type="file" id="edit-video-input" accept="video/*" style="display:none" onchange="editAjouterVideo(this)">
       </div>
     </div>
     <!-- Footer -->
