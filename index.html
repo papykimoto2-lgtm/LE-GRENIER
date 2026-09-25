@@ -1817,6 +1817,22 @@
   .pub-status-paused{background:var(--or-pale);color:#9A6A10}
   .pub-status-ended{background:var(--gris-clair);color:var(--gris-text)}
 
+  /* ─── OBJECTIF 10M / MOIS ─── */
+  .obj10m-alerte{background:#FFF4E0;border:1px solid #E8B45C;color:#6B4A10;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-bottom:12px}
+  .obj10m-alerte code{background:rgba(0,0,0,.06);padding:1px 4px;border-radius:4px;font-size:11px}
+  .obj10m-progress-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px}
+  .obj10m-track{height:12px;background:var(--gris-clair);border-radius:999px;overflow:hidden}
+  .obj10m-fill{height:100%;background:linear-gradient(90deg,#1A7A48,#2FA56A);border-radius:999px;transition:width .4s}
+  .obj10m-sous{font-size:12px;color:var(--gris-text);margin-top:8px;line-height:1.5}
+  .obj10m-sim-titre{font-weight:800;font-size:13px;margin:18px 0 10px}
+  .obj10m-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .obj10m-champ{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--gris-text)}
+  .obj10m-champ input{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--gris-mid);border-radius:8px;font-size:14px;font-weight:700;color:var(--noir);background:#fff}
+  .obj10m-champ small{font-size:10px;font-weight:500}
+  .obj10m-verdict{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px}
+  .obj10m-verdict.ok{background:#E6F4EC;color:#0D5C35}
+  .obj10m-verdict.ko{background:#FDECEC;color:#9B1C1C}
+  .obj10m-reset{margin-top:10px;background:none;border:1px solid var(--gris-mid);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;color:var(--gris-text)}
   /* ─── ABONNEMENTS / PLANS ─── */
   .plan-card{background:#fff;border-radius:var(--radius-lg);border:2px solid var(--gris-mid);padding:20px;text-align:center;position:relative;transition:var(--transition)}
   .plan-card.populaire{border-color:var(--vert)}
@@ -19905,6 +19921,165 @@ function _initChartTooltips(container) {
   }, {passive:true});
 }
 
+// ══════════════════════════════════════════
+//  OBJECTIF 10 000 000 FCFA / MOIS — suivi + simulateur de leviers
+// ══════════════════════════════════════════
+// Montre au propriétaire où il en est ce mois-ci et combien de ventes,
+// abonnés, boosts… il faut réellement pour atteindre l'objectif. Les
+// hypothèses du simulateur sont gardées dans ce navigateur uniquement.
+
+const OBJ10M_CIBLE = 10000000;
+const OBJ10M_CLE = 'lg_obj10m_scenario';
+const OBJ10M_DEFAUT = {
+  plus: 1200, pro: 350, business: 60,        // abonnés payants
+  ventes: 2000, commMoy: 1000,               // ventes commissionnées / mois, commission moyenne (F)
+  boosts: 800, boostMoy: 2500,               // boosts vendus / mois, prix moyen (F)
+  pubJours: 60,                              // jours de bannière pub vendus / mois
+  verifs: 300,                               // vérifications d'identité / mois
+  conversion: 5,                             // % des membres qui paient un abonnement
+};
+
+function _obj10mScenario() {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem(OBJ10M_CLE) || '{}') || {}; } catch (e) { s = {}; }
+  return Object.assign({}, OBJ10M_DEFAUT, s);
+}
+
+function _obj10mPrixPlan(nom, cfgCle) {
+  const p = (DAO._local.plans || []).find(x => x.nom === nom);
+  return Number(p && p.prix) || CFG[cfgCle] || 0;
+}
+
+function calcObjectif10M(sc) {
+  const prix = {
+    plus: _obj10mPrixPlan('Plus', 'plan_prix_plus'),
+    pro: _obj10mPrixPlan('Pro', 'plan_prix_pro'),
+    business: _obj10mPrixPlan('Business', 'plan_prix_business'),
+    pubJour: typeof TARIF_BASE_JOUR !== 'undefined' ? TARIF_BASE_JOUR : 8000,
+    verif: CFG.frais_verification || 1000,
+  };
+  const leviers = [
+    { cle: 'abos', label: 'Abonnements', color: '#1A5FBF',
+      value: sc.plus * prix.plus + sc.pro * prix.pro + sc.business * prix.business },
+    { cle: 'comm', label: 'Commissions', color: '#1A7A48', value: sc.ventes * sc.commMoy },
+    { cle: 'boost', label: 'Boosts', color: '#B8791A', value: sc.boosts * sc.boostMoy },
+    { cle: 'pub', label: 'Publicité', color: '#7C3A8A', value: sc.pubJours * prix.pubJour },
+    { cle: 'verif', label: 'Vérifications', color: '#9C978C', value: sc.verifs * prix.verif },
+  ];
+  const total = leviers.reduce((a, l) => a + l.value, 0);
+  const payants = sc.plus + sc.pro + sc.business;
+  const membres = sc.conversion > 0 ? Math.ceil(payants / (sc.conversion / 100)) : 0;
+  return { prix, leviers, total, payants, membres };
+}
+
+// Revenu réellement encaissé sur le mois calendaire en cours
+function calcRevenuMoisCourant() {
+  const mois = new Date().toISOString().slice(0, 7);
+  const confirmes = (DAO._local.paiements || []).filter(p => p.statut === 'confirmé' && (p.date || '').startsWith(mois));
+  const commissions = confirmes.reduce((s, p) => s + (p.commission || 0), 0);
+  const annexes = (DAO._local.revenus_annexes || [])
+    .filter(r => (r.date || '').startsWith(mois) && r.statut !== 'en attente')
+    .reduce((s, r) => s + (r.montant || 0), 0);
+  const plans = DAO._local.plans || [];
+  const mrr = (DAO._local.abonnements || []).filter(a => a.statut === 'actif')
+    .reduce((s, a) => s + (Number((plans.find(p => p.nom === a.plan) || {}).prix) || 0), 0);
+  return commissions + annexes + mrr;
+}
+
+function renderObjectif10M() {
+  const sc = _obj10mScenario();
+  const o = calcObjectif10M(sc);
+  const actuel = calcRevenuMoisCourant();
+  const jour = new Date().getDate();
+  const joursMois = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+  const projection = jour > 0 ? Math.round(actuel / jour * joursMois) : 0;
+  const pct = Math.min(100, Math.round(actuel / OBJ10M_CIBLE * 1000) / 10);
+  const manque = Math.max(0, OBJ10M_CIBLE - actuel);
+  const enDemo = typeof paiementEstEnProduction === 'function' && !paiementEstEnProduction();
+
+  const champ = (cle, label, suffixe) => `<label class="obj10m-champ">
+      <span>${label}</span>
+      <input type="number" min="0" step="1" value="${sc[cle]}" data-obj10m="${cle}" inputmode="numeric">
+      ${suffixe ? `<small>${suffixe}</small>` : ''}
+    </label>`;
+
+  const ecart = o.total - OBJ10M_CIBLE;
+  const leviersHtml = o.leviers.map(l => {
+    const part = o.total ? Math.round(l.value / o.total * 100) : 0;
+    return `<div class="chart-bar-row">
+      <div class="chart-bar-label">${escapeHtml(l.label)}</div>
+      <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${Math.max(2, part)}%;background:${l.color}"></div></div>
+      <div class="chart-bar-val" style="min-width:64px">${fmtCompactFCFA(l.value)}</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="admin-section obj10m" id="obj10m-bloc">
+    <div class="admin-section-titre">🎯 Objectif ${fmtCompactFCFA(OBJ10M_CIBLE)} / mois</div>
+    ${enDemo ? `<div class="obj10m-alerte">⚠️ <strong>Les paiements sont en mode démo : aucun franc réel n'est encaissé.</strong>
+      Tant que la passerelle CinetPay n'est pas activée (secrets <code>CINETPAY_API_KEY</code> / <code>CINETPAY_SITE_ID</code> dans Supabase,
+      puis <code>PAYMENT_CONFIG.MODE = 'production'</code>), le revenu réel restera à 0 F.</div>` : ''}
+    <div class="obj10m-progress-head">
+      <div><div class="stat-tile-label">Encaissé ce mois</div><div class="stat-tile-val">${fmtCompactFCFA(actuel)}</div></div>
+      <div style="text-align:right"><div class="stat-tile-label">Projection fin de mois</div><div class="stat-tile-val">${fmtCompactFCFA(projection)}</div></div>
+    </div>
+    <div class="obj10m-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+      <div class="obj10m-fill" style="width:${Math.max(pct, 0.5)}%"></div>
+    </div>
+    <div class="obj10m-sous">${pct}% de l'objectif · il manque <strong>${fmtFCFA(manque)}</strong> ce mois-ci</div>
+
+    <div class="obj10m-sim-titre">🧮 Plan pour y arriver — ajustez les chiffres</div>
+    <div class="obj10m-grille">
+      ${champ('plus', 'Abonnés Plus', fmtFCFA(o.prix.plus) + '/mois')}
+      ${champ('pro', 'Abonnés Pro', fmtFCFA(o.prix.pro) + '/mois')}
+      ${champ('business', 'Abonnés Business', fmtFCFA(o.prix.business) + '/mois')}
+      ${champ('ventes', 'Ventes commissionnées', 'par mois')}
+      ${champ('commMoy', 'Commission moyenne', 'F par vente')}
+      ${champ('boosts', 'Boosts vendus', 'par mois')}
+      ${champ('boostMoy', 'Prix moyen boost', 'F (1 000 → 7 500)')}
+      ${champ('pubJours', 'Jours de bannière pub', fmtFCFA(o.prix.pubJour) + '/jour')}
+      ${champ('verifs', 'Vérifications identité', fmtFCFA(o.prix.verif) + ' l\'unité')}
+      ${champ('conversion', 'Membres qui s\'abonnent', '% (3 à 8 % réaliste)')}
+    </div>
+    <div class="chart-wrap" style="margin-top:12px">${leviersHtml}</div>
+    <div class="obj10m-verdict ${ecart >= 0 ? 'ok' : 'ko'}">
+      ${ecart >= 0 ? '✅' : '❌'} Ce plan rapporte <strong>${fmtFCFA(o.total)}</strong> / mois
+      (${ecart >= 0 ? '+' : '−'}${fmtFCFA(Math.abs(ecart))} ${ecart >= 0 ? 'au-dessus' : 'en dessous'} de l'objectif).
+    </div>
+    <div class="obj10m-sous">👥 Il faut <strong>${o.payants.toLocaleString('fr-FR')} abonnés payants</strong>, soit environ
+      <strong>${o.membres.toLocaleString('fr-FR')} vendeurs actifs</strong> sur la plateforme à ${sc.conversion}% de conversion
+      (aujourd'hui : ${(DAO._local.utilisateurs || []).filter(u => u.role !== 'admin').length.toLocaleString('fr-FR')} membres).</div>
+    <button type="button" class="obj10m-reset" onclick="obj10mReinitialiser()">↺ Revenir au plan par défaut</button>
+  </div>`;
+}
+
+function _obj10mBrancher(root) {
+  const bloc = root && root.querySelector('#obj10m-bloc');
+  if (!bloc) return;
+  bloc.addEventListener('change', e => {
+    const cle = e.target && e.target.dataset && e.target.dataset.obj10m;
+    if (!cle) return;
+    const sc = _obj10mScenario();
+    sc[cle] = Math.max(0, Math.round(Number(e.target.value) || 0));
+    try { localStorage.setItem(OBJ10M_CLE, JSON.stringify(sc)); } catch (err) {}
+    _obj10mRafraichir();
+  });
+}
+
+function _obj10mRafraichir() {
+  const ancien = document.getElementById('obj10m-bloc');
+  if (!ancien) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = renderObjectif10M();
+  const nouveau = tmp.firstElementChild;
+  ancien.replaceWith(nouveau);
+  _obj10mBrancher(nouveau.parentNode);
+}
+
+function obj10mReinitialiser() {
+  try { localStorage.removeItem(OBJ10M_CLE); } catch (e) {}
+  _obj10mRafraichir();
+}
+
 function renderStatsStrategiques() {
   const el = document.getElementById('admin-stats-strategiques');
   if (!el || !SESSION) return;
@@ -19969,12 +20144,13 @@ function renderStatsStrategiques() {
     ${s.topVilles.length ? chartBarList(s.topVilles, {color:'#1A5FBF', unit: ' annonce(s)'}) : '<div class="chart-empty">Aucune annonce publiée</div>'}
   </div>`;
 
-  el.innerHTML = kpis +
+  el.innerHTML = renderObjectif10M() + kpis +
     '<div class="stats-grid-2">' + revenuChart + donutChart + '</div>' +
     '<div class="stats-grid-2b">' + catChart + villesChart + '</div>' +
     '<div id="admin-stats-trafic-resume"></div>';
 
   _initChartTooltips(el);
+  _obj10mBrancher(el);
   chargerTraficResumeDashboard();
 }
 
