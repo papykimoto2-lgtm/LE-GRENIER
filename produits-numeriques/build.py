@@ -206,7 +206,9 @@ def construire(fichier):
     corps = re.sub(r"(?m)^(> ?\S.*)\n(?=> ?\S)", r"\1  \n", corps)
     global CHAT_TITRE
     CHAT_TITRE = tuple(meta.get("bulles", "Modèle à copier | adapte le nom et les prix").split(" | "))
-    h = markdown.markdown(corps, extensions=["tables", "sane_lists"])
+    # Récit : un retour à la ligne dans le texte reste un retour à la ligne (phrases courtes, rythme).
+    extensions = ["tables", "sane_lists"] + (["nl2br"] if meta.get("style") == "recit" else [])
+    h = markdown.markdown(corps, extensions=extensions)
     h = re.sub(r"⟦(.*?)⟧", r'<mark class="acompleter">\1</mark>', h)
     h = cases(exercices(encadres(h)))
     h, titres = ouvertures(h, slug, meta)
