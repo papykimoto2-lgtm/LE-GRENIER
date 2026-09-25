@@ -1817,6 +1817,21 @@
   .pub-status-paused{background:var(--or-pale);color:#9A6A10}
   .pub-status-ended{background:var(--gris-clair);color:var(--gris-text)}
 
+  /* ─── PAIEMENT MOBILE MONEY DIRECT ─── */
+  .pm-note{background:#FFF4E0;border:1px solid #E8B45C;color:#6B4A10;border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px}
+  .pm-montant-box{background:var(--gris-clair);border-radius:14px;padding:14px;text-align:center;margin-bottom:12px}
+  .pm-montant-label{font-size:12px;color:var(--gris-text)}
+  .pm-montant{font-size:28px;font-weight:900;color:var(--noir);margin:2px 0 6px}
+  .pm-numero{display:block;margin:6px auto 4px;background:#fff;border:2px dashed #1A7A48;border-radius:10px;padding:8px 14px;font-size:20px;font-weight:900;letter-spacing:.04em;color:#0D5C35;cursor:pointer;font-family:monospace}
+  .pm-benef{font-size:11px;color:var(--gris-text)}
+  .pm-ussd{display:inline-flex;margin-top:10px;font-size:13px;font-weight:700;color:#0D5C35;text-decoration:none;border:1px solid #1A7A48;border-radius:999px;padding:6px 12px}
+  .pm-etapes{font-size:12px;color:var(--gris-text);line-height:1.6;margin:0 0 12px;padding-left:18px}
+  .pm-admin-card{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--gris-mid);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:#fff}
+  .pm-admin-card .pm-admin-info{font-size:12px;line-height:1.5;min-width:0;flex:1 1 220px}
+  .pm-admin-card .pm-admin-info strong{font-size:14px}
+  .pm-admin-card code{font-size:12px;background:var(--gris-clair);padding:1px 5px;border-radius:4px;word-break:break-all}
+  .pm-admin-btns{display:flex;gap:6px}
+  .pm-admin-btns button{border:0;border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer}
   /* ─── OBJECTIF 10M / MOIS ─── */
   .obj10m-alerte{background:#FFF4E0;border:1px solid #E8B45C;color:#6B4A10;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-bottom:12px}
   .obj10m-alerte code{background:rgba(0,0,0,.06);padding:1px 4px;border-radius:4px;font-size:11px}
@@ -9815,6 +9830,46 @@ const ENTREPRISE = {
       </div>
     </div>
 
+    <!-- ÉTAPE MANUELLE : transfert Mobile Money direct vers le numéro du Grenier -->
+    <div id="pay-etape-manuel" style="display:none">
+      <div id="pay-manuel-form" style="padding:18px 18px 0">
+        <div id="pay-manuel-note" class="pm-note" style="display:none"></div>
+        <div class="pm-montant-box">
+          <div class="pm-montant-label">Envoyez exactement</div>
+          <div class="pm-montant" id="pay-manuel-montant">—</div>
+          <div class="pm-montant-label">par <strong id="pay-manuel-canal">Wave</strong> au numéro</div>
+          <button type="button" class="pm-numero" id="pay-manuel-numero" onclick="payManuelCopier('numero')" title="Copier le numéro">—</button>
+          <div class="pm-benef" id="pay-manuel-benef"></div>
+          <a class="pm-ussd" id="pay-manuel-ussd" href="#" style="display:none">📞 Ouvrir le menu de paiement</a>
+        </div>
+        <ol class="pm-etapes">
+          <li>Envoyez le montant exact au numéro ci-dessus.</li>
+          <li>Vous recevez un SMS de confirmation avec un <strong>ID de transaction</strong>.</li>
+          <li>Saisissez cet ID ci-dessous : votre achat est activé dès vérification (en général moins de 30 min).</li>
+        </ol>
+        <div class="pay-input-group">
+          <label for="pay-manuel-tel">Numéro qui a envoyé l'argent</label>
+          <input class="pay-input" type="tel" id="pay-manuel-tel" placeholder="07 XX XX XX XX" maxlength="14" oninput="formatPayNum(this)">
+        </div>
+        <div class="pay-input-group">
+          <label for="pay-manuel-txn">ID de transaction (dans le SMS)</label>
+          <input class="pay-input" type="text" id="pay-manuel-txn" placeholder="ex : CI240925.1432.A12345" maxlength="40" autocomplete="off" style="text-transform:uppercase">
+        </div>
+      </div>
+      <div class="pay-form-area" id="pay-manuel-actions" style="padding-bottom:18px">
+        <button class="btn-payer" id="pay-manuel-btn" onclick="payManuelEnvoyer()">✅ J'ai envoyé l'argent</button>
+        <button class="btn btn-outline w-full" style="margin-top:8px;border-radius:14px" onclick="payRetour()">← Changer de moyen de paiement</button>
+      </div>
+      <div id="pay-manuel-ok" style="display:none;padding:22px 18px;text-align:center">
+        <div style="font-size:44px">⏳</div>
+        <div style="font-weight:800;font-size:17px;margin:6px 0">Paiement reçu, vérification en cours</div>
+        <div style="font-size:13px;color:var(--gris-text);line-height:1.5">Nous vérifions votre transfert. Votre achat sera activé automatiquement dès confirmation (en général moins de 30 min).</div>
+        <div class="pay-success-ref" id="pay-manuel-ref">REF: —</div>
+        <a class="btn btn-primary w-full" id="pay-manuel-wa" href="#" target="_blank" rel="noopener" style="margin-bottom:10px;gap:6px">📲 Accélérer : envoyer la preuve sur WhatsApp</a>
+        <button class="btn btn-outline w-full" style="border-radius:14px" onclick="fermerModalPaiement()">Fermer</button>
+      </div>
+    </div>
+
     <!-- ÉTAPE 4 : Succès -->
     <div id="pay-etape-success" style="display:none">
       <div class="pay-success">
@@ -12638,7 +12693,7 @@ function apGetDestinataire(methode) {
 
 
 function payShowEtape(n) {
-  ['pay-etape-1','pay-etape-2','pay-etape-3','pay-etape-success','pay-etape-spinner'].forEach(id => {
+  ['pay-etape-1','pay-etape-2','pay-etape-3','pay-etape-success','pay-etape-spinner','pay-etape-manuel'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -12655,6 +12710,7 @@ function payShowEtape(n) {
   else if (n === 3)  { document.getElementById('pay-etape-3').style.display = 'block'; lancerOTP(); }
   else if (n === 99) { document.getElementById('pay-etape-success').style.display = 'block'; }
   else if (n === 0)  { document.getElementById('pay-etape-spinner').style.display = 'block'; }
+  else if (n === 'manuel') { document.getElementById('pay-etape-manuel').style.display = 'block'; }
 }
 
 function paySetupEtape2() {
@@ -12676,6 +12732,13 @@ function paySetupEtape2() {
 }
 
 function payEtape2() {
+  // Sans passerelle automatique active, un paiement Mobile Money se fait par
+  // transfert direct vers le numéro du Grenier (argent réel, validé par l'admin)
+  // au lieu de la simulation.
+  if (!paiementEstEnProduction() && payManuelDisponible(payMethodeActive)) {
+    payManuelPreparer();
+    return;
+  }
   payShowEtape(2);
 }
 
@@ -12901,8 +12964,115 @@ async function lancerPaiementReel() {
     window.location.href = r.data.payment_url;
   } catch (err) {
     console.error('[PAIEMENT] Echec :', err);
+    const canalRepli = payManuelDisponible(payMethodeActive) ? payMethodeActive
+      : ['wave','orange','moov','mtn'].find(payManuelDisponible);
+    if (canalRepli) {
+      payMethodeActive = canalRepli;
+      payManuelPreparer('Le paiement automatique est momentanément indisponible : payez directement par transfert, c\'est tout aussi sûr.');
+      return;
+    }
     payShowEtape(1);
     toast('Paiement indisponible pour le moment. Reessayez.', 'erreur');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  PAIEMENT MOBILE MONEY DIRECT (argent réel, sans passerelle)
+//  ────────────────────────────────────────────────────────────
+//  Le client envoie le montant sur le numéro Wave/Orange/MTN/Moov du
+//  Grenier (Profil admin), puis déclare l'ID de transaction reçu par SMS.
+//  Le backend enregistre le paiement "attente" ; l'admin le confirme dans
+//  le tableau de bord après l'avoir vu arriver, ce qui active l'achat
+//  (annonce, abonnement, boost, badge vérifié) côté serveur.
+// ════════════════════════════════════════════════════════════
+const PAY_MANUEL_USSD = { orange: '#144#', mtn: '*133#', moov: '*155#' };
+
+function payManuelDisponible(canal) {
+  const m = PAY_METHODES[canal];
+  return !!(m && m.type === 'mm' && m.destinataire && typeof MODE !== 'undefined' && MODE === 'remote');
+}
+
+// Numéro tel qu'on le tape dans Wave/Orange en Côte d'Ivoire : 07 79 18 10 75
+function payManuelNumeroLocal(num) {
+  let d = String(num || '').replace(/\D/g, '');
+  if (d.length === 13 && d.startsWith('225')) d = d.slice(3);
+  return d.length === 10 ? d.replace(/(\d{2})(?=\d)/g, '$1 ') : String(num || '');
+}
+
+function payManuelPreparer(note) {
+  const m = PAY_METHODES[payMethodeActive];
+  const p = window.ADMIN_PROFIL || {};
+  document.getElementById('pay-manuel-montant').textContent = fmtFCFA(window._payMontantCourant || 0);
+  document.getElementById('pay-manuel-canal').textContent = m.nom;
+  document.getElementById('pay-manuel-numero').textContent = payManuelNumeroLocal(m.destinataire);
+  document.getElementById('pay-manuel-benef').textContent =
+    'Bénéficiaire : ' + ([p.prenom, p.nom].filter(Boolean).join(' ') || 'Le Grenier CI') + ' · touchez le numéro pour le copier';
+  const ussd = document.getElementById('pay-manuel-ussd');
+  const code = PAY_MANUEL_USSD[payMethodeActive];
+  ussd.style.display = code ? 'inline-flex' : 'none';
+  if (code) { ussd.href = 'tel:' + encodeURIComponent(code); ussd.textContent = '📞 Composer ' + code; }
+  const noteEl = document.getElementById('pay-manuel-note');
+  noteEl.style.display = note ? 'block' : 'none';
+  noteEl.textContent = note || '';
+  const tel = document.getElementById('pay-manuel-tel');
+  if (!tel.value && SESSION && SESSION.tel) { tel.value = SESSION.tel; formatPayNum(tel); }
+  document.getElementById('pay-manuel-txn').value = '';
+  document.getElementById('pay-manuel-form').style.display = 'block';
+  document.getElementById('pay-manuel-actions').style.display = 'block';
+  document.getElementById('pay-manuel-ok').style.display = 'none';
+  payShowEtape('manuel');
+}
+
+function payManuelCopier() {
+  const num = document.getElementById('pay-manuel-numero').textContent;
+  const fini = () => toast('📋 Numéro copié : ' + num);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(num).then(fini, fini);
+  else fini();
+}
+
+async function payManuelEnvoyer() {
+  if (!SESSION) { fermerModalPaiement(); goScreen('screen-login'); return; }
+  const tel = document.getElementById('pay-manuel-tel').value.replace(/\s/g, '');
+  const txn = document.getElementById('pay-manuel-txn').value.trim().toUpperCase().replace(/\s+/g, '');
+  if (tel.replace(/\D/g, '').length < 8) { toast('Entrez le numéro qui a envoyé l\'argent', 'erreur'); return; }
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txn)) { toast('Entrez l\'ID de transaction reçu par SMS', 'erreur'); return; }
+
+  const btn = document.getElementById('pay-manuel-btn');
+  btn.disabled = true; btn.textContent = '⏳ Envoi…';
+  const contenu = window._payMetadataCourant || (depotEnCours ? Object.assign({ emoji: emojiCat(depotEnCours.cat) }, depotEnCours) : null);
+  const payload = {
+    montant: window._payMontantCourant || 0,
+    canal: payMethodeActive,
+    type: window._payTypeCourant || 'commission',
+    description: window._payLibelleCourant || 'Paiement Le Grenier CI',
+    tel, txn_id: txn,
+    annonce: contenu,
+  };
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/manuel', payload);
+    if (r.error || !r.data || !r.data.reference) {
+      throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Réponse invalide');
+    }
+    const ref = r.data.reference;
+    // L'achat est désormais porté par le backend : on vide le dépôt local
+    // pour ne pas le republier en double.
+    if (depotEnCours && !window._payMetadataCourant) { depotEnCours = null; DEPOT_PHOTOS = []; }
+    document.getElementById('pay-manuel-ref').textContent = 'REF: ' + ref;
+    const msg = 'Bonjour, je viens de payer sur Le Grenier CI.\n\n' +
+      '• Achat : ' + payload.description + '\n' +
+      '• Montant : ' + fmtFCFA(payload.montant) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Envoyé depuis : ' + tel + '\n' +
+      '• ID transaction : ' + txn + '\n' +
+      '• Référence : ' + ref + '\n\nMerci de valider.';
+    document.getElementById('pay-manuel-wa').href = 'https://wa.me/' + (window._ADMIN_WA || '2250779181075') + '?text=' + encodeURIComponent(msg);
+    document.getElementById('pay-manuel-form').style.display = 'none';
+    document.getElementById('pay-manuel-actions').style.display = 'none';
+    document.getElementById('pay-manuel-ok').style.display = 'block';
+  } catch (err) {
+    console.error('[PAIEMENT MANUEL]', err);
+    toast('❌ ' + (err.message || 'Envoi impossible, réessayez'), 'erreur');
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ J\'ai envoyé l\'argent';
   }
 }
 
@@ -13321,6 +13491,22 @@ function renderDashboard() {
       <td style="white-space:nowrap">${btnBoost}${btnEdit}${btnDelete}</td>
     </tr>`
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--gris-text);padding:20px">Aucune publication</td></tr>';
+
+  // Relance boost : met en avant l'annonce en ligne la plus vue et pas encore
+  // boostée, avec le prix d'entrée, au-dessus du tableau.
+  const aBooster = rows.filter(r => r.type === 'marché' && r.statut === 'en-ligne' && !Boost.isBoosted(r.id))
+    .sort((a, b) => (b.vues || 0) - (a.vues || 0))[0];
+  const table = tbody.closest('table');
+  let nudge = document.getElementById('dash-boost-nudge');
+  if (aBooster && table) {
+    if (!nudge) { nudge = document.createElement('div'); nudge.id = 'dash-boost-nudge'; table.parentNode.insertBefore(nudge, table); }
+    nudge.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FFFBEB;border:1.5px solid #f59e0b;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+      <span style="font-size:24px">⚡</span>
+      <div style="flex:1;min-width:180px;font-size:13px;line-height:1.45"><strong>Vendez plus vite « ${escapeHtml(aBooster.titre)} »</strong><br>
+        Placez-la en tête des résultats avec le badge « Boostée » — dès ${fmtFCFA(1000)} pour 3 jours.</div>
+      <button type="button" onclick="Boost.open(${aBooster.id})" style="background:#f59e0b;color:#1f1300;border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer">Booster maintenant</button>
+    </div>`;
+  } else if (nudge) nudge.remove();
 
   // Avis
   const mesAvis = DAO._local.avis.filter(v=>v.vendeurId===SESSION.id);
@@ -17969,7 +18155,7 @@ async function sauvegarderEditBanniere(id) {
   };
 
   if (difference > 0) {
-    ouvrirModalPaiement(difference, `Complément bannière "${annonceur}"`, appliquer);
+    ouvrirModalPaiement(difference, `Complément bannière "${annonceur}"`, appliquer, { type: 'pub' });
   } else {
     appliquer();
   }
@@ -19729,7 +19915,7 @@ function demanderVerification() {
     });
     toast('✅ Identité vérifiée ! Badge vendeur vérifié activé.');
     renderAdmin && renderAdmin();
-  });
+  }, { type: 'verification' });
 }
 
 // Frais de livraison tricycle
@@ -19741,7 +19927,7 @@ function initierLivraison(annonceId, adresse, quartierDep, quartierArr) {
   ouvrirModalPaiement(tarif, `Livraison tricycle — ${quartierDep} → ${quartierArr}`, () => {
     enregistrerRevenuAnnexe('livraison', `Livraison ${quartierDep}→${quartierArr}`, partGrenier);
     toast(`🚲 Livraison confirmée ! Un tricycliste vous contactera sous 30 min.`);
-  });
+  }, { type: 'livraison' });
 }
 
 // Formation e-commerce
@@ -19750,7 +19936,7 @@ function inscrireFormation(titre, prix) {
   ouvrirModalPaiement(prix, `Formation : ${titre}`, () => {
     enregistrerRevenuAnnexe('formation', `Formation "${titre}" — ${SESSION.prenom} ${SESSION.nom}`, prix);
     toast(`🎓 Inscription confirmée ! Accès envoyé sur ${SESSION.email}`);
-  });
+  }, { type: 'formation' });
 }
 
 // ══════════════════════════════════════════
@@ -19975,8 +20161,12 @@ function calcObjectif10M(sc) {
 // Revenu réellement encaissé sur le mois calendaire en cours
 function calcRevenuMoisCourant() {
   const mois = new Date().toISOString().slice(0, 7);
-  const confirmes = (DAO._local.paiements || []).filter(p => p.statut === 'confirmé' && (p.date || '').startsWith(mois));
-  const commissions = confirmes.reduce((s, p) => s + (p.commission || 0), 0);
+  const confirmes = (DAO._local.paiements || []).filter(p =>
+    (p.statut === 'confirmé' || p.statut === 'confirme') && (p.date || '').startsWith(mois));
+  // Abonnements comptés via le MRR ci-dessous ; commissions pour les ventes ;
+  // montant payé pour tout le reste (boosts, vérifications, pub, livraison…).
+  const commissions = confirmes.reduce((s, p) =>
+    s + (p.type === 'abonnement' ? 0 : p.type === 'commission' || !p.type ? (p.commission || 0) : (p.valeur || 0)), 0);
   const annexes = (DAO._local.revenus_annexes || [])
     .filter(r => (r.date || '').startsWith(mois) && r.statut !== 'en attente')
     .reduce((s, r) => s + (r.montant || 0), 0);
@@ -19995,7 +20185,8 @@ function renderObjectif10M() {
   const projection = jour > 0 ? Math.round(actuel / jour * joursMois) : 0;
   const pct = Math.min(100, Math.round(actuel / OBJ10M_CIBLE * 1000) / 10);
   const manque = Math.max(0, OBJ10M_CIBLE - actuel);
-  const enDemo = typeof paiementEstEnProduction === 'function' && !paiementEstEnProduction();
+  const enDemo = typeof paiementEstEnProduction === 'function' && !paiementEstEnProduction()
+    && !['wave','orange','mtn','moov'].some(payManuelDisponible);
 
   const champ = (cle, label, suffixe) => `<label class="obj10m-champ">
       <span>${label}</span>
@@ -20015,9 +20206,9 @@ function renderObjectif10M() {
 
   return `<div class="admin-section obj10m" id="obj10m-bloc">
     <div class="admin-section-titre">🎯 Objectif ${fmtCompactFCFA(OBJ10M_CIBLE)} / mois</div>
-    ${enDemo ? `<div class="obj10m-alerte">⚠️ <strong>Les paiements sont en mode démo : aucun franc réel n'est encaissé.</strong>
-      Tant que la passerelle CinetPay n'est pas activée (secrets <code>CINETPAY_API_KEY</code> / <code>CINETPAY_SITE_ID</code> dans Supabase,
-      puis <code>PAYMENT_CONFIG.MODE = 'production'</code>), le revenu réel restera à 0 F.</div>` : ''}
+    ${enDemo ? `<div class="obj10m-alerte">⚠️ <strong>Aucun moyen d'encaisser de l'argent réel n'est actif.</strong>
+      Renseignez et activez au moins un numéro Wave / Orange Money / MTN / Moov dans Profil admin → Coordonnées de paiement
+      (ou activez CinetPay) : sinon le revenu réel restera à 0 F.</div>` : ''}
     <div class="obj10m-progress-head">
       <div><div class="stat-tile-label">Encaissé ce mois</div><div class="stat-tile-val">${fmtCompactFCFA(actuel)}</div></div>
       <div style="text-align:right"><div class="stat-tile-label">Projection fin de mois</div><div class="stat-tile-val">${fmtCompactFCFA(projection)}</div></div>
@@ -20078,6 +20269,68 @@ function _obj10mRafraichir() {
 function obj10mReinitialiser() {
   try { localStorage.removeItem(OBJ10M_CLE); } catch (e) {}
   _obj10mRafraichir();
+}
+
+// ══════════════════════════════════════════
+//  ADMIN — PAIEMENTS MOBILE MONEY À VÉRIFIER
+// ══════════════════════════════════════════
+// Chaque transfert déclaré par un client apparaît ici. L'admin vérifie sur
+// son téléphone (Wave/Orange/…) que l'argent est bien arrivé avec cet ID
+// de transaction, puis confirme : le backend active alors l'achat.
+async function chargerPaiementsManuelsAdmin() {
+  const zone = document.getElementById('admin-paiements-manuels');
+  if (!zone) return;
+  if (typeof MODE === 'undefined' || MODE !== 'remote') { zone.innerHTML = ''; return; }
+  const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/paiements?select=*&statut=eq.attente&passerelle=eq.' +
+    encodeURIComponent('Mobile Money direct') + '&order=created_at.desc&limit=100');
+  const el = document.getElementById('admin-paiements-manuels');
+  if (!el) return;
+  if (r.error) { el.innerHTML = ''; return; }
+  const liste = r.data || [];
+  if (!liste.length) {
+    el.innerHTML = `<div class="admin-section"><div class="admin-section-titre">💸 Paiements Mobile Money à vérifier</div>
+      <div class="chart-empty">Aucun paiement en attente. Ceux de vos clients apparaîtront ici.</div></div>`;
+    return;
+  }
+  const total = liste.reduce((s, p) => s + (Number(p.valeur) || 0), 0);
+  const users = DAO._local.utilisateurs || [];
+  el.innerHTML = `<div class="admin-section">
+    <div class="admin-section-titre">💸 ${liste.length} paiement${liste.length > 1 ? 's' : ''} à vérifier · ${fmtFCFA(total)}</div>
+    <div style="font-size:12px;color:var(--gris-text);margin-bottom:10px">Vérifiez sur votre téléphone que le montant est bien arrivé avec cet ID de transaction, puis confirmez : l'achat est activé automatiquement.</div>
+    ${liste.map(p => {
+      const u = users.find(x => x.id === p.vendeur_id);
+      const m = p.metadata || {};
+      const canal = (PAY_METHODES[p.moyen] || {}).nom || p.moyen;
+      const quand = p.created_at ? new Date(p.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      return `<div class="pm-admin-card">
+        <div class="pm-admin-info">
+          <strong>${fmtFCFA(Number(p.valeur) || 0)}</strong> · ${escapeHtml(canal)} · ${escapeHtml(quand)}<br>
+          ${escapeHtml(p.annonce_titre || p.type || '')}<br>
+          👤 ${u ? escapeHtml(u.prenom + ' ' + u.nom) : 'Client #' + p.vendeur_id} · 📱 ${escapeHtml(m.tel_payeur || '—')}<br>
+          ID : <code>${escapeHtml(m.txn_id || '—')}</code>
+        </div>
+        <div class="pm-admin-btns">
+          <button type="button" style="background:#1A7A48;color:#fff" onclick="adminValiderPaiementManuel('${escapeHtml(p.ref)}','confirmer',this)">✅ Reçu</button>
+          <button type="button" style="background:#FDECEC;color:#9B1C1C" onclick="adminValiderPaiementManuel('${escapeHtml(p.ref)}','refuser',this)">❌ Pas reçu</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function adminValiderPaiementManuel(ref, decision, btn) {
+  if (decision === 'refuser' && !confirm('Refuser ce paiement ? Le client ne sera pas activé.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/valider', { ref, decision });
+  if (r.error || !r.data || !r.data.ok) {
+    toast('❌ ' + ((r.data && r.data.error) || 'Validation impossible'), 'erreur');
+  } else if (decision === 'confirmer') {
+    toast('✅ Paiement confirmé' + (r.data.active ? ' · ' + r.data.active + ' activé' : ''), 'succes');
+  } else {
+    toast('Paiement refusé');
+  }
+  await _adminRafraichirCache(['paiements', 'abonnements', 'annonces']).catch(() => {});
+  if (typeof renderStatsStrategiques === 'function') renderStatsStrategiques();
 }
 
 function renderStatsStrategiques() {
@@ -20144,13 +20397,14 @@ function renderStatsStrategiques() {
     ${s.topVilles.length ? chartBarList(s.topVilles, {color:'#1A5FBF', unit: ' annonce(s)'}) : '<div class="chart-empty">Aucune annonce publiée</div>'}
   </div>`;
 
-  el.innerHTML = renderObjectif10M() + kpis +
+  el.innerHTML = '<div id="admin-paiements-manuels"></div>' + renderObjectif10M() + kpis +
     '<div class="stats-grid-2">' + revenuChart + donutChart + '</div>' +
     '<div class="stats-grid-2b">' + catChart + villesChart + '</div>' +
     '<div id="admin-stats-trafic-resume"></div>';
 
   _initChartTooltips(el);
   _obj10mBrancher(el);
+  chargerPaiementsManuelsAdmin();
   chargerTraficResumeDashboard();
 }
 
