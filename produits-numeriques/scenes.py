@@ -288,6 +288,92 @@ def g2_plan():
     return scene(c, W, H)
 
 
+# ════════════════════════════════════════════════════════════════════════
+#  GUIDE 3 — Développer son application sans code (bleu / or)
+# ════════════════════════════════════════════════════════════════════════
+B1, B2 = "#0B2A5B", "#1A5FBF"
+
+
+def ordinateur(x, y, s=1, ecran=""):
+    """Ordinateur portable ; `ecran` dessiné dans un repère 0,0 → 200,124."""
+    return g(f'''<rect x="0" y="0" width="220" height="140" rx="10" fill="{ENCRE}"/>
+      <rect x="10" y="8" width="200" height="124" rx="4" fill="#F5F7FB"/>
+      <g transform="translate(10,8)">{ecran}</g>
+      <path d="M-24,140 L244,140 L256,154 L-36,154Z" fill="#9AA3B2"/>
+      <rect x="86" y="140" width="48" height="5" rx="2" fill="#6B7280"/>''', x, y, s)
+
+
+def g3_outils():
+    c = fond_banniere(B1, B2, 1)
+    tuiles = [("🤖", "Assistant IA", OR), ("🗄️", "Base de données", "#8FD3C1"), ("🌍", "Hébergement", "#fff"),
+              ("💳", "Paiement", CORAIL), ("🔗", "GitHub", "#C9D6F2"), ("⚙️", "Automatisation", OR)]
+    for i, (ico, lib, col) in enumerate(tuiles):
+        x, y = 60 + (i % 3) * 165, 40 + (i // 3) * 112
+        c += f'<rect x="{x}" y="{y}" width="148" height="92" rx="16" fill="{col}"/>'
+        c += texte(x + 74, y + 44, ico, 30, ENCRE, 400, "middle") + texte(x + 74, y + 76, lib, 14, B1, 800, "middle")
+    return scene(c, W, H)
+
+
+def g3_prompt():
+    c = fond_banniere(B1, B2, 2)
+    ecr = ('<rect width="200" height="124" fill="#F5F7FB"/>'
+           '<rect x="8" y="8" width="130" height="30" rx="8" fill="#DCF8C6"/>'
+           + lignes_texte(16, 16, 110, 2, "#7AA37A", 9, 4)
+           + '<rect x="62" y="46" width="130" height="38" rx="8" fill="#fff" stroke="#DDE3EE"/>'
+           + lignes_texte(70, 54, 110, 3, "#9AA5B8", 9, 4)
+           + f'<rect x="8" y="92" width="96" height="24" rx="6" fill="{B2}"/>'
+           + texte(56, 108, "Menu · Panier", 9, "#fff", 800, "middle"))
+    c += ordinateur(190, 40, 1.15, ecr)
+    c += bulle_txt(40, 30, 150, "Crée une app…", "#fff", "d", 14) + bulle_txt(450, 40, 120, "C'est fait ✅", "#DCF8C6", "g", 14)
+    c += etincelle(90, 200, 14, OR) + etincelle(540, 210, 12, "#fff")
+    return scene(c, W, H)
+
+
+def g3_paiement():
+    c = fond_banniere(B1, B2, 3)
+    ecr = ('<rect width="126" height="206" fill="#fff"/><rect width="126" height="30" fill="#1DC3F0"/>'
+           + texte(63, 20, "Mobile Money", 11, "#fff", 800, "middle")
+           + '<circle cx="63" cy="80" r="26" fill="#1A7A48"/>'
+           '<path d="M50,80 L60,90 L78,70" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
+           + texte(63, 130, "Paiement reçu", 11, ENCRE, 800, "middle") + texte(63, 156, "25 000 F", 19, "#1A7A48", 900, "middle")
+           + lignes_texte(20, 172, 86, 2, "#DDD"))
+    c += telephone(240, 25, 140, 240, ecr, ENCRE, 0)
+    c += bouclier(470, 120, 1.4, OR) + pieces(120, 250, 6, 1.1) + billet(120, 110, 1.1, -12) + billet(150, 150, 1, 8, "#9FD8B4")
+    return scene(c, W, H)
+
+
+def g3_plateformes():
+    c = fond_banniere(B1, B2, 4)
+    c += ordinateur(40, 70, .95, ecran_catalogue(200, 124, [OR, CORAIL, B2, "#1A7A48"])[:0] +
+                    '<rect width="200" height="22" fill="#0B2A5B"/>' + texte(100, 15, "le-grenier.ci", 9, "#fff", 700, "middle")
+                    + "".join(f'<rect x="{10+i*64}" y="32" width="54" height="54" rx="6" fill="{col}"/>' for i, col in enumerate([OR, CORAIL, "#1A7A48"]))
+                    + lignes_texte(10, 96, 180, 2, "#B8C2D6", 10, 5))
+    c += telephone(300, 40, 110, 200, ecran_catalogue(96, 166, [OR, CORAIL, B2, "#1A7A48", "#7C3A8A", "#D9A066"]), ENCRE, 6)
+    for i, (lib, sous) in enumerate([("Google Play", "25 $ une fois"), ("App Store", "99 $ par an"), ("PWA", "gratuit")]):
+        y = 50 + i * 66
+        c += f'<rect x="440" y="{y}" width="140" height="52" rx="12" fill="{ENCRE if i < 2 else OR}"/>'
+        c += texte(510, y + 23, lib, 14, "#fff" if i < 2 else ENCRE, 800, "middle") + texte(510, y + 41, sous, 10.5, "#C9D6F2" if i < 2 else ENCRE, 600, "middle")
+    return scene(c, W, H)
+
+
+def g3_securite():
+    c = fond_banniere(B1, B2, 5)
+    c += bouclier(300, 140, 2.4, OR)
+    cad = (f'<path d="M-22,-10 L-22,-30 C-22,-56 22,-56 22,-30 L22,-10" fill="none" stroke="#fff" stroke-width="9"/>'
+           f'<rect x="-34" y="-12" width="68" height="56" rx="10" fill="#fff"/><circle cx="0" cy="12" r="8" fill="{B1}"/>'
+           f'<rect x="-3" y="12" width="6" height="16" fill="{B1}"/>')
+    c += g(cad, 120, 150, 1.3) + g(cad, 480, 150, 1.3)
+    c += texte(300, 262, "Clés secrètes · Accès · Paiements vérifiés", 15, "#fff", 800, "middle")
+    return scene(c, W, H)
+
+
+def g3_plan():
+    c = fond_banniere(B1, B2, 6)
+    c += calendrier(70, 60, 1.2, OR, 22) + graphique(330, 245, [1, 2, 4, 6, 9], .95, "#fff", OR)
+    c += etincelle(540, 60, 14, OR)
+    return scene(c, W, H)
+
+
 # Chaque ouverture de chapitre est soit une scène dessinée (fonction), soit une
 # photo réelle Pexels : ("photo", identifiant, point d'intérêt vertical 0→1).
 # Les pages chiffrées (graphiques, paiement, calendrier) restent dessinées.
@@ -298,6 +384,14 @@ SCENES = {
         "chapitres": [("photo", "6612222", 0.42), ("photo", "36943009", 0.5), ("photo", "27398372", 0.45),
                       ("photo", "8154650", 0.55), ("photo", "17722443", 0.35), g1_vente,
                       g1_paiement, ("photo", "34635135", 0.62), ("photo", "7191994", 0.5), ("photo", "7362929", 0.45)],
+    },
+    "guide-app-sans-code": {
+        "couverture": g3_plan,
+        "couverture_photo": ("auteur", 0.62, 0.42),
+        "titre_en_bas": True,
+        "chapitres": [("photo", "7431938", 0.3), ("photo", "6974793", 0.45), ("photo", "36943009", 0.5), g3_outils,
+                      g3_prompt, ("photo", "33672079", 0.45), g3_paiement, g3_plateformes, g3_securite,
+                      ("photo", "30690398", 0.4), g3_plan],
     },
     "guide-boutique-50000": {
         "couverture": g2_couverture,

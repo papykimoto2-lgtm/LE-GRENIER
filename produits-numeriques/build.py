@@ -84,6 +84,9 @@ body { font-family: 'Poppins', 'Noto Color Emoji', sans-serif; margin: 0; color:
 
 
 # ── Transformations du HTML produit par Markdown ────────────────────────
+CHAT_TITRE = ("Modèle à copier", "adapte le nom et les prix")
+
+
 def _bulles(contenu):
     out = []
     for p in re.findall(r"<p>(.*?)</p>", contenu, re.S):
@@ -93,7 +96,7 @@ def _bulles(contenu):
         elif p.startswith("💬"):
             out.append(f'<div class="b b-vendeur">{p[1:].strip()}<span class="b-heure">✓✓</span></div>')
     return ('<div class="chat"><div class="chat-entete"><span class="chat-avatar"></span>'
-            '<span><strong>Modèle à copier</strong><br><small>adapte le nom et les prix</small></span></div>'
+            f'<span><strong>{CHAT_TITRE[0]}</strong><br><small>{CHAT_TITRE[1]}</small></span></div>'
             f'<div class="chat-fil">{"".join(out)}</div></div>')
 
 
@@ -166,7 +169,10 @@ def construire(fichier):
     corps = re.sub(r"(?m)^(>.*)\n\n(?=>)", r"\1\n\n<div></div>\n\n", corps)
     # Dans une citation, chaque ligne reste une ligne (publication, listes à emoji).
     corps = re.sub(r"(?m)^(> ?\S.*)\n(?=> ?\S)", r"\1  \n", corps)
+    global CHAT_TITRE
+    CHAT_TITRE = tuple(meta.get("bulles", "Modèle à copier | adapte le nom et les prix").split(" | "))
     h = markdown.markdown(corps, extensions=["tables", "sane_lists"])
+    h = re.sub(r"⟦(.*?)⟧", r'<mark class="acompleter">\1</mark>', h)
     h = cases(exercices(encadres(h)))
     h, titres = ouvertures(h, slug, meta)
     c, f = meta["couleur"], meta["fonce"]
@@ -183,8 +189,17 @@ def construire(fichier):
                            '<div class="c-degrade"></div>')
     else:
         fond_couverture = f"<div class=\"c-illus\">{SCENES[slug]['couverture']().replace('xMidYMid meet', 'xMidYMax slice')}</div>"
+    # Portrait de l'auteur en couverture : le titre passe en bas pour dégager le visage.
+    css_bas = ("""
+.couverture { justify-content: flex-end !important; }
+.c-haut { padding: 0 12mm 21mm !important; }
+.c-degrade { background: linear-gradient(0deg, var(--f) 0%, color-mix(in srgb, var(--f) 90%, transparent) 30%, transparent 55%) !important; }
+""" if SCENES[slug].get("titre_en_bas") else "")
     idents = [sc[1] for sc in SCENES[slug]["chapitres"] if isinstance(sc, tuple)] + ([cp[0]] if cp else [])
-    preface_md = (SRC / "preface.md").read_text(encoding="utf-8").replace("{titre}", meta["titre"])
+    fichier_preface = SRC / f"preface-{slug}.md"
+    if not fichier_preface.exists():
+        fichier_preface = SRC / "preface.md"
+    preface_md = fichier_preface.read_text(encoding="utf-8").replace("{titre}", meta["titre"])
     preface = ""
     if (PHOTOS_BRUTES / "auteur.jpg").exists():
         preface = (f'<section class="preface"><div class="pf-label">Préface</div><h2>Le mot de l\'auteur</h2>'
@@ -192,7 +207,7 @@ def construire(fichier):
                    f'<div class="pf-texte">{markdown.markdown(preface_md)}'
                    f'<div class="pf-signature">{html.escape(AUTEUR)}</div></div></div></section>')
     couverture = f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{html.escape(meta['titre'])}</title>
-<style>{POLICES}{CSS_COMMUN}{variables}
+<style>{POLICES}{CSS_COMMUN}{variables}{css_bas}
 @page {{ size: A5; margin: 0; }}
 .couverture {{ width: 148mm; height: 210mm; background: var(--f); color: #fff; position: relative; overflow: hidden; display: flex; flex-direction: column; }}
 .c-haut {{ padding: 13mm 12mm 0; position: relative; z-index: 2; }}
@@ -221,7 +236,7 @@ body {{ font-size: 9pt; line-height: 1.6; }}
 .sommaire h2 {{ font-family: 'Fraunces', serif; font-size: 20pt; color: var(--f); margin: 0 0 1mm; }}
 .sommaire .intro {{ color: #736E64; margin-bottom: 3mm; }}
 .sommaire ol {{ list-style: none; padding: 0; margin: 0; }}
-.sommaire li {{ display: flex; align-items: center; gap: 3.5mm; padding: 1.5mm 0; border-bottom: 1px dashed #DDD9D0; font-weight: 600; font-size: 9.6pt; }}
+.sommaire li {{ display: flex; align-items: center; gap: 3.5mm; padding: 1.1mm 0; border-bottom: 1px dashed #DDD9D0; font-weight: 600; font-size: 9.6pt; }}
 .sommaire small {{ display: block; font-size: 7pt; color: var(--c); text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }}
 .som-num {{ flex: 0 0 7mm; height: 7mm; border-radius: 50%; background: var(--c); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; }}
 .ouverture {{ page-break-before: always; margin-bottom: 5mm; }}
@@ -233,6 +248,7 @@ body {{ font-size: 9pt; line-height: 1.6; }}
 .pf-photo {{ float: right; width: 46mm; height: 57.5mm; object-fit: cover; border-radius: 3mm; margin: 0 0 3mm 4mm; box-shadow: 0 1mm 3mm rgba(0,0,0,.18); }}
 .pf-texte {{ font-size: 9.2pt; }}
 .pf-signature {{ margin-top: 4mm; padding-top: 2.5mm; border-top: 2px solid var(--c); font-family: 'Fraunces', serif; font-weight: 700; color: var(--f); font-size: 10pt; clear: both; }}
+mark.acompleter {{ background: #FFE58A; color: #6B4A00; font-weight: 700; padding: .3mm 1.5mm; border-radius: 1mm; }}
 .credits {{ margin-top: 8mm; font-size: 7pt; color: #8A857B; border-top: 1px solid #E4DED3; padding-top: 2mm; }}
 .ouv-label {{ display: inline-block; margin-top: 4mm; background: var(--c); color: #fff; font-size: 7.4pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 1.2mm 3mm; border-radius: 99px; }}
 .ouverture h2 {{ font-family: 'Fraunces', serif; font-weight: 900; font-size: 18pt; line-height: 1.15; color: var(--f); margin: 2.5mm 0 0; }}
