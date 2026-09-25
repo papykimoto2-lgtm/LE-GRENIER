@@ -48,6 +48,14 @@ SCRIPTS = {
                 "le calcul des prix sans perte et un plan d'action de soixante jours. "
                 "Dix mille francs. Scanne le QR code, paie par Mobile Money et reçois ton guide tout de suite.",
     },
+    "ne-plus-abandonner": {
+        "accroche": ["Licencié.", "Des années de procédure.", "Et j'ai gagné… sans être payé."],
+        "voix": "Licencié en décembre 2022. Des années de procédure. Puis une décision de justice en ma faveur… "
+                "et l'argent qui n'arrivait toujours pas. Dans « Le jour où j'ai décidé de ne plus abandonner », "
+                "je raconte mon combat, comment l'intelligence artificielle m'a aidé à comprendre et à tenir, "
+                "et comment je suis passé de victime à entrepreneur. Cinq mille francs. "
+                "Scanne le QR code, paie par Mobile Money et reçois le livre tout de suite.",
+    },
 }
 
 
