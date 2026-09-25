@@ -15,6 +15,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //    POST /paiement/manuel    → le client déclare un transfert Mobile Money
 //                               direct (Wave/Orange/MTN/Moov) vers le numéro
 //                               du Grenier, avec l'ID de transaction reçu par SMS
+//    POST /paiement/invite    → achat express d'un produit numérique SANS compte
+//                               (QR code, lien partagé) : transfert Mobile Money
+//                               direct + nom et WhatsApp du client ; renvoie un
+//                               jeton secret qui ouvrira le téléchargement une
+//                               fois le paiement confirmé par l'admin
 //    POST /paiement/valider   → (admin) confirme ou refuse un paiement manuel
 //                               après l'avoir vu arriver sur son téléphone ;
 //                               la confirmation active le service acheté.
@@ -240,6 +245,50 @@ async function declarerPaiementManuel(req: Request, user: any) {
   return json({ reference });
 }
 
+function nouveauJeton(): string {
+  const octets = new Uint8Array(24);
+  crypto.getRandomValues(octets);
+  return Array.from(octets, (o) => o.toString(16).padStart(2, "0")).join("");
+}
+
+// Achat express sans compte : uniquement pour un produit numérique en vente,
+// au prix du catalogue. Rien n'est délivré avant la confirmation admin.
+async function declarerAchatInvite(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const montant = Math.max(0, Math.round(Number(body.montant) || 0));
+  const canal = String(body.canal || "").toLowerCase();
+  if (!CANAUX_MANUELS.includes(canal)) return json({ error: "Moyen de paiement invalide" }, 400);
+
+  const txnId = String(body.txn_id || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txnId)) return json({ error: "ID de transaction invalide" }, 400);
+  const nom = String(body.nom || "").trim().slice(0, 80);
+  if (nom.length < 2) return json({ error: "Nom requis" }, 400);
+  const tel = String(body.tel || "").replace(/[^\d+]/g, "").slice(0, 20);
+  if (tel.replace(/\D/g, "").length < 8) return json({ error: "Numéro WhatsApp requis" }, 400);
+
+  const produit = await produitAchete({ produit_id: body.produit_id }, montant);
+  if (!produit) return json({ error: "Produit indisponible ou montant invalide" }, 400);
+
+  const dejaRes = await sb(`/rest/v1/paiements?metadata->>txn_id=eq.${encodeURIComponent(txnId)}&select=id&limit=1`);
+  if (dejaRes.ok && (await dejaRes.json()).length) return json({ error: "Cet ID de transaction a déjà été déclaré" }, 409);
+
+  const jeton = nouveauJeton();
+  const source = String(body.source || "").replace(/[^a-z0-9_-]/gi, "").slice(0, 30) || null;
+  const reference = "MM" + Date.now().toString().slice(-10) + Math.floor(Math.random() * 900 + 100);
+  const insertRes = await sb(`/rest/v1/paiements`, {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      vendeur_id: null, annonce_titre: "Guide : " + produit.titre, valeur: montant, commission: 0,
+      ref: reference, passerelle: PASSERELLE_MANUELLE, moyen: canal, statut: "attente",
+      plan_vendeur: null, type: "produit",
+      metadata: { produit_id: produit.id, source, txn_id: txnId, tel_payeur: tel, nom_client: nom, jeton, invite: true },
+    }),
+  });
+  if (!insertRes.ok) return json({ error: "Échec d'enregistrement du paiement" }, 500);
+  return json({ reference, jeton });
+}
+
 async function creerAnnoncePourPaiement(paiement: any) {
   const meta = paiement.metadata || {};
   if (!meta.titre) return; // commission sans contenu d'annonce (ex. vente déjà en ligne)
@@ -319,10 +368,14 @@ async function validerPaiementManuel(req: Request, user: any) {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
+    const path = new URL(req.url).pathname;
+    if (req.method === "POST" && path.endsWith("/invite")) {
+      return await declarerAchatInvite(req);
+    }
+
     const user = await identifierAppelant(req);
     if (!user) return json({ error: "Non authentifié" }, 401);
 
-    const path = new URL(req.url).pathname;
     if (req.method === "GET" && path.endsWith("/statut")) {
       return await statutPaiement(req, user);
     }

@@ -9816,8 +9816,12 @@ const ENTREPRISE = {
           <li>Vous recevez un SMS de confirmation avec un <strong>ID de transaction</strong>.</li>
           <li>Saisissez cet ID ci-dessous : votre achat est activé dès vérification (en général moins de 30 min).</li>
         </ol>
+        <div class="pay-input-group" id="pay-manuel-nom-groupe" style="display:none">
+          <label for="pay-manuel-nom">Votre nom</label>
+          <input class="pay-input" type="text" id="pay-manuel-nom" placeholder="ex : Awa Koné" maxlength="80" autocomplete="name">
+        </div>
         <div class="pay-input-group">
-          <label for="pay-manuel-tel">Numéro qui a envoyé l'argent</label>
+          <label for="pay-manuel-tel" id="pay-manuel-tel-label">Numéro qui a envoyé l'argent</label>
           <input class="pay-input" type="tel" id="pay-manuel-tel" placeholder="07 XX XX XX XX" maxlength="14" oninput="formatPayNum(this)">
         </div>
         <div class="pay-input-group">
@@ -12613,6 +12617,8 @@ function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   window._payLibelleCourant = libelle || 'Commission publication';
   window._payTypeCourant = (opts && opts.type) || 'commission';
   window._payMetadataCourant = (opts && opts.metadata) || null;
+  // Achat express sans compte (produit numérique via QR code / lien partagé)
+  window._payInvite = !!(opts && opts.invite);
   // Mettre à jour l'affichage
   document.getElementById('pay-montant-display').textContent = fmtFCFA(montant);
   document.getElementById('pay-annonce-display').textContent = libelle || 'Commission publication';
@@ -12702,6 +12708,11 @@ function paySetupEtape2() {
 }
 
 function payEtape2() {
+  if (window._payInvite) {
+    if (!payManuelDisponible(payMethodeActive)) { toast('Sans compte, payez par Wave, Orange Money, MTN ou Moov', 'erreur'); return; }
+    payManuelPreparer();
+    return;
+  }
   // Sans passerelle automatique active, un paiement Mobile Money se fait par
   // transfert direct vers le numéro du Grenier (argent réel, validé par l'admin)
   // au lieu de la simulation.
@@ -12986,6 +12997,9 @@ function payManuelPreparer(note) {
   noteEl.textContent = note || '';
   const tel = document.getElementById('pay-manuel-tel');
   if (!tel.value && SESSION && SESSION.tel) { tel.value = SESSION.tel; formatPayNum(tel); }
+  document.getElementById('pay-manuel-nom-groupe').style.display = window._payInvite ? 'block' : 'none';
+  document.getElementById('pay-manuel-tel-label').textContent = window._payInvite
+    ? 'Votre numéro WhatsApp (celui qui a payé)' : 'Numéro qui a envoyé l\'argent';
   document.getElementById('pay-manuel-txn').value = '';
   document.getElementById('pay-manuel-form').style.display = 'block';
   document.getElementById('pay-manuel-actions').style.display = 'block';
@@ -13001,6 +13015,7 @@ function payManuelCopier() {
 }
 
 async function payManuelEnvoyer() {
+  if (window._payInvite) return payManuelEnvoyerInvite();
   if (!SESSION) { fermerModalPaiement(); goScreen('screen-login'); return; }
   const tel = document.getElementById('pay-manuel-tel').value.replace(/\s/g, '');
   const txn = document.getElementById('pay-manuel-txn').value.trim().toUpperCase().replace(/\s+/g, '');
@@ -13040,6 +13055,48 @@ async function payManuelEnvoyer() {
     document.getElementById('pay-manuel-ok').style.display = 'block';
   } catch (err) {
     console.error('[PAIEMENT MANUEL]', err);
+    toast('❌ ' + (err.message || 'Envoi impossible, réessayez'), 'erreur');
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ J\'ai envoyé l\'argent';
+  }
+}
+
+// Achat express d'un produit numérique sans compte : le serveur renvoie un
+// jeton secret, gardé dans ce navigateur (et envoyé par l'admin au client sur
+// WhatsApp) : il ouvre le téléchargement dès que le paiement est confirmé.
+async function payManuelEnvoyerInvite() {
+  const nom = document.getElementById('pay-manuel-nom').value.trim();
+  const tel = document.getElementById('pay-manuel-tel').value.replace(/\s/g, '');
+  const txn = document.getElementById('pay-manuel-txn').value.trim().toUpperCase().replace(/\s+/g, '');
+  if (nom.length < 2) { toast('Entrez votre nom', 'erreur'); return; }
+  if (tel.replace(/\D/g, '').length < 8) { toast('Entrez votre numéro WhatsApp', 'erreur'); return; }
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txn)) { toast('Entrez l\'ID de transaction reçu par SMS', 'erreur'); return; }
+  const meta = window._payMetadataCourant || {};
+  const btn = document.getElementById('pay-manuel-btn');
+  btn.disabled = true; btn.textContent = '⏳ Envoi…';
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/invite', {
+      montant: window._payMontantCourant || 0, canal: payMethodeActive, txn_id: txn, tel, nom,
+      produit_id: meta.produit_id, source: meta.source || null,
+    });
+    if (r.error || !r.data || !r.data.jeton) {
+      throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Réponse invalide');
+    }
+    BoutiqueNum.memoriserAchatInvite(meta.produit_id, r.data.jeton);
+    document.getElementById('pay-manuel-ref').textContent = 'REF: ' + r.data.reference;
+    const msg = 'Bonjour, je viens d\'acheter un guide sur Le Grenier CI (sans compte).\n\n' +
+      '• Guide : ' + (window._payLibelleCourant || '') + '\n' +
+      '• Montant : ' + fmtFCFA(window._payMontantCourant || 0) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Nom : ' + nom + ' · WhatsApp : ' + tel + '\n' +
+      '• ID transaction : ' + txn + '\n' +
+      '• Référence : ' + r.data.reference + '\n\nMerci de m\'envoyer mon lien de téléchargement.';
+    document.getElementById('pay-manuel-wa').href = 'https://wa.me/' + (window._ADMIN_WA || '2250779181075') + '?text=' + encodeURIComponent(msg);
+    document.getElementById('pay-manuel-form').style.display = 'none';
+    document.getElementById('pay-manuel-actions').style.display = 'none';
+    document.getElementById('pay-manuel-ok').style.display = 'block';
+    BoutiqueNum.afficher();
+  } catch (err) {
+    console.error('[ACHAT INVITÉ]', err);
     toast('❌ ' + (err.message || 'Envoi impossible, réessayez'), 'erreur');
   } finally {
     btn.disabled = false; btn.textContent = '✅ J\'ai envoyé l\'argent';
@@ -20256,6 +20313,16 @@ function obj10mReinitialiser() {
 const BoutiqueNum = (() => {
   let produits = [];
   let achats = { payes: new Set(), attente: new Set() };
+  // Source de la visite (?src=qr-statut, lien-whatsapp…) : enregistrée avec
+  // l'achat pour savoir dans l'admin ce qui fait vendre.
+  const SOURCE = (new URLSearchParams(location.search).get('src') || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 30) || null;
+  const CLE_INVITE = 'lg_achats_invite';
+  const achatsInvite = () => { try { return JSON.parse(localStorage.getItem(CLE_INVITE) || '[]'); } catch (e) { return []; } };
+  function memoriserAchatInvite(produitId, jeton) {
+    const liste = achatsInvite().filter(a => a.jeton !== jeton);
+    liste.push({ produit_id: Number(produitId) || null, jeton });
+    try { localStorage.setItem(CLE_INVITE, JSON.stringify(liste)); } catch (e) {}
+  }
 
   async function charger() {
     if (typeof MODE === 'undefined' || MODE !== 'remote') { produits = []; return; }
@@ -20302,6 +20369,17 @@ const BoutiqueNum = (() => {
     grille.innerHTML = visibles.length ? visibles.map(carte).join('')
       : '<div class="chart-empty">Les premiers guides arrivent très bientôt.</div>';
     const zone = document.getElementById('bn-achats');
+    if (!SESSION) {
+      const invites = achatsInvite();
+      if (zone) zone.innerHTML = invites.length ? `<div class="bn-mes-achats"><strong>📥 Mes achats</strong>
+        ${invites.map(a => {
+          const p = produits.find(x => x.id === a.produit_id);
+          return `<div class="bn-achat-ligne"><span>${escapeHtml(p ? p.titre : 'Mon guide')}</span>
+            <button type="button" onclick="BoutiqueNum.telechargerJeton('${escapeHtml(a.jeton)}', this)">⬇️ Télécharger</button></div>`;
+        }).join('')}
+        <div style="font-size:11.5px;color:var(--gris-text);margin-top:8px">Le téléchargement s'ouvre dès que votre paiement est vérifié.</div></div>` : '';
+      return;
+    }
     const miens = visibles.filter(p => achats.payes.has(p.id) || achats.attente.has(p.id));
     if (zone) zone.innerHTML = miens.length ? `<div class="bn-mes-achats"><strong>📥 Mes achats</strong>
       ${miens.map(p => `<div class="bn-achat-ligne"><span>${escapeHtml(p.titre)}</span>${achats.payes.has(p.id)
@@ -20317,8 +20395,24 @@ const BoutiqueNum = (() => {
   function acheter(id) {
     const p = produits.find(x => x.id === id);
     if (!p) return;
-    if (!SESSION) { toast('Connectez-vous pour acheter ce guide.', 'erreur'); goScreen('screen-login'); return; }
-    ouvrirModalPaiement(p.prix, 'Guide : ' + p.titre, () => afficher(), { type: 'produit', metadata: { produit_id: p.id } });
+    const metadata = { produit_id: p.id, source: SOURCE };
+    // Sans compte : achat express (nom + WhatsApp), pas d'inscription à attendre.
+    ouvrirModalPaiement(p.prix, 'Guide : ' + p.titre, () => afficher(), { type: 'produit', metadata, invite: !SESSION });
+  }
+
+  async function telechargerJeton(jeton, btn) {
+    const txt = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Vérification…'; }
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/telechargement', { jeton });
+    if (btn) { btn.disabled = false; btn.textContent = txt; }
+    if (r.data && r.data.statut === 'attente') { toast('⏳ Paiement en cours de vérification, réessayez dans quelques minutes.'); return false; }
+    if (r.error || !r.data || !r.data.url) { toast('❌ ' + ((r.data && r.data.error) || 'Téléchargement impossible'), 'erreur'); return false; }
+    if (r.data.produit_id) memoriserAchatInvite(r.data.produit_id, jeton);
+    const a = document.createElement('a');
+    a.href = r.data.url; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('⬇️ Téléchargement de « ' + (r.data.titre || 'votre guide') + ' »', 'succes');
+    return true;
   }
 
   async function telecharger(id, btn) {
@@ -20342,15 +20436,21 @@ const BoutiqueNum = (() => {
     await charger();
     const v = await _xhr('GET', SUPABASE_URL + '/rest/v1/paiements?select=valeur,metadata&type=eq.produit&statut=eq.confirme');
     const ventes = {};
+    const parSource = {};
     (v.data || []).forEach(p => {
       const id = Number(p.metadata && p.metadata.produit_id);
       if (!ventes[id]) ventes[id] = { n: 0, total: 0 };
       ventes[id].n++; ventes[id].total += Number(p.valeur) || 0;
+      const src = (p.metadata && p.metadata.source) || 'site';
+      parSource[src] = (parSource[src] || 0) + 1;
     });
+    const lignesSources = Object.entries(parSource).sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${escapeHtml(k)} : ${n}`).join(' · ');
     const el = document.getElementById('admin-boutique-num');
     if (!el) return;
     el.innerHTML = `<div class="admin-section">
       <div class="admin-section-titre">📚 Boutique numérique — guides & formations</div>
+      ${lignesSources ? `<div style="font-size:12px;color:var(--gris-text);margin-bottom:8px">📈 Ventes par source : ${lignesSources}</div>` : ''}
       ${produits.map(p => {
         const vt = ventes[p.id] || { n: 0, total: 0 };
         return `<div class="pm-admin-card">
@@ -20482,12 +20582,28 @@ const BoutiqueNum = (() => {
   setTimeout(async () => {
     await charger().catch(() => {});
     if (promos().length && typeof renderBannieresSite === 'function') renderBannieresSite();
-    const slug = new URLSearchParams(location.search).get('guide');
+    const params = new URLSearchParams(location.search);
+    const slug = params.get('guide');
     const cible = slug && produits.find(p => p.slug === slug && p.actif);
-    if (cible) ouvrir(cible.id);
+    if (cible) {
+      await ouvrir(cible.id);
+      // ?achat=1 (QR code, lien « Acheter maintenant ») : ouvre directement le paiement.
+      if (params.get('achat') === '1') acheter(cible.id);
+    }
+    // ?telecharger=<jeton> : lien envoyé au client sur WhatsApp après validation.
+    const jeton = params.get('telecharger');
+    if (jeton && /^[a-f0-9]{48}$/.test(jeton)) {
+      const onglet = document.querySelector('.info-tab[onclick*="info-formations"]');
+      const nav = document.querySelector('.nav-tab[onclick*="tab-info"]');
+      if (nav && typeof switchMainTab === 'function') switchMainTab(nav, 'tab-info');
+      if (onglet) infoTab(onglet, 'info-formations');
+      memoriserAchatInvite(null, jeton);
+      await telechargerJeton(jeton);
+      afficher();
+    }
   }, 1800);
 
-  return { afficher, acheter, telecharger, renderAdmin, televerser, basculer, changerPrix, creer, promos, banniere, ouvrir };
+  return { afficher, acheter, telecharger, telechargerJeton, memoriserAchatInvite, renderAdmin, televerser, basculer, changerPrix, creer, promos, banniere, ouvrir };
 })();
 
 // ══════════════════════════════════════════
@@ -20506,14 +20622,16 @@ async function chargerPaiementsManuelsAdmin() {
   if (!el) return;
   if (r.error) { el.innerHTML = ''; return; }
   const liste = r.data || [];
+  const liens = _pmLiensClientsHTML();
   if (!liste.length) {
-    el.innerHTML = `<div class="admin-section"><div class="admin-section-titre">💸 Paiements Mobile Money à vérifier</div>
+    el.innerHTML = liens + `<div class="admin-section"><div class="admin-section-titre">💸 Paiements Mobile Money à vérifier</div>
       <div class="chart-empty">Aucun paiement en attente. Ceux de vos clients apparaîtront ici.</div></div>`;
     return;
   }
   const total = liste.reduce((s, p) => s + (Number(p.valeur) || 0), 0);
   const users = DAO._local.utilisateurs || [];
-  el.innerHTML = `<div class="admin-section">
+  window._pmLignes = Object.fromEntries(liste.map(p => [p.ref, p]));
+  el.innerHTML = liens + `<div class="admin-section">
     <div class="admin-section-titre">💸 ${liste.length} paiement${liste.length > 1 ? 's' : ''} à vérifier · ${fmtFCFA(total)}</div>
     <div style="font-size:12px;color:var(--gris-text);margin-bottom:10px">Vérifiez sur votre téléphone que le montant est bien arrivé avec cet ID de transaction, puis confirmez : l'achat est activé automatiquement.</div>
     ${liste.map(p => {
@@ -20525,7 +20643,7 @@ async function chargerPaiementsManuelsAdmin() {
         <div class="pm-admin-info">
           <strong>${fmtFCFA(Number(p.valeur) || 0)}</strong> · ${escapeHtml(canal)} · ${escapeHtml(quand)}<br>
           ${escapeHtml(p.annonce_titre || p.type || '')}<br>
-          👤 ${u ? escapeHtml(u.prenom + ' ' + u.nom) : 'Client #' + p.vendeur_id} · 📱 ${escapeHtml(m.tel_payeur || '—')}<br>
+          👤 ${u ? escapeHtml(u.prenom + ' ' + u.nom) : m.invite ? escapeHtml(m.nom_client || 'Client') + ' (sans compte)' : 'Client #' + p.vendeur_id} · 📱 ${escapeHtml(m.tel_payeur || '—')}${m.source ? ' · 📈 ' + escapeHtml(m.source) : ''}<br>
           ID : <code>${escapeHtml(m.txn_id || '—')}</code>
         </div>
         <div class="pm-admin-btns">
@@ -20537,6 +20655,26 @@ async function chargerPaiementsManuelsAdmin() {
   </div>`;
 }
 
+// Achats sans compte confirmés : l'admin envoie au client, sur WhatsApp, le
+// lien qui ouvre son téléchargement (?telecharger=<jeton>).
+window._pmLiensClients = window._pmLiensClients || [];
+function _numeroWhatsApp(tel) {
+  let d = String(tel || '').replace(/\D/g, '');
+  if (d.length === 10) d = '225' + d;
+  return d;
+}
+function _pmLiensClientsHTML() {
+  if (!window._pmLiensClients.length) return '';
+  return `<div class="admin-section" style="border:2px solid #1A7A48">
+    <div class="admin-section-titre">📲 Liens de téléchargement à envoyer</div>
+    ${window._pmLiensClients.map(l => `<div class="pm-admin-card">
+      <div class="pm-admin-info"><strong>${escapeHtml(l.nom)}</strong> · 📱 ${escapeHtml(l.tel)}<br>${escapeHtml(l.titre)}</div>
+      <div class="pm-admin-btns"><a class="bn-admin-btn" style="background:#25D366;color:#fff;text-decoration:none" target="_blank" rel="noopener"
+        href="https://wa.me/${_numeroWhatsApp(l.tel)}?text=${encodeURIComponent('Bonjour ' + l.nom + ', merci pour votre achat ! Votre paiement est confirmé. Téléchargez votre guide « ' + l.titre + ' » ici : ' + l.lien)}">Envoyer sur WhatsApp</a></div>
+    </div>`).join('')}
+  </div>`;
+}
+
 async function adminValiderPaiementManuel(ref, decision, btn) {
   if (decision === 'refuser' && !confirm('Refuser ce paiement ? Le client ne sera pas activé.')) return;
   if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
@@ -20545,6 +20683,15 @@ async function adminValiderPaiementManuel(ref, decision, btn) {
     toast('❌ ' + ((r.data && r.data.error) || 'Validation impossible'), 'erreur');
   } else if (decision === 'confirmer') {
     toast('✅ Paiement confirmé' + (r.data.active ? ' · ' + r.data.active + ' activé' : ''), 'succes');
+    const ligne = (window._pmLignes || {})[ref];
+    const m = (ligne && ligne.metadata) || {};
+    if (m.jeton) {
+      window._pmLiensClients.unshift({
+        nom: m.nom_client || 'Client', tel: m.tel_payeur || '',
+        titre: (ligne.annonce_titre || 'votre guide').replace(/^Guide : /, ''),
+        lien: (/^https?:/.test(location.origin) ? location.origin : 'https://le-grenier.vercel.app') + '/?telecharger=' + m.jeton,
+      });
+    }
   } else {
     toast('Paiement refusé');
   }
