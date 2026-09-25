@@ -1,0 +1,5 @@
+# Contenu payant : ne jamais publier dans ce dépôt public (le site est
+# déployé depuis ce dépôt). Les PDF se téléversent depuis l admin vers le
+# stockage privé Supabase.
+src/
+dist/

@@ -27,7 +27,7 @@ const CINETPAY_SITE_ID = Deno.env.get("CINETPAY_SITE_ID") || "";
 
 const PASSERELLE_MANUELLE = "Mobile Money direct";
 const CANAUX_MANUELS = ["wave", "orange", "mtn", "moov"];
-const TYPES_MANUELS = ["commission", "abonnement", "boost", "verification", "livraison", "formation", "pub", "autre"];
+const TYPES_MANUELS = ["commission", "abonnement", "boost", "verification", "livraison", "formation", "pub", "produit", "autre"];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -84,6 +84,17 @@ async function planAchete(metadata: any, montant: number): Promise<string | null
   return rows[0].nom;
 }
 
+// Achat d'un produit numérique : le produit doit être en vente et le montant
+// au moins égal à son prix (jamais le prix envoyé par le client).
+async function produitAchete(metadata: any, montant: number): Promise<any | null> {
+  const id = Number(metadata && metadata.produit_id);
+  if (!id) return null;
+  const r = await sb(`/rest/v1/produits_numeriques?id=eq.${id}&actif=eq.true&select=id,titre,prix`);
+  const rows = r.ok ? await r.json() : [];
+  if (!rows.length || montant < Number(rows[0].prix)) return null;
+  return rows[0];
+}
+
 function genererReference(): string {
   return "TXN" + Date.now().toString().slice(-10) + Math.floor(Math.random() * 900 + 100);
 }
@@ -100,7 +111,7 @@ async function initierPaiement(req: Request, user: any) {
   const canal = String(body.canal || "").toLowerCase();
   const channels = canal === "carte" ? "CREDIT_CARD" : "MOBILE_MONEY";
   const description = String(body.description || "Paiement Le Grenier CI").slice(0, 255);
-  const type = ["commission", "abonnement", "boost"].includes(body.type) ? body.type : "commission";
+  const type = ["commission", "abonnement", "boost", "produit"].includes(body.type) ? body.type : "commission";
   const reference = genererReference();
 
   const { pct, planNom } = await commissionPourUtilisateur(user.id);
@@ -113,6 +124,7 @@ async function initierPaiement(req: Request, user: any) {
   const metadata = body.annonce && typeof body.annonce === "object" ? body.annonce : null;
   const planVendeur = type === "abonnement" ? (await planAchete(metadata, montant)) : planNom;
   if (type === "abonnement" && !planVendeur) return json({ error: "Plan d'abonnement invalide" }, 400);
+  if (type === "produit" && !(await produitAchete(metadata, montant))) return json({ error: "Produit indisponible ou montant invalide" }, 400);
 
   const insertRes = await sb(`/rest/v1/paiements`, {
     method: "POST",
@@ -200,6 +212,10 @@ async function declarerPaiementManuel(req: Request, user: any) {
   const contenu = body.annonce && typeof body.annonce === "object" ? body.annonce : {};
   const telPayeur = String(body.tel || "").replace(/[^\d+]/g, "").slice(0, 20);
   const metadata = { ...contenu, txn_id: txnId, tel_payeur: telPayeur };
+
+  if (type === "produit" && !(await produitAchete(contenu, montant))) {
+    return json({ error: "Produit indisponible ou montant invalide" }, 400);
+  }
 
   let planVendeur: string | null;
   if (type === "abonnement") {
@@ -291,6 +307,8 @@ async function validerPaiementManuel(req: Request, user: any) {
       method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ verifie: true }),
     });
     active = "badge vérifié";
+  } else if (paiement.type === "produit") {
+    active = "téléchargement du produit";
   } else if (paiement.type === "commission") {
     await creerAnnoncePourPaiement(paiement);
     active = paiement.metadata?.titre ? "annonce (en modération)" : "";
