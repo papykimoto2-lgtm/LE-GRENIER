@@ -5,7 +5,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //
 //  Sécurité : le frontend n'envoie JAMAIS de clé secrète de prestataire.
 //  Cette fonction détient ses propres identifiants (secrets Supabase :
-//  CINETPAY_API_KEY, CINETPAY_SITE_ID) et calcule elle-même la commission
+//  CINETPAY_API_KEY + CINETPAY_API_PASSWORD pour la nouvelle API CinetPay
+//  v1 (panel.cinetpay.net), ou CINETPAY_API_KEY + CINETPAY_SITE_ID pour
+//  l'ancienne API checkout v2) et calcule elle-même la commission
 //  due (plan actif de l'utilisateur), au lieu de faire confiance à une
 //  valeur envoyée par le client.
 //
@@ -29,6 +31,10 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CINETPAY_API_KEY = Deno.env.get("CINETPAY_API_KEY") || "";
 const CINETPAY_SITE_ID = Deno.env.get("CINETPAY_SITE_ID") || "";
+const CINETPAY_API_PASSWORD = Deno.env.get("CINETPAY_API_PASSWORD") || "";
+// Nouvelle API v1 : clé sk_test_ → bac à sable, sk_live_ → production.
+const CP_V1 = !!(CINETPAY_API_KEY && CINETPAY_API_PASSWORD);
+const CP_V1_BASE = CINETPAY_API_KEY.startsWith("sk_live_") ? "https://api.cinetpay.co" : "https://api.cinetpay.net";
 
 const PASSERELLE_MANUELLE = "Mobile Money direct";
 const CANAUX_MANUELS = ["wave", "orange", "mtn", "moov"];
@@ -100,13 +106,30 @@ async function produitAchete(metadata: any, montant: number): Promise<any | null
   return rows[0];
 }
 
+// Appel à l'API CinetPay v1 : connexion (clé + mot de passe API) → jeton
+// JWT, puis requête authentifiée. Renvoie le JSON de la réponse.
+async function cinetpayV1(method: string, path: string, body?: unknown): Promise<any> {
+  const entetes = { "Content-Type": "application/json", Accept: "application/json" };
+  const login = await fetch(`${CP_V1_BASE}/v1/oauth/login`, {
+    method: "POST", headers: entetes,
+    body: JSON.stringify({ api_key: CINETPAY_API_KEY, api_password: CINETPAY_API_PASSWORD }),
+  });
+  const jeton = (await login.json().catch(() => null))?.access_token;
+  if (!jeton) throw new Error("Connexion CinetPay refusée (vérifiez la clé et le mot de passe API)");
+  const r = await fetch(`${CP_V1_BASE}${path}`, {
+    method, headers: { ...entetes, Authorization: `Bearer ${jeton}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return await r.json().catch(() => null);
+}
+
 function genererReference(): string {
   return "TXN" + Date.now().toString().slice(-10) + Math.floor(Math.random() * 900 + 100);
 }
 
 async function initierPaiement(req: Request, user: any) {
-  if (!CINETPAY_API_KEY || !CINETPAY_SITE_ID) {
-    return json({ error: "Passerelle non configurée côté serveur (secrets CINETPAY_API_KEY / CINETPAY_SITE_ID manquants)", manuel_possible: true }, 503);
+  if (!CP_V1 && !(CINETPAY_API_KEY && CINETPAY_SITE_ID)) {
+    return json({ error: "Passerelle non configurée côté serveur (secrets CINETPAY_API_KEY / CINETPAY_API_PASSWORD manquants)", manuel_possible: true }, 503);
   }
   const body = await req.json().catch(() => ({}));
   const montant = Math.max(0, Math.round(Number(body.montant) || 0));
@@ -149,6 +172,45 @@ async function initierPaiement(req: Request, user: any) {
     ? body.return_url : notifyUrl;
   const returnUrl = baseReturn + (baseReturn.includes("?") ? "&" : "?") + "paiement_ref=" + encodeURIComponent(reference);
 
+  const echec = async (message?: string) => {
+    await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ statut: "echoue" }),
+    });
+    return json({ error: message || "Initialisation du paiement refusée par la passerelle", manuel_possible: true }, 502);
+  };
+
+  if (CP_V1) {
+    let cp: any = null;
+    try {
+      cp = await cinetpayV1("POST", "/v1/payment", {
+        currency: "XOF",
+        merchant_transaction_id: reference,
+        amount: montant,
+        lang: "fr",
+        designation: description,
+        client_email: user.email || "client@legrenier.ci",
+        client_first_name: (user.prenom || "Client").slice(0, 60),
+        client_last_name: (user.nom || "Le Grenier").slice(0, 60),
+        success_url: returnUrl,
+        failed_url: returnUrl,
+        notify_url: notifyUrl,
+        channel: "PUSH",
+      });
+    } catch (e) {
+      return await echec(String((e as Error).message || e));
+    }
+    if (!cp || !cp.payment_url) return await echec(cp && (cp.description || cp.message));
+    // Identifiants CinetPay gardés pour vérifier la notification du webhook.
+    await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ metadata: { ...(metadata || {}), cp_transaction_id: cp.transaction_id || null, cp_notify_token: cp.notify_token || null } }),
+    });
+    return json({ payment_url: cp.payment_url, reference });
+  }
+
   const cpRes = await fetch("https://api-checkout.cinetpay.com/v2/payment", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -170,12 +232,7 @@ async function initierPaiement(req: Request, user: any) {
   });
   const cpData = await cpRes.json().catch(() => null);
   if (!cpRes.ok || !cpData || cpData.code !== "201" || !cpData.data?.payment_url) {
-    await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ statut: "echoue" }),
-    });
-    return json({ error: (cpData && cpData.message) || "Initialisation du paiement refusée par la passerelle", manuel_possible: true }, 502);
+    return await echec(cpData && cpData.message);
   }
 
   return json({ payment_url: cpData.data.payment_url, reference });
