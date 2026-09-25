@@ -370,11 +370,6 @@
   .pay-step-line{flex:1;height:2px;background:var(--gris-mid);border-radius:1px}
   .pay-step-line.done{background:var(--vert)}
 
-  /* OTP */
-  .otp-grid{display:flex;gap:8px;justify-content:center;margin:12px 0}
-  .otp-input{width:46px;height:56px;border:2px solid var(--gris-mid);border-radius:12px;text-align:center;font-size:24px;font-weight:700;font-family:var(--font-corps);outline:none;transition:var(--transition);color:var(--noir)}
-  .otp-input:focus{border-color:var(--vert);box-shadow:0 0 0 3px rgba(13,92,53,.1)}
-  .otp-hint{text-align:center;font-size:13px;color:var(--gris-text);margin-bottom:14px}
 
   /* Bouton payer */
   .btn-payer{width:100%;background:linear-gradient(135deg,var(--vert),var(--vert-vif));color:#fff;border:none;border-radius:14px;padding:15px;font-size:16px;font-weight:700;cursor:pointer;transition:var(--transition);box-shadow:0 4px 16px rgba(13,92,53,.3);display:flex;align-items:center;justify-content:center;gap:8px}
@@ -409,7 +404,6 @@
     .pay-methodes-grid{grid-template-columns:repeat(3,1fr);gap:6px}
     .pay-methode .pm-logo{width:38px;height:38px;font-size:18px}
     .pay-methode .pm-nom{font-size:10px}
-    .otp-input{width:40px;height:50px;font-size:20px}
   }
 
   /* ─── DASHBOARD UTILISATEUR ─── */
@@ -9770,35 +9764,6 @@ const ENTREPRISE = {
       </div>
     </div>
 
-    <!-- ÉTAPE 3 : OTP (Mobile Money seulement) -->
-    <div id="pay-etape-3" style="display:none">
-      <div style="padding:20px 18px 0;text-align:center">
-        <div style="font-size:40px;margin-bottom:8px" id="pay-otp-ico">🌊</div>
-        <div style="font-weight:700;font-size:15px;margin-bottom:4px">Code de confirmation</div>
-        <div class="otp-hint" id="pay-otp-hint">Entrez le code à 6 chiffres reçu par SMS au <strong id="pay-otp-num">—</strong></div>
-        <div id="pay-otp-demo-note" style="display:none;background:var(--or-pale);color:#7A5010;border-radius:8px;padding:8px 12px;font-size:11px;margin:10px 18px 0;text-align:left">
-          🧪 Mode démo — aucun SMS n'est réellement envoyé. Entrez n'importe quelle suite de 6 chiffres (ex: 123456) pour continuer.
-        </div>
-        <div class="otp-grid">
-          <input class="otp-input" type="tel" maxlength="1" oninput="otpMove(this,0)">
-          <input class="otp-input" type="tel" maxlength="1" oninput="otpMove(this,1)">
-          <input class="otp-input" type="tel" maxlength="1" oninput="otpMove(this,2)">
-          <input class="otp-input" type="tel" maxlength="1" oninput="otpMove(this,3)">
-          <input class="otp-input" type="tel" maxlength="1" oninput="otpMove(this,4)">
-          <input class="otp-input" type="tel" maxlength="1" oninput="otpMove(this,5)">
-        </div>
-        <div style="font-size:12px;color:var(--gris-text);margin-bottom:16px">
-          Code non reçu ? <button style="background:none;border:none;color:var(--vert);font-weight:700;cursor:pointer;font-size:12px" onclick="renvoyerOTP()">Renvoyer</button>
-          <span id="otp-timer-display"></span>
-        </div>
-      </div>
-      <div class="pay-form-area" style="padding-bottom:18px">
-        <button class="btn-payer" id="btn-valider-otp" onclick="validerOTP()">
-          Valider le paiement
-        </button>
-      </div>
-    </div>
-
     <!-- ÉTAPE MANUELLE : transfert Mobile Money direct vers le numéro du Grenier -->
     <div id="pay-etape-manuel" style="display:none">
       <div id="pay-manuel-form" style="padding:18px 18px 0">
@@ -12606,8 +12571,6 @@ const PAY_METHODES = {
 };
 
 let payMethodeActive = 'wave';
-let otpTimer = null;
-let otpSecondes = 120;
 
 function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   payMethodeActive = 'wave';
@@ -12631,7 +12594,6 @@ function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
 
 function fermerModalPaiement() {
   document.getElementById('modal-paiement').classList.remove('open');
-  if (otpTimer) { clearInterval(otpTimer); otpTimer = null; }
 }
 
 function selPayMethode(id) {
@@ -12669,7 +12631,7 @@ function apGetDestinataire(methode) {
 
 
 function payShowEtape(n) {
-  ['pay-etape-1','pay-etape-2','pay-etape-3','pay-etape-success','pay-etape-spinner','pay-etape-manuel'].forEach(id => {
+  ['pay-etape-1','pay-etape-2','pay-etape-success','pay-etape-spinner','pay-etape-manuel'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -12683,7 +12645,6 @@ function payShowEtape(n) {
   }
   if (n === 1)       { document.getElementById('pay-etape-1').style.display = 'block'; }
   else if (n === 2)  { document.getElementById('pay-etape-2').style.display = 'block'; paySetupEtape2(); }
-  else if (n === 3)  { document.getElementById('pay-etape-3').style.display = 'block'; lancerOTP(); }
   else if (n === 99) { document.getElementById('pay-etape-success').style.display = 'block'; }
   else if (n === 0)  { document.getElementById('pay-etape-spinner').style.display = 'block'; }
   else if (n === 'manuel') { document.getElementById('pay-etape-manuel').style.display = 'block'; }
@@ -12732,12 +12693,9 @@ function payEnvoyer() {
   if (m.type === 'mm') {
     const num = document.getElementById('pay-numero-mm').value.replace(/\s/g,'');
     if (num.length < 8) { toast('Entrez un numéro valide', 'erreur'); return; }
-    document.getElementById('pay-otp-num').textContent = document.getElementById('pay-numero-mm').value;
-    document.getElementById('pay-otp-ico').textContent = m.ico;
-    document.getElementById('pay-otp-hint').querySelector('strong').textContent = document.getElementById('pay-numero-mm').value;
-    const demoNote = document.getElementById('pay-otp-demo-note');
-    if (demoNote) demoNote.style.display = (typeof paiementEstEnProduction === 'function' && paiementEstEnProduction()) ? 'none' : 'block';
-    payShowEtape(3);
+    // Pas de code SMS à saisir ici : c'est l'opérateur (via la passerelle)
+    // qui fait approuver le débit sur le téléphone du client.
+    payTraiter();
   } else if (m.type === 'carte') {
     const num = document.getElementById('pay-carte-num').value.replace(/\s/g,'');
     const exp = document.getElementById('pay-carte-exp').value;
@@ -12753,48 +12711,9 @@ function payVirementConfirm() {
   payTraiter();
 }
 
-function lancerOTP() {
-  // Pré-remplir OTP demo = 123456
-  const inputs = document.querySelectorAll('.otp-input');
-  inputs.forEach(i => i.value = '');
-  inputs[0]?.focus();
-  otpSecondes = 120;
-  if (otpTimer) clearInterval(otpTimer);
-  otpTimer = setInterval(() => {
-    otpSecondes--;
-    const disp = document.getElementById('otp-timer-display');
-    if (disp) disp.textContent = ` (${otpSecondes}s)`;
-    if (otpSecondes <= 0) { clearInterval(otpTimer); }
-  }, 1000);
-}
-
-function renvoyerOTP() {
-  otpSecondes = 120;
-  toast('Code renvoyé par SMS', 'info');
-  document.querySelectorAll('.otp-input').forEach(i => i.value = '');
-  document.querySelectorAll('.otp-input')[0]?.focus();
-}
-
-function otpMove(input, idx) {
-  input.value = input.value.replace(/\D/g,'');
-  if (input.value && idx < 5) {
-    document.querySelectorAll('.otp-input')[idx + 1]?.focus();
-  }
-  // Vérifier si tous remplis
-  const vals = [...document.querySelectorAll('.otp-input')].map(i => i.value);
-  if (vals.every(v => v !== '')) {
-    setTimeout(validerOTP, 300);
-  }
-}
-
-function validerOTP() {
-  const otp = [...document.querySelectorAll('.otp-input')].map(i => i.value).join('');
-  if (otp.length < 6) { toast('Entrez les 6 chiffres du code', 'erreur'); return; }
-  clearInterval(otpTimer);
-  payTraiter();
-}
-
 function payTraiter() {
+  // Un double clic ne doit pas lancer deux paiements.
+  if (document.getElementById('pay-etape-spinner').style.display === 'block') return;
   payShowEtape(0);
   document.getElementById('pay-spinner-txt').textContent = 'Vérification du paiement ' + PAY_METHODES[payMethodeActive].nom + '…';
 
