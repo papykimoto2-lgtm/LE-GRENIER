@@ -3,3 +3,6 @@
 # stockage privé Supabase.
 src/
 dist/
+__pycache__/
+photos-brutes/
+photos/

@@ -1791,6 +1791,25 @@
   }
   .banner-pub-close:hover{background:rgba(0,0,0,.5)}
 
+  /* Bannière livre (boutique numérique) */
+  .banner-livre .bl-titre{font-family:var(--font-titre);font-size:22px;font-weight:800;line-height:1.1}
+  .banner-livre .bl-sous{font-size:12.5px;opacity:.9;line-height:1.35;max-width:420px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .banner-livre .banner-pub-cta{background:#F0A830;color:#1F1A17;border:0}
+  .banner-livre:hover .banner-pub-cta{background:#FFC04D}
+  .bl-couv-zone{flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:12px 22px 12px 0}
+  .bl-couv{height:136px;width:auto;border-radius:4px;box-shadow:0 8px 22px rgba(0,0,0,.35);transform:rotate(3deg)}
+  .pub-zone-nav .banner-livre .banner-pub-left{padding:12px 16px;gap:6px}
+  .pub-zone-nav .banner-livre .bl-titre{font-size:16px}
+  .pub-zone-nav .banner-livre .bl-sous{display:none}
+  .pub-zone-nav .bl-couv{height:120px}
+  @media(max-width:600px){
+    .banner-livre .bl-titre{font-size:17px}
+    .banner-livre .bl-sous{display:none}
+    .bl-couv{height:110px}
+    .bl-couv-zone{padding:10px 12px 10px 0}
+  }
+  .bn-surbrillance{box-shadow:0 0 0 4px #F0A830,0 10px 30px rgba(0,0,0,.2)!important;transition:box-shadow .3s}
+
   /* Version sans media (slogan seul) */
   .banner-pub-solo{
     display:flex;align-items:center;gap:20px;
@@ -17658,10 +17677,22 @@ function renderBannieresSite() {
   renderHeroTop();
 }
 
+// Part des affichages réservée aux livres de la boutique numérique quand des
+// campagnes payantes existent déjà sur l'emplacement (sinon, les livres
+// occupent seuls l'emplacement libre).
+const PART_LIVRES = 0.35;
+
 function _rendreZonePub(zone, pool) {
   const el = document.getElementById('pub-zone-' + zone);
   if (!el) return;
-  if (_banZonesFermees.has(zone) || !pool.length) { el.classList.remove('visible'); el.innerHTML = ''; return; }
+  if (_banZonesFermees.has(zone)) { el.classList.remove('visible'); el.innerHTML = ''; return; }
+  const livres = (typeof BoutiqueNum !== 'undefined') ? BoutiqueNum.promos() : [];
+  if (livres.length && (!pool.length || Math.random() < PART_LIVRES)) {
+    el.classList.add('visible');
+    el.innerHTML = BoutiqueNum.banniere(livres[Math.floor(Math.random() * livres.length)]);
+    return;
+  }
+  if (!pool.length) { el.classList.remove('visible'); el.innerHTML = ''; return; }
   const b = pool[Math.floor(Math.random() * pool.length)];
   if (typeof DAO !== 'undefined' && DAO.incrementerImpression) {
     DAO.incrementerImpression(b.id).catch(err => console.error('incrementerImpression', err));
@@ -20250,7 +20281,7 @@ const BoutiqueNum = (() => {
     if (possede(p.id)) action = `<button class="btn btn-primary w-full" onclick="BoutiqueNum.telecharger(${p.id}, this)">⬇️ Télécharger le PDF</button>`;
     else if (achats.attente.has(p.id)) action = `<button class="btn btn-outline w-full" disabled>⏳ Paiement en cours de vérification</button>`;
     else action = `<button class="btn btn-primary w-full" onclick="BoutiqueNum.acheter(${p.id})">Acheter — ${fmtFCFA(p.prix)}</button>`;
-    return `<div class="bn-carte">
+    return `<div class="bn-carte" data-bn-id="${p.id}">
       ${p.couverture_url ? `<img class="bn-couv" src="${escapeHtml(p.couverture_url)}" alt="" loading="lazy">`
         : `<div class="bn-couv bn-couv-vide">📘</div>`}
       <div class="bn-corps">
@@ -20409,7 +20440,54 @@ const BoutiqueNum = (() => {
     renderAdmin();
   }
 
-  return { afficher, acheter, telecharger, renderAdmin, televerser, basculer, changerPrix, creer };
+  // ── Promotion des livres dans les emplacements publicitaires ──
+  // Couleur de la bannière = couleur de la couverture du livre.
+  const COULEURS_PROMO = { 'app-sans-code': '#0B2A5B', 'vendre-whatsapp-facebook': '#0D5C35', 'boutique-50000': '#5B2466' };
+  const promos = () => produits.filter(p => p.actif && p.couverture_url);
+
+  function banniere(p) {
+    const couleur = COULEURS_PROMO[p.slug] || '#0B2A5B';
+    return `<div class="banner-pub banner-livre" style="background:linear-gradient(135deg,${couleur} 0%,${couleur}CC 100%);color:#fff"
+         onclick="BoutiqueNum.ouvrir(${p.id})" role="button" aria-label="Livre : ${escapeHtml(p.titre)}">
+      <div class="banner-pub-left">
+        <div class="banner-pub-annonceur">📚 ${escapeHtml(p.categorie || 'Guide')} · PDF${p.pages ? ' · ' + p.pages + ' pages' : ''}</div>
+        <div class="bl-titre">${escapeHtml(p.titre)}</div>
+        ${p.sous_titre ? `<div class="bl-sous">${escapeHtml(p.sous_titre)}</div>` : ''}
+        <div class="banner-pub-cta">Découvrir · ${fmtFCFA(p.prix)}</div>
+      </div>
+      <div class="bl-couv-zone"><img class="bl-couv" src="${escapeHtml(p.couverture_url)}" alt=""></div>
+      <span class="banner-pub-tag">Le Grenier</span>
+      <button class="banner-pub-close" onclick="event.stopPropagation();fermerBanniere(this,0)" title="Fermer">✕</button>
+    </div>`;
+  }
+
+  // Ouvre la boutique sur le livre demandé (clic bannière ou lien ?guide=slug).
+  async function ouvrir(id) {
+    if (typeof goScreen === 'function') goScreen('screen-accueil');
+    const nav = document.querySelector('.nav-tab[onclick*="tab-info"]');
+    if (nav && typeof switchMainTab === 'function') switchMainTab(nav, 'tab-info');
+    const onglet = document.querySelector('.info-tab[onclick*="info-formations"]');
+    if (onglet) infoTab(onglet, 'info-formations');
+    await afficher();
+    const carte = document.querySelector(`.bn-carte[data-bn-id="${id}"]`);
+    if (carte) {
+      carte.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      carte.classList.add('bn-surbrillance');
+      setTimeout(() => carte.classList.remove('bn-surbrillance'), 2600);
+    }
+  }
+
+  // Préchargement au démarrage : les livres en vente alimentent les bannières,
+  // et un lien partagé https://…/?guide=<slug> ouvre directement le livre.
+  setTimeout(async () => {
+    await charger().catch(() => {});
+    if (promos().length && typeof renderBannieresSite === 'function') renderBannieresSite();
+    const slug = new URLSearchParams(location.search).get('guide');
+    const cible = slug && produits.find(p => p.slug === slug && p.actif);
+    if (cible) ouvrir(cible.id);
+  }, 1800);
+
+  return { afficher, acheter, telecharger, renderAdmin, televerser, basculer, changerPrix, creer, promos, banniere, ouvrir };
 })();
 
 // ══════════════════════════════════════════
