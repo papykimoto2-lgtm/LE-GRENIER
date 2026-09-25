@@ -189,6 +189,13 @@ def construire(fichier):
                            '<div class="c-degrade"></div>')
     else:
         fond_couverture = f"<div class=\"c-illus\">{SCENES[slug]['couverture']().replace('xMidYMid meet', 'xMidYMax slice')}</div>"
+    # Titre court (style best-seller) : très grand, la seconde partie en or.
+    titre_classe, titre_html = "", html.escape(meta["titre"])
+    if len(meta["titre"]) <= 28:
+        titre_classe = ' class="grand"'
+        if ", " in meta["titre"]:
+            a, b = meta["titre"].split(", ", 1)
+            titre_html = f'{html.escape(a)},<br><span class="or">{html.escape(b)}</span>'
     # Portrait de l'auteur en couverture : le titre passe en bas pour dégager le visage.
     css_bas = ("""
 .couverture { justify-content: flex-end !important; }
@@ -213,6 +220,8 @@ def construire(fichier):
 .c-haut {{ padding: 13mm 12mm 0; position: relative; z-index: 2; }}
 .marque {{ display: inline-block; font-size: 7.5pt; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; background: rgba(255,255,255,.14); padding: 1.6mm 3.2mm; border-radius: 99px; }}
 h1 {{ font-family: 'Fraunces', serif; font-weight: 900; font-size: 25pt; line-height: 1.08; margin: 6mm 0 3.5mm; }}
+h1.grand {{ font-size: 40pt; line-height: 1; margin: 5mm 0 4mm; }}
+h1 .or {{ color: #F0A830; }}
 .sous {{ font-size: 9.5pt; line-height: 1.45; opacity: .92; max-width: 118mm; }}
 .badges {{ display: flex; flex-wrap: wrap; gap: 2mm; margin-top: 5mm; }}
 .badges span {{ background: #F0A830; color: #1F1A17; font-size: 7.4pt; font-weight: 800; padding: 1.5mm 3mm; border-radius: 99px; }}
@@ -223,7 +232,7 @@ h1 {{ font-family: 'Fraunces', serif; font-weight: 900; font-size: 25pt; line-he
 .c-bas {{ z-index: 2; position: absolute; left: 0; right: 0; bottom: 0; padding: 3mm 12mm; font-size: 7pt; background: rgba(0,0,0,.28); display: flex; justify-content: space-between; }}
 </style></head><body><section class="couverture">
 <div class="c-haut"><div class="marque">Le Grenier CI · Guide pratique</div>
-<h1>{html.escape(meta['titre'])}</h1><div class="sous">{html.escape(meta['sous_titre'])}</div>
+<h1{titre_classe}>{titre_html}</h1><div class="sous">{html.escape(meta['sous_titre'])}</div>
 <div class="badges">{badges}</div></div>
 {fond_couverture}
 <div class="c-bas"><span>{html.escape(meta['edition'])} · Côte d'Ivoire</span><span>Usage personnel · ne pas partager</span></div>
