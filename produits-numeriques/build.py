@@ -33,7 +33,7 @@ DIST = RACINE / "dist"
 PHOTOS_BRUTES = RACINE / "photos-brutes"
 PHOTOS = RACINE / "photos"
 # Signature de la préface (à confirmer par l'auteur).
-AUTEUR = "Fondateur de Le Grenier CI · SANIX AFRICA Technologies"
+AUTEUR = "Cyrille KESSIE · Fondateur de SANIX AFRICA Technologies et de Le Grenier CI"
 sys.path.insert(0, str(RACINE))
 from scenes import SCENES  # noqa: E402
 
