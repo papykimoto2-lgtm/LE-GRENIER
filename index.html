@@ -18305,6 +18305,21 @@ window.chargerProfilAdminDepuisSupabase = async function() {
       if (window.ADMIN_PROFIL.tel) window._ADMIN_WA = formaterTelWhatsApp(window.ADMIN_PROFIL.tel);
     }
   } catch (e) { console.error('[admin profil] chargement échoué', e); }
+  try {
+    // Réglages non-secrets de PAYMENT_CONFIG (MODE, prestataire actif,
+    // routage) — jamais les clés d'API, qui restent des secrets serveur.
+    const r2 = await _xhr('GET', SUPABASE_URL + '/rest/v1/configuration?cle=eq.paiement_config_json&select=valeur');
+    if (!r2.error && r2.data && r2.data[0] && r2.data[0].valeur && typeof PAYMENT_CONFIG !== 'undefined') {
+      const saved = JSON.parse(r2.data[0].valeur);
+      if (saved.MODE) PAYMENT_CONFIG.MODE = saved.MODE;
+      if (saved.PRESTATAIRE_DEFAUT) PAYMENT_CONFIG.PRESTATAIRE_DEFAUT = saved.PRESTATAIRE_DEFAUT;
+      if (saved.PRESTATAIRES) Object.keys(saved.PRESTATAIRES).forEach(k => {
+        if (PAYMENT_CONFIG.PRESTATAIRES[k]) PAYMENT_CONFIG.PRESTATAIRES[k].actif = !!saved.PRESTATAIRES[k].actif;
+      });
+      if (saved.ROUTAGE) Object.assign(PAYMENT_CONFIG.ROUTAGE, saved.ROUTAGE);
+      if (typeof window.apUpdatePayBadge === 'function') window.apUpdatePayBadge();
+    }
+  } catch (e) { console.error('[paiement config] chargement échoué', e); }
 };
 
 window.renderAdminProfil = function() {
@@ -18443,16 +18458,23 @@ window.sauvegarderProfilAdmin = async function() {
   sauvegarderCFG(Object.assign({}, CFG));  // persister silencieusement
 
   // ── Persistance Supabase (source de vérité partagée entre appareils) ──
-  // Ne couvre que window.ADMIN_PROFIL (identité, entreprise, numéros de
-  // réception Mobile Money, virement bancaire — déjà montrés aux clients
-  // lors du paiement, donc sans caractère secret). PAYMENT_CONFIG reste
-  // volontairement local : ses clés d'API de passerelle (CinetPay,
-  // PayDunya...) ne doivent jamais atterrir dans une table lisible
-  // publiquement comme `configuration` — elles n'ont leur place que dans
-  // un vrai backend, comme l'indique déjà le mode démo ci-dessus.
+  // window.ADMIN_PROFIL (identité, entreprise, numéros de réception Mobile
+  // Money, virement bancaire — déjà montrés aux clients lors du paiement,
+  // donc sans caractère secret) ET les réglages non-secrets de
+  // PAYMENT_CONFIG (MODE, prestataire actif, routage — sans quoi le choix
+  // "PRODUCTION" de l'admin se réinitialisait à "DEMO" à chaque rechargement).
+  // Les clés d'API de passerelle (CinetPay, PayDunya...) ne sont PAS dans cet
+  // objet : ce sont des secrets serveur (Edge Functions Supabase), jamais
+  // saisis ici ni transmis au client — voir lancerPaiementReel().
   const st = document.getElementById('ap-save-status');
-  const rCfg = await DAO_PERSIST.configurationMaj('admin_profil_json', JSON.stringify(p));
-  if (rCfg && rCfg.error) {
+  const [rCfg, rPay] = await Promise.all([
+    DAO_PERSIST.configurationMaj('admin_profil_json', JSON.stringify(p)),
+    typeof PAYMENT_CONFIG !== 'undefined' ? DAO_PERSIST.configurationMaj('paiement_config_json', JSON.stringify({
+      MODE: PAYMENT_CONFIG.MODE, PRESTATAIRE_DEFAUT: PAYMENT_CONFIG.PRESTATAIRE_DEFAUT,
+      PRESTATAIRES: PAYMENT_CONFIG.PRESTATAIRES, ROUTAGE: PAYMENT_CONFIG.ROUTAGE
+    })) : Promise.resolve(null)
+  ]);
+  if ((rCfg && rCfg.error) || (rPay && rPay.error)) {
     toast('Profil enregistré localement, mais la synchronisation serveur a échoué', 'erreur');
   } else {
     if (st) { st.style.display = 'inline'; setTimeout(() => st.style.display = 'none', 3000); }
