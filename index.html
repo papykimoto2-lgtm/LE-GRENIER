@@ -1832,6 +1832,22 @@
   .pm-admin-card code{font-size:12px;background:var(--gris-clair);padding:1px 5px;border-radius:4px;word-break:break-all}
   .pm-admin-btns{display:flex;gap:6px}
   .pm-admin-btns button{border:0;border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer}
+  /* ─── BOUTIQUE NUMÉRIQUE ─── */
+  .bn-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:18px}
+  .bn-carte{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);overflow:hidden;box-shadow:var(--shadow-sm);display:flex;flex-direction:column}
+  .bn-couv{width:100%;aspect-ratio:148/210;max-height:260px;object-fit:cover;object-position:top;display:block;background:var(--gris-clair)}
+  .bn-couv-vide{display:flex;align-items:center;justify-content:center;font-size:54px}
+  .bn-corps{padding:14px 16px 16px;display:flex;flex-direction:column;flex:1}
+  .bn-cat{font-size:11px;font-weight:700;color:var(--gris-text);text-transform:uppercase;letter-spacing:.04em}
+  .bn-titre{font-family:var(--font-titre);font-size:19px;font-weight:700;color:var(--noir);line-height:1.2;margin:4px 0}
+  .bn-sous{font-size:12.5px;color:var(--gris-text);line-height:1.45;margin-bottom:8px}
+  .bn-points{font-size:12.5px;color:var(--noir);line-height:1.7;padding-left:18px;margin:0 0 10px}
+  .bn-prix{font-family:var(--font-titre);font-size:24px;font-weight:700;color:var(--vert);margin:auto 0 10px}
+  .bn-mes-achats{background:#E6F4EC;border-radius:var(--radius);padding:12px 14px;margin-bottom:18px;font-size:13px}
+  .bn-achat-ligne{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+  .bn-achat-ligne button{background:#1A7A48;color:#fff;border:0;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer}
+  .bn-admin-btn{display:inline-flex;align-items:center;border:1px solid var(--gris-mid);background:#fff;border-radius:8px;padding:7px 10px;font-weight:700;font-size:12px;cursor:pointer}
+  .bn-nouveau summary{cursor:pointer;font-weight:700;font-size:13px;margin-top:8px}
   /* ─── OBJECTIF 10M / MOIS ─── */
   .obj10m-alerte{background:#FFF4E0;border:1px solid #E8B45C;color:#6B4A10;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-bottom:12px}
   .obj10m-alerte code{background:rgba(0,0,0,.06);padding:1px 4px;border-radius:4px;font-size:11px}
@@ -4345,7 +4361,7 @@ document.addEventListener('keydown', function(ev) {
       <button class="info-tab" onclick="infoTab(this,'info-droits')">Vos droits</button>
       <button class="info-tab" onclick="infoTab(this,'info-quiz')">Quiz</button>
       <button class="info-tab" onclick="infoTab(this,'info-glossaire')">Glossaire</button>
-      <button class="info-tab" onclick="infoTab(this,'info-formations')">Formations</button>
+      <button class="info-tab" onclick="infoTab(this,'info-formations')">📚 Guides</button>
     </div>
 
     <!-- Section Débutant -->
@@ -4597,81 +4613,15 @@ document.addEventListener('keydown', function(ev) {
         </div>
       </div>
     </div>
-    <!-- ── FORMATIONS PAYANTES ── -->
+    <!-- ── BOUTIQUE NUMÉRIQUE : guides & formations à télécharger ── -->
     <div id="info-formations" class="info-section">
-      <div style="font-family:var(--font-titre);font-size:24px;font-weight:700;color:var(--noir);margin-bottom:4px">Formations e-commerce</div>
-      <div style="font-size:14px;color:var(--gris-text);margin-bottom:6px">Maîtrisez la vente en ligne en Côte d'Ivoire — Certifiées Le Grenier CI</div>
+      <div style="font-family:var(--font-titre);font-size:24px;font-weight:700;color:var(--noir);margin-bottom:4px">Guides & formations</div>
+      <div style="font-size:14px;color:var(--gris-text);margin-bottom:6px">Des guides pratiques pour vendre plus en Côte d'Ivoire — payez par Mobile Money, téléchargez tout de suite après validation.</div>
       <div style="background:var(--or-pale);border-radius:var(--radius);padding:10px 16px;font-size:13px;color:#9A6A10;margin-bottom:22px;border:1px solid rgba(212,146,30,.2)">
-        💎 <strong>Plan Business :</strong> accès à toutes les formations offert · <span style="cursor:pointer;text-decoration:underline" onclick="afficherPlans()">Upgrader →</span>
+        💎 <strong>Plan Business :</strong> tous les guides inclus · <span style="cursor:pointer;text-decoration:underline" onclick="afficherPlans()">Voir les plans →</span>
       </div>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:18px">
-
-        <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);overflow:hidden;box-shadow:var(--shadow-sm)">
-          <div style="background:linear-gradient(135deg,#0D5C35,#1A8A52);padding:20px;color:#fff;position:relative">
-            <div style="font-size:36px;margin-bottom:8px"></div>
-            <div style="font-family:var(--font-titre);font-size:18px;font-weight:700">Vendre en ligne — Les bases</div>
-            <div style="font-size:12px;opacity:.8;margin-top:4px">Durée : 2h · Niveau débutant · 4 modules</div>
-            <div style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.2);padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700">Bestseller 🔥</div>
-          </div>
-          <div style="padding:16px">
-            <ul style="font-size:13px;color:var(--gris-text);line-height:2.2;padding-left:18px;margin-bottom:14px">
-              <li>Créer une annonce qui convertit</li>
-              <li>Fixer le bon prix sur le marché ivoirien</li>
-              <li>Photos qui donnent envie d'acheter</li>
-              <li>Gérer les questions et négociations</li>
-            </ul>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <div style="font-family:var(--font-titre);font-size:24px;color:var(--vert);font-weight:700">5 000 F</div>
-              <div style="font-size:12px;color:var(--gris-text)">⭐ 4.8 · 156 inscrits</div>
-            </div>
-            <button class="btn btn-primary w-full" onclick="inscrireFormation('Vendre en ligne — Les bases',5000)">S'inscrire — 5 000 F</button>
-          </div>
-        </div>
-
-        <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);overflow:hidden;box-shadow:var(--shadow-sm)">
-          <div style="background:linear-gradient(135deg,#7C3A8A,#A855B5);padding:20px;color:#fff;position:relative">
-            <div style="font-size:36px;margin-bottom:8px">📱</div>
-            <div style="font-family:var(--font-titre);font-size:18px;font-weight:700">Marketing WhatsApp & Réseaux</div>
-            <div style="font-size:12px;opacity:.8;margin-top:4px">Durée : 3h · Intermédiaire · 6 modules</div>
-          </div>
-          <div style="padding:16px">
-            <ul style="font-size:13px;color:var(--gris-text);line-height:2.2;padding-left:18px;margin-bottom:14px">
-              <li>Créer un catalogue WhatsApp Business</li>
-              <li>Automatiser ses messages avec des bots</li>
-              <li>Instagram et TikTok pour vendre local</li>
-              <li>Construire une communauté d'acheteurs</li>
-            </ul>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <div style="font-family:var(--font-titre);font-size:24px;color:#7C3A8A;font-weight:700">8 000 F</div>
-              <div style="font-size:12px;color:var(--gris-text)">⭐ 4.9 · 89 inscrits</div>
-            </div>
-            <button class="btn w-full" style="background:linear-gradient(135deg,#7C3A8A,#A855B5);color:#fff;padding:11px;border-radius:var(--radius);font-weight:700" onclick="inscrireFormation('Marketing WhatsApp & Réseaux',8000)">S'inscrire — 8 000 F</button>
-          </div>
-        </div>
-
-        <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);overflow:hidden;box-shadow:var(--shadow-sm)">
-          <div style="background:linear-gradient(135deg,#C0392B,#E74C3C);padding:20px;color:#fff">
-            <div style="font-size:36px;margin-bottom:8px">🏪</div>
-            <div style="font-family:var(--font-titre);font-size:18px;font-weight:700">Ouvrir sa boutique en ligne</div>
-            <div style="font-size:12px;opacity:.8;margin-top:4px">Durée : 5h · Avancé · 10 modules</div>
-          </div>
-          <div style="padding:16px">
-            <ul style="font-size:13px;color:var(--gris-text);line-height:2.2;padding-left:18px;margin-bottom:14px">
-              <li>Passer du compte vendeur à la boutique</li>
-              <li>Gestion des stocks et commandes</li>
-              <li>Intégrer Mobile Money dans son site</li>
-              <li>Livraisons et logistique locale</li>
-            </ul>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <div style="font-family:var(--font-titre);font-size:24px;color:#C0392B;font-weight:700">15 000 F</div>
-              <div style="font-size:12px;color:var(--gris-text)">⭐ 4.7 · 42 inscrits</div>
-            </div>
-            <button class="btn w-full" style="background:linear-gradient(135deg,#C0392B,#E74C3C);color:#fff;padding:11px;border-radius:var(--radius);font-weight:700" onclick="inscrireFormation('Ouvrir sa boutique en ligne',15000)">S'inscrire — 15 000 F</button>
-          </div>
-        </div>
-
-      </div>
+      <div id="bn-achats"></div>
+      <div id="bn-grille" class="bn-grille"><div class="chart-empty">Chargement des guides…</div></div>
 
       <!-- Livraison tricycle CTA -->
       <div style="margin-top:28px;background:linear-gradient(135deg,#D97706,#F59E0B);border-radius:var(--radius-lg);padding:20px 24px;color:#fff;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -12670,9 +12620,10 @@ function selPayMethode(id) {
 function renderPayRecap(montant, libelle) {
   const planUser = getPlanUser(SESSION?.id);
   const tauxLabel = planUser ? planUser.limites.commission : CFG.comm_taux_gratuit;
+  const estCommission = (window._payTypeCourant || 'commission') === 'commission';
   const recap = `
-    <div class="pay-recap-row"><span>Annonce</span><span style="font-weight:600;max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libelle||'—'}</span></div>
-    <div class="pay-recap-row"><span>Commission (${tauxLabel}%)</span><span>${fmtFCFA(montant)}</span></div>
+    <div class="pay-recap-row"><span>${estCommission ? 'Annonce' : 'Achat'}</span><span style="font-weight:600;max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libelle||'—'}</span></div>
+    <div class="pay-recap-row"><span>${estCommission ? `Commission (${tauxLabel}%)` : 'Prix'}</span><span>${fmtFCFA(montant)}</span></div>
     <div class="pay-recap-row"><span>Total à payer</span><span>${fmtFCFA(montant)}</span></div>`;
   ['pay-recap','pay-recap-2','pay-recap-carte'].forEach(id => {
     const el = document.getElementById(id);
@@ -15955,6 +15906,7 @@ function infoTab(el, sectionId) {
   document.querySelectorAll('.info-section').forEach(s=>s.classList.remove('actif'));
   document.getElementById(sectionId).classList.add('actif');
   window.scrollTo(0,64);
+  if (sectionId === 'info-formations' && typeof BoutiqueNum !== 'undefined') BoutiqueNum.afficher();
 }
 
 function repondreQuiz(el, correct) {
@@ -19930,14 +19882,6 @@ function initierLivraison(annonceId, adresse, quartierDep, quartierArr) {
   }, { type: 'livraison' });
 }
 
-// Formation e-commerce
-function inscrireFormation(titre, prix) {
-  if (!SESSION) { goScreen('screen-login'); return; }
-  ouvrirModalPaiement(prix, `Formation : ${titre}`, () => {
-    enregistrerRevenuAnnexe('formation', `Formation "${titre}" — ${SESSION.prenom} ${SESSION.nom}`, prix);
-    toast(`🎓 Inscription confirmée ! Accès envoyé sur ${SESSION.email}`);
-  }, { type: 'formation' });
-}
 
 // ══════════════════════════════════════════
 //  DASHBOARD STRATÉGIQUE ADMIN — graphiques
@@ -20271,6 +20215,203 @@ function obj10mReinitialiser() {
   _obj10mRafraichir();
 }
 
+// ══════════════════════════════════════════════════════════════
+//  BOUTIQUE NUMÉRIQUE — guides / formations PDF payants
+//  Catalogue : table produits_numeriques. Achat : paiement de type
+//  "produit" (metadata.produit_id). Téléchargement : edge function
+//  "telechargement", qui vérifie l'achat (ou le plan Business) et renvoie
+//  un lien temporaire vers le bucket privé "produits-fichiers".
+// ══════════════════════════════════════════════════════════════
+const BoutiqueNum = (() => {
+  let produits = [];
+  let achats = { payes: new Set(), attente: new Set() };
+
+  async function charger() {
+    if (typeof MODE === 'undefined' || MODE !== 'remote') { produits = []; return; }
+    const r = await _xhr('GET', SUPABASE_URL + '/rest/v1/produits_numeriques?select=*&order=ordre.asc,id.asc');
+    produits = (!r.error && Array.isArray(r.data)) ? r.data : [];
+    achats = { payes: new Set(), attente: new Set() };
+    if (!SESSION) return;
+    const a = await _xhr('GET', SUPABASE_URL + '/rest/v1/paiements?select=statut,metadata&type=eq.produit&vendeur_id=eq.' + SESSION.id);
+    (a.data || []).forEach(p => {
+      const id = Number(p.metadata && p.metadata.produit_id);
+      if (!id) return;
+      if (p.statut === 'confirme' || p.statut === 'confirmé') achats.payes.add(id);
+      else if (p.statut === 'attente') achats.attente.add(id);
+    });
+  }
+
+  const planBusiness = () => !!SESSION && (getPlanUser(SESSION.id) || {}).nom === 'Business';
+  const possede = id => planBusiness() || achats.payes.has(id) || (SESSION && SESSION.role === 'admin');
+
+  function carte(p) {
+    const points = (p.points || []).slice(0, 5).map(x => `<li>${escapeHtml(x)}</li>`).join('');
+    let action;
+    if (possede(p.id)) action = `<button class="btn btn-primary w-full" onclick="BoutiqueNum.telecharger(${p.id}, this)">⬇️ Télécharger le PDF</button>`;
+    else if (achats.attente.has(p.id)) action = `<button class="btn btn-outline w-full" disabled>⏳ Paiement en cours de vérification</button>`;
+    else action = `<button class="btn btn-primary w-full" onclick="BoutiqueNum.acheter(${p.id})">Acheter — ${fmtFCFA(p.prix)}</button>`;
+    return `<div class="bn-carte">
+      ${p.couverture_url ? `<img class="bn-couv" src="${escapeHtml(p.couverture_url)}" alt="" loading="lazy">`
+        : `<div class="bn-couv bn-couv-vide">📘</div>`}
+      <div class="bn-corps">
+        <div class="bn-cat">${escapeHtml(p.categorie || '')}${p.pages ? ' · ' + p.pages + ' pages' : ''} · PDF</div>
+        <div class="bn-titre">${escapeHtml(p.titre)}</div>
+        ${p.sous_titre ? `<div class="bn-sous">${escapeHtml(p.sous_titre)}</div>` : ''}
+        ${points ? `<ul class="bn-points">${points}</ul>` : ''}
+        <div class="bn-prix">${fmtFCFA(p.prix)}</div>
+        ${action}
+      </div>
+    </div>`;
+  }
+
+  function rendre() {
+    const grille = document.getElementById('bn-grille');
+    if (!grille) return;
+    const visibles = produits.filter(p => p.actif);
+    grille.innerHTML = visibles.length ? visibles.map(carte).join('')
+      : '<div class="chart-empty">Les premiers guides arrivent très bientôt.</div>';
+    const zone = document.getElementById('bn-achats');
+    const miens = visibles.filter(p => achats.payes.has(p.id) || achats.attente.has(p.id));
+    if (zone) zone.innerHTML = miens.length ? `<div class="bn-mes-achats"><strong>📥 Mes achats</strong>
+      ${miens.map(p => `<div class="bn-achat-ligne"><span>${escapeHtml(p.titre)}</span>${achats.payes.has(p.id)
+        ? `<button type="button" onclick="BoutiqueNum.telecharger(${p.id}, this)">⬇️ Télécharger</button>`
+        : '<em>⏳ en vérification</em>'}</div>`).join('')}</div>` : '';
+  }
+
+  async function afficher() {
+    await charger();
+    rendre();
+  }
+
+  function acheter(id) {
+    const p = produits.find(x => x.id === id);
+    if (!p) return;
+    if (!SESSION) { toast('Connectez-vous pour acheter ce guide.', 'erreur'); goScreen('screen-login'); return; }
+    ouvrirModalPaiement(p.prix, 'Guide : ' + p.titre, () => afficher(), { type: 'produit', metadata: { produit_id: p.id } });
+  }
+
+  async function telecharger(id, btn) {
+    const txt = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Préparation…'; }
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/telechargement', { produit_id: id });
+    if (btn) { btn.disabled = false; btn.textContent = txt; }
+    if (r.error || !r.data || !r.data.url) {
+      toast('❌ ' + ((r.data && r.data.error) || 'Téléchargement impossible, réessayez'), 'erreur');
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = r.data.url; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // ── Admin : gestion des produits ──
+  async function renderAdmin() {
+    const zone = document.getElementById('admin-boutique-num');
+    if (!zone) return;
+    await charger();
+    const v = await _xhr('GET', SUPABASE_URL + '/rest/v1/paiements?select=valeur,metadata&type=eq.produit&statut=eq.confirme');
+    const ventes = {};
+    (v.data || []).forEach(p => {
+      const id = Number(p.metadata && p.metadata.produit_id);
+      if (!ventes[id]) ventes[id] = { n: 0, total: 0 };
+      ventes[id].n++; ventes[id].total += Number(p.valeur) || 0;
+    });
+    const el = document.getElementById('admin-boutique-num');
+    if (!el) return;
+    el.innerHTML = `<div class="admin-section">
+      <div class="admin-section-titre">📚 Boutique numérique — guides & formations</div>
+      ${produits.map(p => {
+        const vt = ventes[p.id] || { n: 0, total: 0 };
+        return `<div class="pm-admin-card">
+          <div class="pm-admin-info">
+            <strong>${escapeHtml(p.titre)}</strong> · ${fmtFCFA(p.prix)}<br>
+            ${p.actif ? '🟢 En vente' : '⚪ Masqué'} · ${p.fichier_path ? '📄 PDF en ligne' : '⚠️ PDF manquant'} · ${p.couverture_url ? '🖼 couverture' : 'sans couverture'}<br>
+            💰 ${vt.n} vente${vt.n > 1 ? 's' : ''} · ${fmtFCFA(vt.total)}
+          </div>
+          <div class="pm-admin-btns" style="flex-wrap:wrap">
+            <label class="bn-admin-btn">📄 PDF<input type="file" accept="application/pdf" hidden onchange="BoutiqueNum.televerser(${p.id},'pdf',this)"></label>
+            <label class="bn-admin-btn">🖼 Couverture<input type="file" accept="image/*" hidden onchange="BoutiqueNum.televerser(${p.id},'couv',this)"></label>
+            <button type="button" class="bn-admin-btn" onclick="BoutiqueNum.changerPrix(${p.id})">✏️ Prix</button>
+            <button type="button" class="bn-admin-btn" style="background:${p.actif ? '#FDECEC;color:#9B1C1C' : '#1A7A48;color:#fff'}" onclick="BoutiqueNum.basculer(${p.id})">${p.actif ? 'Masquer' : 'Mettre en vente'}</button>
+          </div>
+        </div>`;
+      }).join('') || '<div class="chart-empty">Aucun produit.</div>'}
+      <details class="bn-nouveau"><summary>➕ Ajouter un nouveau guide / formation</summary>
+        <div class="obj10m-grille" style="margin-top:10px">
+          <label class="obj10m-champ" style="grid-column:1/-1"><span>Titre</span><input id="bn-n-titre" maxlength="140"></label>
+          <label class="obj10m-champ" style="grid-column:1/-1"><span>Sous-titre</span><input id="bn-n-sous" maxlength="200"></label>
+          <label class="obj10m-champ"><span>Prix (F)</span><input id="bn-n-prix" type="number" min="100" step="100" value="3000"></label>
+          <label class="obj10m-champ"><span>Catégorie</span><input id="bn-n-cat" value="E-commerce" maxlength="40"></label>
+          <label class="obj10m-champ"><span>Nombre de pages</span><input id="bn-n-pages" type="number" min="1"></label>
+          <label class="obj10m-champ" style="grid-column:1/-1"><span>Ce que le client apprend (un point par ligne)</span><textarea id="bn-n-points" rows="4" style="width:100%;border:1px solid var(--gris-mid);border-radius:8px;padding:8px"></textarea></label>
+        </div>
+        <button type="button" class="btn btn-primary" style="margin-top:10px" onclick="BoutiqueNum.creer(this)">Créer (masqué) — ajoutez ensuite le PDF</button>
+      </details>
+    </div>`;
+  }
+
+  async function patch(id, champs) {
+    const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/produits_numeriques?id=eq.' + id, champs, { Prefer: 'return=minimal' });
+    if (r.error) { toast('❌ Enregistrement impossible', 'erreur'); return false; }
+    return true;
+  }
+
+  async function televerser(id, genre, input) {
+    const f = input.files && input.files[0];
+    const p = produits.find(x => x.id === id);
+    if (!f || !p) return;
+    if (genre === 'pdf' && f.type !== 'application/pdf') { toast('Choisissez un fichier PDF', 'erreur'); return; }
+    toast('⏳ Envoi en cours…');
+    const ext = genre === 'pdf' ? 'pdf' : ((f.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png');
+    const chemin = `${p.slug}/${Date.now()}.${ext}`;
+    const bucket = genre === 'pdf' ? 'produits-fichiers' : 'produits-couvertures';
+    const up = await _supa.storage.from(bucket).upload(chemin, f);
+    if (up.error) { toast('❌ Envoi échoué : ' + up.error.message, 'erreur'); return; }
+    const champs = genre === 'pdf' ? { fichier_path: chemin }
+      : { couverture_url: _supa.storage.from(bucket).getPublicUrl(chemin).data.publicUrl };
+    if (await patch(id, champs)) toast(genre === 'pdf' ? '✅ PDF en ligne' : '✅ Couverture mise à jour', 'succes');
+    renderAdmin();
+  }
+
+  async function basculer(id) {
+    const p = produits.find(x => x.id === id);
+    if (!p) return;
+    if (!p.actif && !p.fichier_path) { toast('Ajoutez d\'abord le PDF avant de mettre en vente', 'erreur'); return; }
+    if (await patch(id, { actif: !p.actif })) toast(p.actif ? 'Produit masqué' : '✅ Produit en vente', 'succes');
+    renderAdmin();
+  }
+
+  async function changerPrix(id) {
+    const p = produits.find(x => x.id === id);
+    const v = prompt('Nouveau prix en FCFA pour « ' + p.titre + ' »', p.prix);
+    const prix = Math.round(Number(v));
+    if (!v || !(prix >= 100)) return;
+    if (await patch(id, { prix })) toast('✅ Prix mis à jour', 'succes');
+    renderAdmin();
+  }
+
+  async function creer(btn) {
+    const val = id => (document.getElementById(id).value || '').trim();
+    const titre = val('bn-n-titre'), prix = Math.round(Number(val('bn-n-prix')));
+    if (!titre || !(prix >= 100)) { toast('Titre et prix (≥ 100 F) obligatoires', 'erreur'); return; }
+    const slug = titre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) + '-' + Date.now().toString(36);
+    btn.disabled = true;
+    const r = await _xhr('POST', SUPABASE_URL + '/rest/v1/produits_numeriques', {
+      slug, titre, prix, sous_titre: val('bn-n-sous') || null, categorie: val('bn-n-cat') || 'E-commerce',
+      pages: Number(val('bn-n-pages')) || null,
+      points: val('bn-n-points').split('\n').map(x => x.trim()).filter(Boolean),
+      actif: false, ordre: produits.length + 1,
+    }, { Prefer: 'return=minimal' });
+    btn.disabled = false;
+    if (r.error) { toast('❌ Création impossible', 'erreur'); return; }
+    toast('✅ Produit créé : ajoutez le PDF puis mettez-le en vente', 'succes');
+    renderAdmin();
+  }
+
+  return { afficher, acheter, telecharger, renderAdmin, televerser, basculer, changerPrix, creer };
+})();
+
 // ══════════════════════════════════════════
 //  ADMIN — PAIEMENTS MOBILE MONEY À VÉRIFIER
 // ══════════════════════════════════════════
@@ -20397,7 +20538,7 @@ function renderStatsStrategiques() {
     ${s.topVilles.length ? chartBarList(s.topVilles, {color:'#1A5FBF', unit: ' annonce(s)'}) : '<div class="chart-empty">Aucune annonce publiée</div>'}
   </div>`;
 
-  el.innerHTML = '<div id="admin-paiements-manuels"></div>' + renderObjectif10M() + kpis +
+  el.innerHTML = '<div id="admin-paiements-manuels"></div>' + renderObjectif10M() + '<div id="admin-boutique-num"></div>' + kpis +
     '<div class="stats-grid-2">' + revenuChart + donutChart + '</div>' +
     '<div class="stats-grid-2b">' + catChart + villesChart + '</div>' +
     '<div id="admin-stats-trafic-resume"></div>';
@@ -20405,6 +20546,7 @@ function renderStatsStrategiques() {
   _initChartTooltips(el);
   _obj10mBrancher(el);
   chargerPaiementsManuelsAdmin();
+  BoutiqueNum.renderAdmin();
   chargerTraficResumeDashboard();
 }
 
