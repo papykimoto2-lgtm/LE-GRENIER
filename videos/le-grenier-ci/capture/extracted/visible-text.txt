@@ -1,0 +1,1074 @@
+[button] Connexion
+[button] Inscription
+[button] Produits
+[button] Services
+[button] Marché
+[button] Auto & Location
+[button] Dons & Gratuit
+[button] Colis & Envois
+[button] Mon Super Marché
+[span] Marché
+[span] Boulots
+[span] Colis
+[span] Auto
+[span] •••
+[span] Plus
+[div] Rejoignez Le Grenier CI pour publier & acheter !
+[div] Créez un compte gratuit pour poster vos annonces, contacter les vendeurs et profiter de toutes les fonctionnalités.
+[button] S'inscrire gratuitement
+[button] Se connecter
+[div] 🇨🇮 Marketplace Côte d'Ivoire
+[h1] Achetez & vendez
+[em] près de chez vous
+[p] Annonces entre particuliers — objets, mobilier, électronique et plus encore.
+[button] Chercher
+[strong] 500+
+[div] Annonces
+[div] Villes
+[strong] 100%
+[div] Sécurisé
+[div] 🛋️
+[h2] Un grenier, tous les rayons
+[p] Chaque besoin a son coin ici. Entrez dans celui qu'il vous faut aujourd'hui.
+[span] rayons à explorer
+[span] LE CŒUR DU GRENIER
+[span] Le Marché
+[span] Achetez et vendez entre voisins : téléphones, meubles, vêtements, et tout ce qui traîne encore utile.
+[span] Petits Boulots
+[span] Un plombier, un maçon, un job du jour. · 16 dispo
+[span] 🔥 Populaire
+[span] Nounou & Servants
+[span] Du personnel de maison de confiance. · 10 dispo
+[span] Colis & Envois
+[span] Un trajet part bientôt ? Envoyez avec. · 8 dispo
+[span] Auto & Location
+[span] Voitures d'occasion, sans intermédiaire. · 14 dispo
+[span] 🔥 Populaire
+[span] Dons & Gratuit
+[span] Ce qui ne sert plus fera un heureux. · 8 dispo
+[span] Beauté & RDV
+[span] Coiffure, soins, institut du quartier. · 9 dispo
+[span] Résidences
+[span] Studios et appartements à louer. · 6 dispo
+[span] Maquis & Restos
+[span] Réservez une table, ou à emporter. · 5 dispo
+[span] Livraison
+[span] Un coursier moto pour vos courses. · 5 dispo
+[span] Info & Formation
+[span] Bien vendre, en sécurité, sans arnaque.
+[span] Mon Super Marché
+[span] Les courses du quotidien, livrées. · 8 dispo
+[span] Catégorie :
+[button] Tout
+[button] Électronique
+[button] Mobilier
+[button] Vêtements
+[button] Électroménager
+[button] Livres
+[button] Véhicules
+[button] Divers
+[option] Toutes les villes
+[option] Cocody
+[option] Plateau
+[option] Marcory
+[option] Yopougon
+[option] Adjamé
+[option] Abobo
+[option] Koumassi
+[option] Port-Bouët
+[option] Treichville
+[option] Riviera
+[option] Bingerville
+[option] Songon
+[option] Anyama
+[option] Attécoubé
+[option] Williamsville
+[option] Deux-Plateaux
+[option] Angré
+[option] Riviera Palmeraie
+[option] Zone 4
+[option] Vridi
+[option] Kouté
+[option] Grand-Bassam
+[option] Dabou
+[option] Jacqueville
+[option] Bonoua
+[option] Alépé
+[option] Azaguié
+[option] Sikensi
+[option] Bouaké
+[option] Daloa
+[option] San-Pédro
+[option] Yamoussoukro
+[option] Korhogo
+[option] Man
+[option] Abengourou
+[option] Gagnoa
+[option] Divo
+[option] Bondoukou
+[option] Soubré
+[option] Odienné
+[option] Séguéla
+[option] Ferkessédougou
+[option] Aboisso
+[option] Agboville
+[button] Près de moi
+[strong] Annonces près de vous
+[button] Désactiver
+[div] Annonces récentes
+[div] Aucune annonce trouvée.
+[div] Proposez vos services ou trouvez un artisan !
+[div] Inscrivez-vous gratuitement pour publier votre profil de prestataire ou contacter directement les artisans disponibles.
+[button] S'inscrire gratuitement
+[button] Se connecter
+[h2] Petits Boulots & Journaliers
+[p] Artisans, maçons, manœuvres de confiance à Abidjan
+[span] disponibles
+[strong] 4.7★
+[span] note moy.
+[strong] Gratuit
+[span] inscription
+[button] Proposer mes services
+[span] Métier :
+[button] Tous
+[button] Maçonnerie
+[button] Électricité
+[button] Plomberie
+[button] Peinture
+[button] 🪵 Menuiserie
+[button] Jardinage
+[button] Déménagement
+[button] Nettoyage
+[button] Manœuvre
+[option] Toutes les villes
+[option] Cocody
+[option] Plateau
+[option] Marcory
+[option] Yopougon
+[option] Adjamé
+[option] Abobo
+[option] Koumassi
+[option] Port-Bouët
+[option] Treichville
+[option] Riviera
+[option] Bingerville
+[option] Songon
+[option] Anyama
+[option] Attécoubé
+[option] Williamsville
+[option] Deux-Plateaux
+[option] Angré
+[option] Riviera Palmeraie
+[option] Zone 4
+[option] Vridi
+[option] Kouté
+[option] Grand-Bassam
+[option] Dabou
+[option] Jacqueville
+[option] Bonoua
+[option] Alépé
+[option] Azaguié
+[option] Sikensi
+[div] Chercheurs de journaliers — Aujourd'hui :
+[div] 3 maçons recherchés à Yopougon · 2 manœuvres à Abobo · 1 électricien urgent Cocody
+[button] Publier une offre
+[span] GRATUIT
+[span] Offres & Diagnostics gratuits
+[span] Ces prestataires proposent une prestation d'entrée gratuite
+[div] Assi Bénédicte
+[span] GRATUIT
+[div] Couture
+[div] 📍 Yopougon / Koumassi
+[div] ⭐ 4.8
+[span] 34 avis
+[div] Couturière tous vêtements : robes, pagnes, uniformes scolaires, retouches. Tissu…
+[span] Robes
+[span] Uniformes
+[span] Retouches
+[button] Contacter gratuitement
+[div] Ouédraogo Paul
+[span] GRATUIT
+[div] Informatique
+[div] 📍 Plateau / Cocody
+[div] ⭐ 4.9
+[span] 41 avis
+[div] Dépannage PC/Mac, installation logiciels, récupération données, réseau WiFi, for…
+[span] Dépannage PC
+[span] WiFi
+[span] Récup. données
+[button] Contacter gratuitement
+[div] Brou Stéphane
+[span] GRATUIT
+[div] Maçonnerie
+[div] 📍 Songon / Anyama
+[div] ⭐ 4.4
+[span] 8 avis
+[div] Maçon disponible pour petits travaux : rebouchage, enduit, pose parpaing. Devis …
+[span] Rebouchage
+[span] Enduit
+[span] Parpaing
+[button] Contacter gratuitement
+[div] Kourouma Hawa
+[span] GRATUIT
+[div] Garde d'enfants
+[div] 📍 Cocody / Riviera
+[div] ⭐ 5
+[span] 19 avis
+[div] Nounou expérimentée, diplômée petite enfance. Garde à domicile, aide aux devoirs…
+[span] Garde domicile
+[span] Devoirs
+[span] Activités
+[button] Contacter gratuitement
+[div] Tous les prestataires
+[div] Kouamé Jean-Baptiste
+[div] Maçonnerie
+[div] 📍 Cocody / Yopougon
+[div] Disponible maintenant
+[div] ⭐ 4.9
+[div] 23 avis
+[div] 12 000 FCFA
+[span] /jour
+[div] · 35 000 FCFA
+[span] à la tâche
+[span] Fondations
+[span] Parpaings
+[span] Carrelage
+[span] 10 ans
+[button] Contacter
+[button] Profil
+[div] Traoré Moussa
+[div] Électricité
+[div] 📍 Tout Abidjan
+[div] Disponible maintenant
+[div] ⭐ 4.7
+[div] 18 avis
+[div] 15 000 FCFA
+[span] /jour
+[span] Tableau élec.
+[span] Prises
+[span] Climatisation
+[span] 7 ans
+[button] Contacter
+[button] Profil
+[div] Aka Brice
+[div] Plomberie
+[div] 📍 Marcory / Koumassi
+[div] Actuellement occupé
+[div] ⭐ 4.5
+[div] 11 avis
+[div] 14 000 FCFA
+[span] /jour
+[div] · 20 000 FCFA
+[span] à la tâche
+[span] Fuites
+[span] WC/Douche
+[span] Chauffe-eau
+[span] 5 ans
+[button] Contacter
+[button] Profil
+[div] Coulibaly Ibrahim
+[div] Peinture
+[div] 📍 Abobo / Adjamé
+[div] Disponible maintenant
+[div] ⭐ 4.8
+[div] 31 avis
+[div] 10 000 FCFA
+[span] /jour
+[div] · 25 000 FCFA
+[span] à la tâche
+[span] Intérieur
+[span] Extérieur
+[span] Enduit
+[span] 12 ans
+[button] Contacter
+[button] Profil
+[div] N'Goran Sylvain
+[div] Menuiserie
+[div] 📍 Plateau / Cocody
+[div] Disponible maintenant
+[div] ⭐ 4.6
+[div] 9 avis
+[div] 18 000 FCFA
+[span] /jour
+[span] Portes/Fenêtres
+[span] Armoires
+[span] Cuisine
+[span] 15 ans
+[button] Contacter
+[button] Profil
+[div] Diallo Aminata
+[div] Nettoyage
+[div] 📍 Tout Abidjan
+[div] Disponible maintenant
+[div] ⭐ 5
+[div] 47 avis
+[div] 8 000 FCFA
+[span] /jour
+[div] · 15 000 FCFA
+[span] à la tâche
+[span] Après travaux
+[span] Bureaux
+[span] Vitrerie
+[span] 6 ans
+[button] Contacter
+[button] Profil
+[div] Koné Seydou
+[div] Manœuvre
+[div] 📍 Yopougon / Abobo
+[div] Disponible maintenant
+[div] ⭐ 4.3
+[div] 7 avis
+[div] 6 000 FCFA
+[span] /jour
+[span] Démolition
+[span] Terrassement
+[span] Transport
+[span] 3 ans
+[button] Contacter
+[button] Profil
+[div] Yao Fernand
+[div] Carrelage
+[div] 📍 Cocody / Marcory
+[div] Actuellement occupé
+[div] ⭐ 4.7
+[div] 15 avis
+[div] 16 000 FCFA
+[span] /jour
+[div] · 30 000 FCFA
+[span] à la tâche
+[span] Sol
+[span] Mur
+[span] Mosaïque
+[span] 9 ans
+[button] Contacter
+[button] Profil
+[div] Bamba Oumar
+[div] Jardinage
+[div] 📍 Cocody / Riviera
+[div] Disponible maintenant
+[div] ⭐ 4.6
+[div] 13 avis
+[div] 9 000 FCFA
+[span] /jour
+[div] · 20 000 FCFA
+[span] à la tâche
+[span] Gazon
+[span] Haies
+[span] Massifs
+[span] 8 ans
+[button] Contacter
+[button] Profil
+[div] Touré Aboubakar
+[div] Soudure
+[div] 📍 Port-Bouët / Treichville
+[div] Disponible maintenant
+[div] ⭐ 4.8
+[div] 19 avis
+[div] 20 000 FCFA
+[span] /jour
+[div] · 40 000 FCFA
+[span] à la tâche
+[span] Portails
+[span] Grilles
+[span] Escaliers
+[span] 11 ans
+[button] Contacter
+[button] Profil
+[div] Konaté Fatou
+[div] Nettoyage
+[div] 📍 Plateau / Cocody
+[div] Disponible maintenant
+[div] ⭐ 4.9
+[div] 28 avis
+[div] 7 500 FCFA
+[span] /jour
+[div] · 12 000 FCFA
+[span] à la tâche
+[span] Ménage
+[span] Vitres
+[span] Désinfection
+[span] 5 ans
+[button] Contacter
+[button] Profil
+[div] Cissé Mamadou
+[div] Déménagement
+[div] 📍 Tout Abidjan
+[div] Disponible maintenant
+[div] ⭐ 4.5
+[div] 22 avis
+[div] 25 000 FCFA
+[span] /jour
+[span] Camion 5T
+[span] Emballage
+[span] Montage meuble
+[span] 7 ans
+[button] Contacter
+[button] Profil
+[div] Assi Bénédicte
+[span] GRATUIT
+[div] Couture
+[div] 📍 Yopougon / Koumassi
+[div] Disponible maintenant
+[div] ⭐ 4.8
+[div] 34 avis
+[span] Tarif à convenir
+[div] · 5 000 FCFA
+[span] à la tâche
+[span] Robes
+[span] Uniformes
+[span] Retouches
+[span] 8 ans
+[button] Contacter
+[button] Profil
+[div] Ouédraogo Paul
+[span] GRATUIT
+[div] Informatique
+[div] 📍 Plateau / Cocody
+[div] Disponible maintenant
+[div] ⭐ 4.9
+[div] 41 avis
+[span] Tarif à convenir
+[div] · 10 000 FCFA
+[span] à la tâche
+[span] Dépannage PC
+[span] WiFi
+[span] Récup. données
+[span] 6 ans
+[button] Contacter
+[button] Profil
+[div] Brou Stéphane
+[span] GRATUIT
+[div] Maçonnerie
+[div] 📍 Songon / Anyama
+[div] Disponible maintenant
+[div] ⭐ 4.4
+[div] 8 avis
+[div] 8 000 FCFA
+[span] /jour
+[div] · 15 000 FCFA
+[span] à la tâche
+[span] Rebouchage
+[span] Enduit
+[span] Parpaing
+[span] 4 ans
+[button] Contacter
+[button] Profil
+[div] Kourouma Hawa
+[span] GRATUIT
+[div] Garde d'enfants
+[div] 📍 Cocody / Riviera
+[div] Disponible maintenant
+[div] ⭐ 5
+[div] 19 avis
+[div] 7 000 FCFA
+[span] /jour
+[span] Garde domicile
+[span] Devoirs
+[span] Activités
+[span] 5 ans
+[button] Contacter
+[button] Profil
+[div] Comment ça marche ?
+[div] Cherchez
+[p] Filtrez par métier et ville pour trouver le bon prestataire
+[div] Contactez
+[p] Appelez ou WhatsApp directement depuis la fiche
+[div] Négociez
+[p] Convenez du tarif journalier ou à la tâche
+[div] Notez
+[p] Laissez un avis pour aider la communauté
+[div] Accédez à tous les guides & formations !
+[div] Créez un compte gratuit pour sauvegarder vos articles favoris, poser vos questions et rejoindre la communauté.
+[button] S'inscrire gratuitement
+[button] Se connecter
+[h2] Info & Formation
+[p] Apprenez à acheter et vendre en toute sécurité, évitez les arnaques, comprenez vos droits
+[button] Débutant
+[button] Bien vendre
+[button] Sécurité
+[button] Vos droits
+[button] Quiz
+[button] Glossaire
+[button] Formations
+[h3] Qu'est-ce que Le Grenier ?
+[div] Le savoir de base
+[p] Le Grenier est une
+[strong] marketplace C2C
+[p] (Consumer to Consumer) qui permet à des particuliers de vendre et d'acheter des objets d'occasion entre eux. Contrairement à un magasin, c'est
+[em] vous
+[p] qui fixez les prix et gérez vos transactions.
+[p] C'est gratuit de naviguer. Seule la
+[strong] publication d'une annonce
+[p] est payante (
+[span] 10%
+[p] de commission, minimum
+[span] 50 FCFA
+[p] , maximum
+[span] 5 000 FCFA
+[div] Comment commencer en 4 étapes
+[div] Créer un compte
+[p] Prénom, email, numéro Mobile Money et votre quartier
+[div] Photographiez
+[p] Prenez 3 à 5 photos claires de votre objet à la lumière du jour
+[div] Publiez
+[p] Remplissez le formulaire, payez la commission via Mobile Money
+[div] Vendez
+[p] Répondez aux messages, convenez d'un lieu de rendez-vous sûr
+[h3] Astuces pour bien débuter
+[strong] Parcourez
+[li] les annonces existantes avant de vendre pour fixer le bon prix
+[li] Une
+[strong] bonne photo
+[li] multiplie par 3 les chances de vente
+[li] Répondez
+[strong] vite
+[li] aux messages : les acheteurs contactent souvent plusieurs vendeurs
+[strong] titre clair
+[li] avec la marque et le modèle attire plus d'acheteurs
+[li] Indiquez votre
+[strong] quartier exact
+[li] pour rassurer les acheteurs locaux
+[h3] L'art de la photo qui vend
+[p] 80% des acheteurs décident en regardant la photo. Voici les règles d'or :
+[strong] Lumière naturelle
+[li] : photographiez près d'une fenêtre, jamais avec flash
+[strong] Fond propre
+[li] : placez l'objet sur un tissu uni ou au sol
+[strong] Plusieurs angles
+[li] : face, profil, dessous, détails importants
+[strong] Montrez les défauts
+[li] : un acheteur déçu laisse un mauvais avis
+[h3] Fixer le bon prix
+[p] La règle générale en Côte d'Ivoire :
+[strong] Neuf
+[li] : 80-90% du prix boutique
+[strong] Bon état
+[li] : 50-70% du prix boutique
+[strong] Usagé
+[li] : 30-50% du prix boutique
+[strong] À réparer
+[li] : max 20% du prix boutique
+[strong] Astuce :
+[p] Mettez un prix légèrement supérieur à votre prix plancher pour avoir de la marge de négociation.
+[h3] Rédiger une annonce efficace
+[p] Modèle de description qui convertit :
+[strong] [Marque] [Modèle]
+[div] — [état]
+[div] ▸ Acheté en [année], utilisé [durée]
+[div] ▸ [Caractéristiques principales]
+[div] ▸ [Accessoires inclus]
+[div] ▸ [Défauts honnêtes s'il y en a]
+[div] ▸ Prix : [montant] FCFA —
+[em] négociable
+[div] 📍 Disponible à [quartier] · Livraison possible [oui/non]
+[h3] Les arnaques les plus courantes
+[div] Protégez-vous
+[strong] Paiement en avance :
+[li] Un acheteur ne doit JAMAIS envoyer de l'argent avant de voir l'objet
+[strong] Prix trop bas :
+[li] Si c'est trop beau pour être vrai, c'est sûrement une arnaque
+[strong] Vendeur pressé :
+[li] "Je pars demain" — technique classique pour forcer la décision
+[strong] Échange lien suspect :
+[li] Ne cliquez pas sur des liens envoyés par des inconnus
+[strong] Paiement partiel :
+[li] "Je t'envoie la moitié maintenant" — refusez toujours
+[h3] Les bonnes pratiques
+[strong] Lieu public :
+[li] Rencontrez toujours dans un endroit animé (marché, banque, centre commercial)
+[strong] Tester avant :
+[li] Branchez, allumez, vérifiez l'objet devant le vendeur
+[strong] Paiement comptant :
+[li] Préférez le cash ou Mobile Money instantané
+[strong] Informez quelqu'un :
+[li] Dites à un proche où vous allez pour un achat important
+[strong] Profil vérifié :
+[li] Privilégiez les vendeurs avec badge ✓ et des avis positifs
+[h3] Les paiements Mobile Money expliqués
+[p] En Côte d'Ivoire, les principaux moyens sécurisés :
+[div] Orange Money
+[div] *144#
+[div] MTN Mobile Money
+[div] *133#
+[div] Wave
+[div] App Wave
+[div] Moov Money
+[div] *555#
+[p] Vérifiez
+[strong] toujours la notification SMS
+[p] de confirmation avant de remettre l'objet.
+[h3] Vos droits en Côte d'Ivoire
+[div] Loi n°2016-412 sur le commerce électronique
+[li] Vous avez le droit à une
+[strong] description fidèle
+[li] du produit. Un vendeur qui ment engage sa responsabilité.
+[li] Pour un objet d'occasion entre particuliers, il n'y a
+[strong] pas de droit de retour légal
+[li] sauf vice caché grave.
+[li] Pour les transactions importantes (+100 000 FCFA), demandez un
+[strong] reçu écrit
+[li] En cas d'arnaque, vous pouvez porter plainte à la
+[strong] PLCC
+[li] (Plateforme de Lutte contre la Cybercriminalité) : 08 88 88 88.
+[div] 🏛️
+[h3] Protection des données personnelles
+[div] ARTCI / Loi n°2013-450
+[p] Le Grenier protège vos données conformément à la loi ivoirienne :
+[li] Vos coordonnées ne sont
+[strong] jamais revendues
+[li] à des tiers
+[li] Vous contrôlez ce qui est visible sur votre profil public
+[li] Vous pouvez demander la
+[strong] suppression de votre compte
+[li] à tout moment
+[li] Contact :
+[span] protection@legrenier.ci
+[h3] Fiscalité pour les vendeurs réguliers
+[p] Si vous vendez régulièrement (activité commerciale), la loi ivoirienne prévoit :
+[li] Au-delà de
+[strong] 5 millions FCFA/an
+[li] de chiffre d'affaires : déclaration DGI recommandée
+[li] Pensez à créer une
+[strong] entreprise individuelle
+[li] via le CEPICI (gratuit en ligne)
+[li] Le régime de
+[strong] l'auto-entrepreneur
+[li] est possible depuis 2020
+[div] Quiz — Testez vos connaissances
+[p] Répondez aux questions pour valider votre formation et obtenir votre badge
+[span] Question 1/5
+[div] Quel est le montant minimum de commission pour publier une annonce sur Le Grenier ?
+[button] 500 FCFA
+[button] 50 FCFA
+[button] 100 FCFA
+[button] 1 000 FCFA
+[h3] Félicitations !
+[p] Vous avez complété la formation Le Grenier
+[div] 5/5
+[button] Partager sur WhatsApp
+[div] Glossaire du vendeur
+[p] Les termes importants expliqués simplement
+[div] C2C
+[div] Consumer to Consumer : vente entre particuliers, sans intermédiaire professionnel
+[div] Commission
+[div] Frais prélevés par la plateforme (10% plan Gratuit, min 50 FCFA, max 5 000 FCFA) en échange de la publication et de la visibilité
+[div] Mobile Money
+[div] Service de paiement via téléphone mobile : Orange Money, MTN, Wave, Moov
+[div] Annonce en attente
+[div] Votre annonce a été payée mais est en cours de vérification par l'équipe modération
+[div] Vice caché
+[div] Défaut grave non visible à l'achat qui rend l'objet inutilisable. Le vendeur en est responsable.
+[div] QR Code
+[div] Code barre 2D scannable par téléphone, utilisé ici pour se connecter rapidement sur un autre appareil
+[div] Phishing
+[div] Technique d'arnaque où quelqu'un se fait passer pour un autre pour voler vos informations
+[div] Parrainage
+[div] Recommander la plateforme à un ami. En échange, vous recevez des crédits d'annonces gratuites
+[div] FAQ
+[div] Foire Aux Questions : liste de réponses aux questions les plus posées
+[div] Modération
+[div] Vérification des annonces par l'équipe pour éviter les fraudes et contenus inappropriés
+[div] Journalier
+[div] Ouvrier payé à la journée, sans contrat long terme. Très courant en maçonnerie et manœuvre.
+[div] Tarif à la tâche
+[div] Prix fixé pour un travail précis (ex : peindre une chambre) indépendamment du temps passé
+[div] Questions fréquentes
+[button] Puis-je vendre sans compte ?
+[div] Non, un compte est obligatoire pour publier une annonce. En revanche, vous pouvez parcourir et consulter toutes les annonces sans vous connecter.
+[button] Comment récupérer mon argent si je suis arnaqué ?
+[div] En cas d'arnaque, signalez l'annonce immédiatement, contactez votre opérateur Mobile Money pour tenter un rappel de fonds, et portez plainte à la PLCC (08 88 88 88). Agissez dans les 24h pour maximiser vos chances.
+[button] Ma commission est-elle remboursée si l'objet ne se vend pas ?
+[div] Non, la commission couvre la publication et la visibilité de votre annonce, pas la vente elle-même. Cependant, en cas de bug technique ou d'erreur de notre part, contactez le support.
+[button] Comment être sûr que le Mobile Money a bien été reçu ?
+[div] Vérifiez TOUJOURS la notification SMS de confirmation envoyée par votre opérateur. Ne remettez jamais un objet avant d'avoir reçu cette confirmation sur votre téléphone.
+[button] Puis-je vendre des objets neufs sur Le Grenier ?
+[div] Oui, vous pouvez vendre des objets neufs. Sélectionnez l'état "Neuf" lors de la création de l'annonce. Attention toutefois : la vente régulière de produits neufs pourrait être considérée comme une activité commerciale nécessitant une déclaration fiscale.
+[div] Formations e-commerce
+[div] Maîtrisez la vente en ligne en Côte d'Ivoire — Certifiées Le Grenier CI
+[strong] Plan Business :
+[div] accès à toutes les formations offert ·
+[span] Upgrader →
+[div] Vendre en ligne — Les bases
+[div] Durée : 2h · Niveau débutant · 4 modules
+[div] Bestseller 🔥
+[li] Créer une annonce qui convertit
+[li] Fixer le bon prix sur le marché ivoirien
+[li] Photos qui donnent envie d'acheter
+[li] Gérer les questions et négociations
+[div] 5 000 F
+[div] ⭐ 4.8 · 156 inscrits
+[button] S'inscrire — 5 000 F
+[div] Marketing WhatsApp & Réseaux
+[div] Durée : 3h · Intermédiaire · 6 modules
+[li] Créer un catalogue WhatsApp Business
+[li] Automatiser ses messages avec des bots
+[li] Instagram et TikTok pour vendre local
+[li] Construire une communauté d'acheteurs
+[div] 8 000 F
+[div] ⭐ 4.9 · 89 inscrits
+[button] S'inscrire — 8 000 F
+[div] Ouvrir sa boutique en ligne
+[div] Durée : 5h · Avancé · 10 modules
+[li] Passer du compte vendeur à la boutique
+[li] Gestion des stocks et commandes
+[li] Intégrer Mobile Money dans son site
+[li] Livraisons et logistique locale
+[div] 15 000 F
+[div] ⭐ 4.7 · 42 inscrits
+[button] S'inscrire — 15 000 F
+[div] Livraison tricycle — Abidjan
+[div] Faites livrer vos articles vendus par nos tricyclistes partenaires · Dès 500 F · 30 min chrono
+[button] Commander une livraison
+[div] Trouvez ou proposez des services à domicile !
+[div] Inscrivez-vous gratuitement pour publier un profil de nounou / gouvernante ou contacter du personnel qualifié à Abidjan.
+[button] S'inscrire gratuitement
+[button] Se connecter
+[h2] Nounou, Gouvernantes & Servants
+[p] Personnel de maison qualifié et de confiance à Abidjan
+[span] disponibles
+[strong] 4.8★
+[span] note moy.
+[strong] Essai
+[span] offert ×3
+[button] Proposer mes services
+[span] Rôle :
+[button] Tous
+[button] Nounou
+[button] Gouvernante
+[button] Cuisinière
+[button] Aide ménagère
+[button] Chauffeur
+[button] Gardien
+[option] Toutes les zones
+[option] Cocody
+[option] Plateau
+[option] Marcory
+[option] Yopougon
+[option] Adjamé
+[option] Abobo
+[option] Koumassi
+[option] Port-Bouët
+[option] Treichville
+[option] Riviera
+[option] Bingerville
+[option] Songon
+[option] Anyama
+[option] Attécoubé
+[option] Williamsville
+[option] Deux-Plateaux
+[option] Angré
+[option] Riviera Palmeraie
+[option] Zone 4
+[option] Vridi
+[option] Kouté
+[option] Grand-Bassam
+[option] Dabou
+[option] Jacqueville
+[option] Bonoua
+[option] Alépé
+[option] Azaguié
+[option] Sikensi
+[span] ESSAI OFFERT
+[span] Période d'essai gratuite
+[span] Ces profils proposent une journée ou semaine d'essai sans engagement
+[div] Tous les profils
+[div] Comment recruter en toute sécurité ?
+[div] Filtrez
+[p] Choisissez le rôle et la zone géographique
+[div] Comparez
+[p] Notes, expérience, langues parlées, tarif
+[div] Testez
+[p] Profitez des périodes d'essai avant tout engagement
+[div] Sécurisez
+[p] Demandez le casier judiciaire et les références
+[div] Envoyez ou réceptionnez des colis en toute sécurité !
+[div] Créez un compte pour publier un trajet, suivre vos envois et accéder aux tarifs négociés entre particuliers.
+[button] S'inscrire gratuitement
+[button] Se connecter
+[div] Envois Internationaux & Nationaux
+[h2] Envoyez vos colis
+[em] partout dans le monde
+[p] Confiez vos colis à des voyageurs vérifiés — Abidjan ↔ Paris, Bruxelles, Montréal, Dakar et plus encore
+[strong] 48+
+[span] Destinations
+[strong] 1 200+
+[span] Colis livrés
+[strong] 4.8★
+[span] Satisfaction
+[strong] 72h
+[span] Délai moyen
+[button] Envoyer un colis
+[button] Trajets disponibles
+[button] Envoyer un colis
+[button] Suivre mon colis
+[button] Tarifs & Délais
+[button] Je suis voyageur
+[div] Trajets disponibles
+[option] Départ
+[option] 🇨🇮 Abidjan (ABJ)
+[option] 🇫🇷 Paris CDG
+[option] 🇫🇷 Paris ORY
+[option] 🇫🇷 Lyon (LYS)
+[option] 🇧🇪 Bruxelles (BRU)
+[option] 🇨🇦 Montréal (YUL)
+[option] 🇨🇭 Genève (GVA)
+[option] 🇸🇳 Dakar (DSS)
+[option] 🇨🇲 Douala (DLA)
+[option] 🇲🇱 Bamako (BKO)
+[option] 🇹🇬 Lomé (LFW)
+[option] 🇧🇯 Cotonou (COO)
+[option] 🇧🇫 Ouagadougou (OUA)
+[option] 🇦🇪 Dubaï (DXB)
+[option] Destination
+[option] 🇨🇮 Abidjan (ABJ)
+[option] 🇫🇷 Paris CDG
+[option] 🇫🇷 Paris ORY
+[option] 🇫🇷 Lyon (LYS)
+[option] 🇧🇪 Bruxelles (BRU)
+[option] 🇨🇦 Montréal (YUL)
+[option] 🇨🇭 Genève (GVA)
+[option] 🇸🇳 Dakar (DSS)
+[option] 🇨🇲 Douala (DLA)
+[option] 🇲🇱 Bamako (BKO)
+[option] 🇹🇬 Lomé (LFW)
+[option] 🇧🇯 Cotonou (COO)
+[option] 🇧🇫 Ouagadougou (OUA)
+[option] 🇦🇪 Dubaï (DXB)
+[option] Type de colis
+[option] 📄 Documents & Papiers administratifs
+[option] 👕 Vêtements & Textiles
+[option] Électronique & Téléphones
+[option] 💊 Médicaments (ordonnance requise)
+[option] 🍱 Alimentaire (non périssable)
+[option] 💄 Cosmétiques & Beauté
+[option] 🎁 Jouets & Cadeaux
+[option] 🔩 Pièces auto & moto
+[option] Livres & Scolaire
+[option] 💍 Bijoux & Accessoires
+[option] 💵 Argent / Espèces (déclaré)
+[option] 📦 Autre (préciser dans la description)
+[span] Abidjan
+[span] Paris
+[span] Air France AF701
+[span] 📅 22 mai 2025
+[span] ⚖️ 6 kg dispo
+[span] Vêtements
+[span] Documents
+[span] Cosmétiques
+[div] 15 000 FCFA
+[span] / kg
+[div] Aya Konan
+[div] ⭐ 4.9 · 47 livraisons
+[button] Contacter
+[span] Paris
+[span] Abidjan
+[span] Air Côte d'Ivoire HF471
+[span] 📅 25 mai 2025
+[span] ⚖️ 10 kg dispo
+[span] Tout type
+[div] 12 000 FCFA
+[span] / kg
+[div] Jean-Paul Essoh
+[div] ⭐ 4.7 · 31 livraisons
+[button] Contacter
+[span] Abidjan
+[span] Bruxelles
+[span] Brussels Airlines SN200
+[span] 📅 28 mai 2025
+[span] ⚖️ 4 kg dispo
+[span] Documents
+[span] Électronique
+[div] 16 000 FCFA
+[span] / kg
+[div] Mariam Touré
+[div] ⭐ 5 · 18 livraisons
+[button] Contacter
+[span] Bruxelles
+[span] Abidjan
+[span] Brussels Airlines SN201
+[span] 📅 30 mai 2025
+[span] ⚖️ 8 kg dispo
+[span] Vêtements
+[span] Médicaments
+[div] 14 000 FCFA
+[span] / kg
+[div] Serge Diallo
+[div] ⭐ 4.8 · 22 livraisons
+[button] Contacter
+[span] Abidjan
+[span] Montréal
+[span] Air Canada AC872
+[span] 📅 1 juin 2025
+[span] ⚖️ 5 kg dispo
+[span] Documents
+[span] Vêtements
+[div] 18 000 FCFA
+[span] / kg
+[div] Fatou Bamba
+[div] ⭐ 4.6 · 12 livraisons
+[button] Contacter
+[span] Dakar
+[span] Abidjan
+[span] Air Sénégal HC200
+[span] 📅 23 mai 2025
+[span] ⚖️ 12 kg dispo
+[span] Tout type
+[div] 6 000 FCFA
+[span] / kg
+[div] Oumar Sy
+[div] ⭐ 4.8 · 35 livraisons
+[button] Contacter
+[span] Abidjan
+[span] Dakar
+[span] Air Côte d'Ivoire HF200
+[span] 📅 24 mai 2025
+[span] ⚖️ 7 kg dispo
+[span] Vêtements
+[span] Alimentaire
+[div] 7 000 FCFA
+[span] / kg
+[div] Koffi Assi
+[div] ⭐ 4.5 · 8 livraisons
+[button] Contacter
+[span] Paris
+[span] Bruxelles
+[span] Eurostar / Train
+[span] 📅 27 mai 2025
+[span] ⚖️ 3 kg dispo
+[span] Documents
+[div] 5 000 FCFA
+[span] / kg
+[div] Sophie Gnabri
+[div] ⭐ 4.9 · 26 livraisons
+[button] Contacter
+[div] Envoyer un colis
+[div] Remplissez ce formulaire — un voyageur vérifié vous contactera sous 24h
+[div] Itinéraire
+[div] Indiquez le départ et la destination de votre colis
+[option] Ville de départ
+[option] 🇨🇮 Abidjan, Côte d'Ivoire
+[option] 🇸🇳 Dakar, Sénégal
+[option] 🇨🇲 Douala, Cameroun
+[option] 🇲🇱 Bamako, Mali
+[option] 🇬🇳 Conakry, Guinée
+[option] 🇹🇬 Lomé, Togo
+[option] 🇧🇯 Cotonou, Bénin
+[option] 🇧🇫 Ouagadougou, Burkina Faso
+[option] 🇫🇷 Paris, France
+[option] 🇫🇷 Lyon, France
+[option] 🇫🇷 Marseille, France
+[option] 🇧🇪 Bruxelles, Belgique
+[option] 🇨🇦 Montréal, Canada
+[option] 🇨🇭 Genève, Suisse
+[option] 🇦🇪 Dubaï, Émirats
+[option] Ville de destination
+[option] 🇨🇮 Abidjan, Côte d'Ivoire
+[option] 🇸🇳 Dakar, Sénégal
+[option] 🇨🇲 Douala, Cameroun
+[option] 🇲🇱 Bamako, Mali
+[option] 🇬🇳 Conakry, Guinée
+[option] 🇹🇬 Lomé, Togo
+[option] 🇧🇯 Cotonou, Bénin
+[option] 🇧🇫 Ouagadougou, Burkina Faso
+[option] 🇫🇷 Paris, France
+[option] 🇫🇷 Lyon, France
+[option] 🇫🇷 Marseille, France
+[option] 🇧🇪 Bruxelles, Belgique
+[option] 🇨🇦 Montréal, Canada
+[option] 🇨🇭 Genève, Suisse
+[option] 🇦🇪 Dubaï, Émirats
+[label] Poids estimé (kg)
+[label] Type de contenu
+[option] -- Type de colis --
+[option] 📄 Documents & Papiers administratifs
+[option] 👕 Vêtements & Textiles
+[option] Électronique & Téléphones
+[option] 💊 Médicaments (ordonnance requise)
+[option] 🍱 Alimentaire (non périssable)
+[option] 💄 Cosmétiques & Beauté
+[option] 🎁 Jouets & Cadeaux
+[option] 🔩 Pièces auto & moto
+[option] Livres & Scolaire
+[option] 💍 Bijoux & Accessoires
+[option] 💵 Argent / Espèces (déclaré)
+[option] 📦 Autre (préciser dans la description)
+[label] Valeur déclarée (FCFA)
+[div] Tarif estimatif
+[div] par kg · assurance non comprise
+[div] Expéditeur & Destinataire
+[div] Coordonnées de contact pour la remise
+[label] Votre nom & téléphone
+[label] Nom du destinataire
+[label] Téléphone destinataire (avec indicatif pays)
+[label] Adresse de livraison
+[label] Instructions spéciales (fragile, urgent…)
+[label] Mode de paiement préféré
+[label] 🌊 Wave
+[label] 🟠 Orange Money
+[label] 💛 MTN MoMo
+[label] 💵 Espèces
+[button] 📦 Soumettre ma demande d'envoi
+[span] Publicité
+[div] DiasColis Abidjan
+[div] Envois diaspora sans stress
+[div] Spécialiste Abidjan ↔ Europe depuis 2015. Suivi WhatsApp en temps réel, assurance incluse.
+[strong] 10+
+[span] Ans expérience
+[strong] 72h
+[span] Délai Paris
+[button] En savoir plus →
+[span] Publicité
+[div] PackCI Express
+[div] Emballez bien, livrez mieux
+[div] Boîtes renforcées, bulles, adhésif douane — livraison à domicile à Abidjan dès 800 F sous 4h.
+[span] Livraison
+[strong] 800 F
+[span] Dès
+[button] Commander →
+[div] Vols Abidjan ↔ Paris dès 480 €
+[div] Ethiopian Airlines · Air France · Brussels
+[button] Voir les vols →
+[div] Comment ça marche en 4 étapes ?
+[div] Déposez
+[p] Remplissez le formulaire et décrivez votre colis précisément
+[div] Matchez
+[p] Un voyageur vérifié part vers votre destination vous contacte
+[div] Remettez
+[p] Rendez-vous dans un lieu sûr à Abidjan pour remettre le colis
+[div] Livré !
+[p] Votre destinataire reçoit le colis, vous recevez une notification
+[div] Suivre mon colis
+[div] Entrez votre numéro de suivi ou votre numéro de téléphone
+[button] Suivre
+[div] Numéro de suivi
+[span] En transit
+[div] Trajet
+[div] Voyageur
+[div] Date envoi
+[div] Livraison est.
+[button] Contacter le voyageur via WhatsApp
+[div] Aucun colis à afficher
+[div] Entrez votre numéro de suivi pour localiser votre colis
+[div] Tarifs & Délais
+[div] Tarifs moyens pratiqués par nos voyageurs (par kg)
+[div] Les prix définitifs sont négociés directement avec le voyageur — ces tarifs sont indicatifs
+[div] Ce qui est autorisé & interdit
+[div] Autorisé
+[li] Vêtements, chaussures
+[li] Téléphones & accessoires
+[li] Documents officiels
+[li] Cosmétiques & beauté
+[li] Médicaments (avec ordonnance)
+[li] Alimentaire non périssable
+[li] Jouets & cadeaux
+[div] Interdit
+[li] Liquides >100ml (avion)
+[li] Argent liquide non déclaré
+[li] Matières dangereuses
+[li] Contrefaçons
+[li] Drogues & substances illicites
+[li] Armes & munitions
+[li] Animaux vivants
+[div] Vous voyagez ? Rentabilisez votre vol
+[div] Publiez votre trajet, t
+[...truncated]

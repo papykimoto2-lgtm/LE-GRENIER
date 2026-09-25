@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="node_modules/gsap/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: 'Plus Jakarta Sans';
+        src: url('capture/assets/fonts/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yygg_vb.woff2') format('woff2');
+        font-weight: 300 800; font-style: normal;
+      }
+      @font-face {
+        font-family: 'Cormorant Garamond';
+        src: url('capture/assets/fonts/co3bmX5slCNuHLi8bLeY9MK7whWMhyjYp3tKky2F7i6C.woff2') format('woff2');
+        font-weight: 300 800; font-style: normal;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1080px; height: 1920px; overflow: hidden;
+        background: #0D3D24;
+        font-family: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+      }
+      #root {
+        position: relative; width: 100%; height: 100%; overflow: hidden;
+      }
+      .scene {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        display: flex; align-items: flex-end; justify-content: center;
+        overflow: hidden; opacity: 0;
+      }
+      .scene .bg-img {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        object-fit: cover; object-position: top center;
+        transform-origin: center 30%;
+      }
+      .scene .scrim {
+        position: absolute; left: 0; right: 0; bottom: 0; height: 52%;
+        background: linear-gradient(to top, rgba(9,46,27,.97) 0%, rgba(9,46,27,.86) 42%, rgba(9,46,27,0) 100%);
+      }
+      .scene .label {
+        position: relative; z-index: 2; width: 100%; padding: 26px 64px 130px;
+        color: #fff; text-align: center; background: rgba(6,38,22,.55);
+      }
+      .scene .label .cat {
+        font-size: 40px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 10px;
+        text-shadow: 0 2px 18px rgba(0,0,0,.35);
+      }
+      .scene .label .sub {
+        font-size: 25px; font-weight: 500; color: #E9F5EC; opacity: .92;
+        max-width: 820px; margin: 0 auto; line-height: 1.35;
+      }
+      .scene .pill {
+        position: relative; z-index: 2; align-self: flex-start; margin: 210px 0 0 56px;
+        background: rgba(255,255,255,.16); border: 1.5px solid rgba(255,255,255,.4);
+        backdrop-filter: blur(6px); color: #fff; font-weight: 700; font-size: 24px;
+        padding: 12px 26px; border-radius: 40px;
+      }
+      /* Intro / outro / stat cards (no screenshot) */
+      .card {
+        position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: radial-gradient(120% 90% at 50% 0%, #146B3E 0%, #0D3D24 62%, #082A19 100%);
+        text-align: center; padding: 0 80px;
+      }
+      .card .logo { width: 190px; height: 190px; border-radius: 46px; object-fit: cover;
+        box-shadow: 0 18px 60px rgba(0,0,0,.35); margin-bottom: 40px; }
+      .card .brand { color: #fff; font-family: 'Cormorant Garamond', Georgia, serif;
+        font-size: 88px; font-weight: 700; letter-spacing: -0.01em; }
+      .card .tag { color: #D4921E; font-size: 30px; font-weight: 700; margin-top: 16px; letter-spacing: .02em; }
+      .card .cta { margin-top: 56px; color: #0D3D24; font-size: 27px; font-weight: 700;
+        background: #F2C572; padding: 18px 44px; border-radius: 50px; }
+      .card .flag { position: absolute; top: 130px; display: flex; gap: 8px; }
+      .card .flag span { width: 44px; height: 30px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="26" data-width="1080" data-height="1920">
+
+      <!-- Scene 0 : intro logo -->
+      <div id="s-intro" class="card clip" data-start="0" data-duration="2.5" data-track-index="0">
+        <div class="flag"><span style="background:#F77F00"></span><span style="background:#fff"></span><span style="background:#0D5C35"></span></div>
+        <img class="logo" src="capture/assets/logo.jpg" alt="Le Grenier CI">
+        <div class="brand">le Grenier</div>
+        <div class="tag">MARKETPLACE CÔTE D'IVOIRE</div>
+      </div>
+
+      <!-- Scenes 1..N : screenshots, injected by script below -->
+      <div id="scene-host"></div>
+
+      <!-- Scene stat card -->
+      <div id="s-stat" class="card clip" data-start="17.0" data-duration="2.7" data-track-index="0">
+        <div class="brand" style="font-size:64px">Partout en<br>Côte d'Ivoire</div>
+        <div class="tag" style="margin-top:26px">📱 Sur votre téléphone, à tout moment</div>
+      </div>
+
+      <!-- Scene outro -->
+      <div id="s-outro" class="card clip" data-start="19.7" data-duration="6.3" data-track-index="0">
+        <img class="logo" src="capture/assets/logo.jpg" alt="Le Grenier CI">
+        <div class="brand">le Grenier</div>
+        <div class="tag">Échangez. Vendez. Trouvez.</div>
+        <div class="cta">Téléchargez dès aujourd'hui</div>
+      </div>
+
+      <audio id="voiceover" class="clip" data-start="2.3" data-duration="19.221" data-volume="1" src="audio/voiceover.wav"></audio>
+    </div>
+
+    <script>
+      // ── Données des scènes "capture d'écran" — pilotées par un tableau pour
+      // éviter de dupliquer 10 fois la même structure HTML/GSAP à la main.
+      const SCENES = [
+        { img: 'capture/screenshots/categories/accueil.png',     cat: 'Un grenier, tous les rayons',  sub: "Tout ce dont vous avez besoin, en un seul endroit", start: 2.3,  dur: 3.0 },
+        { img: 'capture/screenshots/categories/marche.png',      cat: 'Le Marché',                    sub: 'Achetez et vendez entre particuliers',              start: 5.3,  dur: 1.05, pill: '🛍️ Annonces' },
+        { img: 'capture/screenshots/categories/boulots.png',     cat: 'Boulots & Artisans',            sub: 'Trouvez un artisan de confiance près de chez vous', start: 6.35, dur: 1.05, pill: '🔧 Artisans' },
+        { img: 'capture/screenshots/categories/nounou.png',      cat: 'Nounous',                       sub: 'Des nounous vérifiées pour vos enfants',            start: 7.4,  dur: 1.05, pill: '🍼 Nounous' },
+        { img: 'capture/screenshots/categories/logement.png',    cat: 'Logements',                     sub: 'Trouvez le logement idéal',                         start: 8.45, dur: 1.05, pill: '🏠 Logements' },
+        { img: 'capture/screenshots/categories/livraison.png',   cat: 'Livraison & Covoiturage',       sub: 'Réservez une course ou une livraison en quelques secondes', start: 9.5, dur: 2.1, pill: '🛵 Livraison' },
+        { img: 'capture/screenshots/categories/supermarche.png', cat: 'Supermarché en ligne',           sub: 'Faites vos courses sans sortir de chez vous',       start: 11.6, dur: 2.1, pill: '🛒 Supermarché' },
+        { img: 'capture/screenshots/categories/auto.png',        cat: 'Véhicules',                     sub: 'Achetez ou louez un véhicule',                      start: 13.7, dur: 1.1, pill: '🚗 Véhicules' },
+        { img: 'capture/screenshots/categories/dons.png',        cat: 'Dons',                          sub: 'Offrez une seconde vie à vos objets',               start: 14.8, dur: 1.1, pill: '🎁 Dons' },
+        { img: 'capture/screenshots/categories/beaute.png',      cat: 'Beauté',                        sub: 'Réservez votre salon de beauté',                    start: 15.9, dur: 1.1, pill: '💇 Beauté' },
+      ];
+
+      const host = document.getElementById('scene-host');
+      SCENES.forEach((s, i) => {
+        const el = document.createElement('div');
+        el.className = 'scene clip';
+        el.id = 'scene-' + i;
+        el.dataset.start = String(s.start);
+        el.dataset.duration = String(s.dur);
+        el.dataset.trackIndex = '0';
+        el.innerHTML = `
+          <img class="bg-img" src="${s.img}" alt="${s.cat}">
+          ${s.pill ? `<div class="pill">${s.pill}</div>` : ''}
+          <div class="scrim"></div>
+          <div class="label"><div class="cat">${s.cat}</div><div class="sub">${s.sub}</div></div>
+        `;
+        host.appendChild(el);
+      });
+
+      // ── Timeline ──
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Intro : logo + marque, léger zoom + fondu.
+      tl.fromTo('#s-intro', { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0);
+      tl.fromTo('#s-intro .logo, #s-intro .brand, #s-intro .tag, #s-intro .flag',
+        { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08 }, 0.15);
+      tl.to('#s-intro', { opacity: 0, duration: 0.35 }, 2.15);
+
+      // Scènes captures : fondu + zoom "Ken Burns" doux, texte qui glisse.
+      SCENES.forEach((s) => {
+        const sel = '#scene-' + SCENES.indexOf(s);
+        const fade = Math.min(0.35, s.dur * 0.28);
+        tl.fromTo(sel, { opacity: 0 }, { opacity: 1, duration: fade }, s.start);
+        tl.fromTo(sel + ' .bg-img', { scale: 1.04 }, { scale: 1.16, duration: s.dur + fade, ease: 'none' }, s.start);
+        tl.fromTo(sel + ' .cat, ' + sel + ' .sub',
+          { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.06 }, s.start + fade * 0.6);
+        if (s.pill) tl.fromTo(sel + ' .pill', { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.35 }, s.start + 0.05);
+        tl.to(sel, { opacity: 0, duration: fade }, s.start + s.dur - fade * 0.4);
+      });
+
+      // Carte statistique.
+      tl.fromTo('#s-stat', { opacity: 0 }, { opacity: 1, duration: 0.35 }, 17.0);
+      tl.fromTo('#s-stat .brand, #s-stat .tag', { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.1 }, 17.15);
+      tl.to('#s-stat', { opacity: 0, duration: 0.35 }, 19.35);
+
+      // Outro : logo + tagline + CTA, tient jusqu'à la fin.
+      tl.fromTo('#s-outro', { opacity: 0 }, { opacity: 1, duration: 0.45 }, 19.7);
+      tl.fromTo('#s-outro .logo', { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.55, ease: 'back.out(1.6)' }, 19.85);
+      tl.fromTo('#s-outro .brand, #s-outro .tag, #s-outro .cta',
+        { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.12 }, 20.15);
+
+      window.__timelines['main'] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

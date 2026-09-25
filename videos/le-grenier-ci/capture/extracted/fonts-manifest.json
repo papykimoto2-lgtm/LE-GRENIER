@@ -1,0 +1,166 @@
+{
+  "files": [
+    {
+      "file": "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yygg_vb.woff2",
+      "family": "Plus Jakarta Sans",
+      "rawFamily": "Plus Jakarta Sans",
+      "subfamily": "Regular",
+      "postscript": "PlusJakartaSans-Regular",
+      "weight": 400,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko40yygg_vbd-E.woff2",
+      "family": "Plus Jakarta Sans",
+      "rawFamily": "Plus Jakarta Sans",
+      "subfamily": "Regular",
+      "postscript": "PlusJakartaSans-Regular",
+      "weight": 400,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko50yygg_vbd-E.woff2",
+      "family": "Plus Jakarta Sans",
+      "rawFamily": "Plus Jakarta Sans",
+      "subfamily": "Regular",
+      "postscript": "PlusJakartaSans-Regular",
+      "weight": 400,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko70yygg_vbd-E.woff2",
+      "family": "Plus Jakarta Sans",
+      "rawFamily": "Plus Jakarta Sans",
+      "subfamily": "Regular",
+      "postscript": "PlusJakartaSans-Regular",
+      "weight": 400,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYp3tKky2F7i6C.woff2",
+      "family": "Cormorant Garamond",
+      "rawFamily": "Cormorant Garamond Light",
+      "subfamily": "Regular",
+      "postscript": "CormorantGaramond-Light",
+      "weight": 300,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYpHtKky2F7i6C.woff2",
+      "family": "Cormorant Garamond",
+      "rawFamily": "Cormorant Garamond Light",
+      "subfamily": "Regular",
+      "postscript": "CormorantGaramond-Light",
+      "weight": 300,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYpntKky2F7i6C.woff2",
+      "family": "Cormorant Garamond",
+      "rawFamily": "Cormorant Garamond Light",
+      "subfamily": "Regular",
+      "postscript": "CormorantGaramond-Light",
+      "weight": 300,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYqXtKky2F7g.woff2",
+      "family": "Cormorant Garamond",
+      "rawFamily": "Cormorant Garamond Light",
+      "subfamily": "Regular",
+      "postscript": "CormorantGaramond-Light",
+      "weight": 300,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYrXtKky2F7i6C.woff2",
+      "family": "Cormorant Garamond",
+      "rawFamily": "Cormorant Garamond Light",
+      "subfamily": "Regular",
+      "postscript": "CormorantGaramond-Light",
+      "weight": 300,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    }
+  ],
+  "families": [
+    {
+      "family": "Cormorant Garamond",
+      "weights": [
+        300
+      ],
+      "variable": true,
+      "fileCount": 5,
+      "files": [
+        "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYp3tKky2F7i6C.woff2",
+        "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYpHtKky2F7i6C.woff2",
+        "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYpntKky2F7i6C.woff2",
+        "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYqXtKky2F7g.woff2",
+        "co3bmX5slCNuHLi8bLeY9MK7whWMhyjYrXtKky2F7i6C.woff2"
+      ]
+    },
+    {
+      "family": "Plus Jakarta Sans",
+      "weights": [
+        400
+      ],
+      "variable": true,
+      "fileCount": 4,
+      "files": [
+        "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yygg_vb.woff2",
+        "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko40yygg_vbd-E.woff2",
+        "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko50yygg_vbd-E.woff2",
+        "LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko70yygg_vbd-E.woff2"
+      ]
+    }
+  ],
+  "unidentified": [],
+  "meta": {
+    "generatedAt": "2026-09-25T08:24:11.502Z",
+    "tool": "fontkit"
+  }
+}

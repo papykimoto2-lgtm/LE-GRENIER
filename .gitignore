@@ -1,0 +1,6 @@
+node_modules/
+
+# HyperFrames skill tooling (installed via `npx skills add`), not app content
+.agents/
+.claude/
+skills-lock.json
