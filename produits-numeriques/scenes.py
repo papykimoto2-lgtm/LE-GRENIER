@@ -408,3 +408,6 @@ SCENES = {
                       ("photo", "16779591", 0.3), g2_clients, ("photo", "7491011", 0.5), ("photo", "7552575", 0.4), g2_plan],
     },
 }
+
+# Version resserrée du récit : même couverture et mêmes photos de parties.
+SCENES["livre-ne-plus-abandonner-court"] = SCENES["livre-ne-plus-abandonner"]

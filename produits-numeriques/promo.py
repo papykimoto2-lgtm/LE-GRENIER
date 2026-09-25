@@ -38,6 +38,11 @@ LIVRES = [
      "accroche": "Le plan complet pour démarrer petit, sans s'endetter, et grandir.",
      "prix": "10 000 F", "fonce": "#5B2466", "couleur": "#7C3A8A",
      "points": ["Répartition exacte des 50 000 F", "Calcul des prix sans perte", "Plan d'action 60 jours"]},
+    {"slug": "ne-plus-abandonner", "fichier": "livre-ne-plus-abandonner-court",
+     "titre": "Le jour où j'ai décidé de ne plus abandonner",
+     "accroche": "Licencié en 2022. Des années de procédure. Et une victoire qu'il a encore fallu faire exécuter.",
+     "prix": "5 000 F", "fonce": "#2A1215", "couleur": "#9A2B2B",
+     "points": ["Une histoire vraie", "Gagner n'est pas encaisser", "L'IA comme alliée"]},
 ]
 CANAUX = {"statut": "qr-statut", "carre": "qr-reseaux", "flyer": "qr-flyer"}
 
@@ -71,6 +76,7 @@ def page(livre, format_, qr_uri, couv_uri):
     w, h = {"statut": (1080, 1920), "carre": (1080, 1080), "flyer": (1240, 1754)}[format_]
     points = "".join(f"<li>✅ {html.escape(p)}</li>" for p in livre["points"])
     vertical = format_ != "carre"
+    long = len(livre["titre"]) > 32  # titre long : on réduit titre et couverture pour garder le QR visible
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face {{ font-family: Poppins; font-weight: 400; src: url('../../polices/poppins-latin-400-normal.woff2'); }}
 @font-face {{ font-family: Poppins; font-weight: 700; src: url('../../polices/poppins-latin-700-normal.woff2'); }}
@@ -82,8 +88,8 @@ body {{ width: {w}px; height: {h}px; font-family: Poppins, 'Noto Color Emoji', s
 .c {{ height: 100%; display: flex; flex-direction: {'column' if vertical else 'row'}; align-items: center;
   justify-content: space-between; padding: {'90px 80px' if vertical else '60px'}; gap: {'40px' if vertical else '50px'}; text-align: {'center' if vertical else 'left'}; }}
 .marque {{ font-size: {26 if vertical else 22}px; letter-spacing: .2em; font-weight: 800; opacity: .8; text-transform: uppercase; }}
-.couv {{ height: {760 if format_ == 'statut' else 560 if format_ == 'flyer' else 600}px; flex-shrink: 0; border-radius: 14px; box-shadow: 0 30px 70px rgba(0,0,0,.45); transform: rotate(-2deg); }}
-h1 {{ font-family: Fraunces, serif; font-weight: 900; font-size: {84 if vertical else 50}px; line-height: 1.02; margin: 14px 0 18px; }}
+.couv {{ height: {(640 if long else 760) if format_ == 'statut' else (480 if long else 560) if format_ == 'flyer' else 600}px; flex-shrink: 0; border-radius: 14px; box-shadow: 0 30px 70px rgba(0,0,0,.45); transform: rotate(-2deg); }}
+h1 {{ font-family: Fraunces, serif; font-weight: 900; font-size: {(66 if long else 84) if vertical else (44 if long else 50)}px; line-height: 1.02; margin: 14px 0 18px; }}
 .accroche {{ margin-bottom: {0 if vertical else 30}px; font-size: {34 if vertical else 24}px; line-height: 1.35; opacity: .95; }}
 ul {{ list-style: none; padding: 0; margin: 26px 0; font-size: {32 if vertical else 26}px; font-weight: 700; line-height: 1.7; }}
 .achat {{ display: flex; align-items: center; gap: {36 if vertical else 24}px; background: #fff; color: #1F1A17; border-radius: 34px; padding: 28px 34px;

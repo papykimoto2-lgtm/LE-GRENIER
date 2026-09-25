@@ -96,6 +96,7 @@ p { text-align: justify; hyphens: auto; }
 .sans-illus h2 { color: var(--f); font-size: 20pt; }
 .ouverture + p { font-family: 'Fraunces', serif; font-weight: 700; font-size: 13pt; line-height: 1.35; color: var(--c); text-align: left; }
 .sommaire li { break-inside: avoid; }
+.sep { text-align: center; color: #F0A830; font-size: 11pt; margin: 4mm 0; letter-spacing: .5em; }
 .ouverture + p strong { color: inherit; }
 .pf-texte { font-size: 8.8pt; }
 .partie { page-break-before: always; page-break-after: always; height: 178mm; display: flex; flex-direction: column;
@@ -206,7 +207,9 @@ def construire(fichier):
     corps = re.sub(r"(?m)^(> ?\S.*)\n(?=> ?\S)", r"\1  \n", corps)
     global CHAT_TITRE
     CHAT_TITRE = tuple(meta.get("bulles", "Modèle à copier | adapte le nom et les prix").split(" | "))
-    h = markdown.markdown(corps, extensions=["tables", "sane_lists"])
+    # Récit : un retour à la ligne dans le texte reste un retour à la ligne (phrases courtes, rythme).
+    extensions = ["tables", "sane_lists"] + (["nl2br"] if meta.get("style") == "recit" else [])
+    h = markdown.markdown(corps, extensions=extensions)
     h = re.sub(r"⟦(.*?)⟧", r'<mark class="acompleter">\1</mark>', h)
     h = cases(exercices(encadres(h)))
     h, titres = ouvertures(h, slug, meta)
