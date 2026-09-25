@@ -1,8 +1,9 @@
 """Construit les guides PDF illustrés de la boutique numérique.
 
 Usage : python3 produits-numeriques/build.py
-Entrée : produits-numeriques/src/*.md (en-tête : titre, sous_titre, edition,
-         couleur, fonce, badges « a | b | c »)
+Entrée : produits-numeriques/src/guide-*.md et livre-*.md (en-tête : titre,
+         sous_titre, edition, couleur, fonce, badges « a | b | c » ; options :
+         marque, sommaire_titre, sommaire_intro, style: recit)
 Sortie : produits-numeriques/dist/<slug>.pdf (A5) et <slug>-couverture.png
 
 Conventions dans le Markdown :
@@ -14,6 +15,7 @@ Conventions dans le Markdown :
   > **Conseil / Astuce / Important / Le dernier mot …** encadrés colorés
   - [ ] …  case à cocher
   ### Exercice  → encadré « À toi de jouer »
+  ## Partie I — …  /  ## Prologue — …  /  ## Épilogue — …  (récits)
 """
 import html
 import pathlib
@@ -83,6 +85,31 @@ body { font-family: 'Poppins', 'Noto Color Emoji', sans-serif; margin: 0; color:
 """
 
 
+# Récit (style: recit) : texte justifié, lettrine, chapitres sobres, pages de partie.
+CSS_RECIT = """
+body { font-size: 9.4pt; line-height: 1.68; }
+p { text-align: justify; hyphens: auto; }
+.sommaire li { padding: .7mm 0; font-size: 8.8pt; }
+.sommaire li.som-partie { margin-top: 2mm; border-bottom: 2px solid var(--c); }
+.sommaire li.som-partie .som-num { background: var(--f); }
+.sans-illus { background: none; color: inherit; border-radius: 0; padding: 14mm 0 2mm; border-bottom: 2px solid #F0A830; }
+.sans-illus h2 { color: var(--f); font-size: 20pt; }
+.ouverture + p { font-family: 'Fraunces', serif; font-weight: 700; font-size: 13pt; line-height: 1.35; color: var(--c); text-align: left; }
+.sommaire li { break-inside: avoid; }
+.ouverture + p strong { color: inherit; }
+.pf-texte { font-size: 8.8pt; }
+.partie { page-break-before: always; page-break-after: always; height: 178mm; display: flex; flex-direction: column;
+  background: var(--f); color: #fff; border-radius: 4mm; overflow: hidden; }
+.partie-photo { width: 100%; height: 100mm; object-fit: cover; display: block; }
+.partie-texte { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 9mm; }
+.partie .ouv-label { background: #F0A830; color: #1F1A17; align-self: flex-start; }
+.partie h2 { font-family: 'Fraunces', serif; font-weight: 900; font-size: 26pt; line-height: 1.05; margin: 3mm 0 0; color: #fff; }
+blockquote { font-style: normal; }
+.citation-forte { font-family: 'Fraunces', serif; font-weight: 700; font-size: 12pt; line-height: 1.4; color: var(--f);
+  text-align: center; margin: 6mm 4mm; padding: 4mm 0; border-top: 1px solid #F0A830; border-bottom: 1px solid #F0A830; }
+"""
+
+
 # ── Transformations du HTML produit par Markdown ────────────────────────
 CHAT_TITRE = ("Modèle à copier", "adapte le nom et les prix")
 
@@ -106,6 +133,8 @@ def encadres(h):
         premier = re.sub(r"<[^>]+>", "", contenu)[:40].strip()
         if premier.startswith(("💬", "🙋")):
             return _bulles(contenu)
+        if premier.startswith("❝"):
+            return f'<div class="citation-forte">{contenu.replace("❝", "", 1)}</div>'
         for emoji, classe, etiquette in [("📣", "post", ""), ("📖", "histoire", ""), ("🚀", "etape", "")]:
             if premier.startswith(emoji):
                 contenu = contenu.replace(emoji, "", 1)
@@ -138,16 +167,22 @@ def cases(h):
 
 def ouvertures(h, slug, meta):
     scenes = SCENES.get(slug, {}).get("chapitres", [])
+    # Récit : les photos sont rattachées à une étiquette (« Partie I »…).
+    par_label = SCENES.get(slug, {}).get("par_label", {})
     titres = []
     compteur = iter(range(10 ** 6))
 
     def remplacer(m):
         i = next(compteur)
         brut = m.group(1)
-        mc = re.match(r"Chapitre (\d+) — (.*)", brut)
-        label, titre = (f"Chapitre {mc.group(1)}", mc.group(2)) if mc else ("", brut)
+        mc = re.match(r"(Chapitre \d+|Partie [IVX]+|Prologue|Épilogue|Annexe) — (.*)", brut)
+        label, titre = (mc.group(1), mc.group(2)) if mc else ("", brut)
         titres.append((label, titre))
-        sc = scenes[i] if i < len(scenes) else None
+        sc = par_label.get(label) if par_label else (scenes[i] if i < len(scenes) else None)
+        if label.startswith("Partie"):
+            photo_partie = f'<img class="partie-photo" src="{photo(sc[1], 1000, 900, sc[2])}" alt="">' if sc else ""
+            return (f'<section class="partie">{photo_partie}<div class="partie-texte">'
+                    f'<div class="ouv-label">{label}</div><h2>{titre}</h2></div></section>')
         if isinstance(sc, tuple):
             illus = f'<img class="ouv-photo" src="{photo(sc[1], 1500, 700, sc[2])}" alt="">'
         else:
@@ -178,9 +213,11 @@ def construire(fichier):
     c, f = meta["couleur"], meta["fonce"]
     badges = "".join(f"<span>{html.escape(b.strip())}</span>" for b in meta.get("badges", "").split("|") if b.strip())
 
-    sommaire = "".join(
-        f'<li><span class="som-num">{(l.split()[-1] if l else "★")}</span><span><small>{l or "&nbsp;"}</small>{t}</span></li>'
-        for l, t in titres)
+    def ligne_sommaire(l, t):
+        classe = ' class="som-partie"' if l.startswith("Partie") else ""
+        num = l.split()[-1] if l.startswith(("Chapitre", "Partie")) else "★"
+        return f'<li{classe}><span class="som-num">{num}</span><span><small>{l or "&nbsp;"}</small>{t}</span></li>'
+    sommaire = "".join(ligne_sommaire(l, t) for l, t in titres)
 
     variables = f":root {{ --c: {c}; --f: {f}; }}"
     cp = SCENES[slug].get("couverture_photo")
@@ -202,7 +239,10 @@ def construire(fichier):
 .c-haut { padding: 0 12mm 21mm !important; }
 .c-degrade { background: linear-gradient(0deg, var(--f) 0%, color-mix(in srgb, var(--f) 90%, transparent) 30%, transparent 55%) !important; }
 """ if SCENES[slug].get("titre_en_bas") else "")
-    idents = [sc[1] for sc in SCENES[slug]["chapitres"] if isinstance(sc, tuple)] + ([cp[0]] if cp else [])
+    idents = ([sc[1] for sc in SCENES[slug].get("chapitres", []) if isinstance(sc, tuple)]
+              + [sc[1] for sc in SCENES[slug].get("par_label", {}).values()] + ([cp[0]] if cp else []))
+    marque = html.escape(meta.get("marque", "Le Grenier CI · Guide pratique"))
+    css_recit = CSS_RECIT if meta.get("style") == "recit" else ""
     fichier_preface = SRC / f"preface-{slug}.md"
     if not fichier_preface.exists():
         fichier_preface = SRC / "preface.md"
@@ -231,7 +271,7 @@ h1 .or {{ color: #F0A830; }}
 .c-degrade {{ position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, var(--f) 0%, color-mix(in srgb, var(--f) 88%, transparent) 30%, transparent 58%, transparent 80%, rgba(0,0,0,.55) 100%); }}
 .c-bas {{ z-index: 2; position: absolute; left: 0; right: 0; bottom: 0; padding: 3mm 12mm; font-size: 7pt; background: rgba(0,0,0,.28); display: flex; justify-content: space-between; }}
 </style></head><body><section class="couverture">
-<div class="c-haut"><div class="marque">Le Grenier CI · Guide pratique</div>
+<div class="c-haut"><div class="marque">{marque}</div>
 <h1{titre_classe}>{titre_html}</h1><div class="sous">{html.escape(meta['sous_titre'])}</div>
 <div class="badges">{badges}</div></div>
 {fond_couverture}
@@ -311,10 +351,11 @@ blockquote p:last-child {{ margin: 0; }}
 .atoi {{ margin: 5mm 0; padding: 3.5mm 4mm; border: 1.8px dashed var(--c); border-radius: 3.5mm; background: #fff; page-break-inside: avoid; }}
 .atoi-titre {{ display: inline-block; background: var(--c); color: #fff; font-weight: 800; font-size: 8.4pt; padding: 1mm 3mm; border-radius: 99px; margin-bottom: 2.5mm; }}
 .atoi p:last-child, .atoi ul:last-child, .atoi table:last-child {{ margin-bottom: 0; }}
+{css_recit}
 </style></head><body>
 {preface}
-<section class="sommaire"><h2>Au programme</h2>
-<div class="intro">Lis un chapitre par jour et coche les cases au fur et à mesure.</div><ol>{sommaire}</ol></section>
+<section class="sommaire"><h2>{html.escape(meta.get("sommaire_titre", "Au programme"))}</h2>
+<div class="intro">{html.escape(meta.get("sommaire_intro", "Lis un chapitre par jour et coche les cases au fur et à mesure."))}</div><ol>{sommaire}</ol></section>
 {h}
 <div class="credits">Photos : {html.escape(credits_photos(idents))} (Pexels, licence Pexels). Illustrations : Le Grenier CI.</div>
 </body></html>"""
@@ -338,7 +379,9 @@ def assembler(slug):
 
 
 if __name__ == "__main__":
-    guides = [construire(f) for f in sorted(SRC.glob("guide-*.md"))]
+    # « python3 build.py livre » ne reconstruit que les fichiers dont le nom contient « livre ».
+    filtre = sys.argv[1] if len(sys.argv) > 1 else ""
+    guides = [construire(f) for f in sorted(SRC.glob("guide-*.md")) + sorted(SRC.glob("livre-*.md")) if filtre in f.stem]
     subprocess.run(["node", str(RACINE / "build-pdf.js")] + [s for s, _ in guides], check=True)
     for slug, _ in guides:
         assembler(slug)
