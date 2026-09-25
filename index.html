@@ -13560,9 +13560,22 @@ function _buildEditForm(type, d) {
 
   let f = '';
   if (type === 'marché') {
-    f += `<div class="form-row">${inp('titre','Titre *',d.titre,'text','Titre de l\'annonce')}${sel('cat','Catégorie *',d.cat,CATS_MARCHE)}</div>`;
-    f += `<div class="form-row">${sel('etat','État *',d.etat,ETATS)}${inp('valeur','Prix (FCFA) *',d.valeur,'number','0')}</div>`;
-    f += sel('ville','Ville *',d.ville,ZONES);
+    // La modale d'édition ne connaît que la liste CATS_MARCHE, mais une annonce
+    // peut venir de n'importe quel onglet (Logement, Auto, Beauté...) avec une
+    // catégorie hors de cette liste (ex: "Terrain"). Sans ce garde-fou, le
+    // <select> ne trouverait aucune option correspondante et retomberait sur
+    // la première de la liste au moment d'enregistrer — corrompant
+    // silencieusement la catégorie réelle de l'annonce.
+    const catsEdit = (d.cat && !CATS_MARCHE.includes(d.cat)) ? [d.cat, ...CATS_MARCHE] : CATS_MARCHE;
+    const zonesEdit = (d.ville && !ZONES.includes(d.ville)) ? [d.ville, ...ZONES] : ZONES;
+    f += `<div class="form-row">${inp('titre','Titre *',d.titre,'text','Titre de l\'annonce')}${sel('cat','Catégorie *',d.cat,catsEdit)}</div>`;
+    // Le champ "État" (Neuf/Bon état...) n'a de sens que pour un objet physique.
+    // Une annonce de service (boulots, beauté, info...) n'en a jamais eu — le
+    // forcer ici lui collerait un badge "Neuf" incohérent et visible publiquement.
+    f += d.etat
+      ? `<div class="form-row">${sel('etat','État *',d.etat,ETATS)}${inp('valeur','Prix (FCFA) *',d.valeur,'number','0')}</div>`
+      : inp('valeur','Prix (FCFA) *',d.valeur,'number','0');
+    f += sel('ville','Ville *',d.ville,zonesEdit);
     f += ta('desc','Description *',d.desc,'Décrivez l\'article...',4);
   } else if (type === 'boulot') {
     f += `<div class="form-row">${sel('metier','Métier *',d.metier,METIERS)}${sel('zone','Zone *',d.zone,ZONES)}</div>`;
@@ -13695,8 +13708,11 @@ function sauvegarderEdit() {
 
   let updates = {};
   if (type === 'marché') {
-    if (!v('titre')||!v('cat')||!v('etat')||!v('valeur')) { toast('Remplissez les champs obligatoires (*)','erreur'); return; }
-    updates = { titre:v('titre'), cat:v('cat'), etat:v('etat'), valeur:parseFloat(v('valeur'))||0, ville:v('ville'), desc:v('desc'), photos:_editPhotos.map(p=>p.src), video:_editVideo?_editVideo.src:null };
+    const item = DAO._local.annonces.find(a=>a.id===id);
+    const aEtat = !!(item && item.etat);
+    if (!v('titre')||!v('cat')||!v('valeur')||(aEtat && !v('etat'))) { toast('Remplissez les champs obligatoires (*)','erreur'); return; }
+    updates = { titre:v('titre'), cat:v('cat'), valeur:parseFloat(v('valeur'))||0, ville:v('ville'), desc:v('desc'), photos:_editPhotos.map(p=>p.src), video:_editVideo?_editVideo.src:null };
+    if (aEtat) updates.etat = v('etat');
     const idx = DAO._local.annonces.findIndex(a=>a.id===id);
     if (idx>=0) Object.assign(DAO._local.annonces[idx], updates);
   } else if (type === 'boulot') {
