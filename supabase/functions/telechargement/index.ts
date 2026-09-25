@@ -5,6 +5,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //  fichier d'un produit numérique (bucket privé "produits-fichiers").
 //
 //  POST { produit_id } → { url } (valable 10 minutes)
+//  POST { jeton }      → { url } pour un achat express sans compte, une fois
+//                        le paiement confirmé ; { statut: "attente" } avant.
 //  Accès accordé si l'appelant :
 //    - a un paiement confirmé de ce produit, ou
 //    - a un abonnement Business actif (formations incluses), ou
@@ -54,18 +56,30 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     if (req.method !== "POST") return json({ error: "Route inconnue" }, 404);
-    const user = await identifierAppelant(req);
-    if (!user) return json({ error: "Non authentifié" }, 401);
-
     const body = await req.json().catch(() => ({}));
-    const produitId = Math.trunc(Number(body.produit_id) || 0);
-    if (!produitId) return json({ error: "produit_id requis" }, 400);
+    let produitId: number;
 
-    const pr = await sb(`/rest/v1/produits_numeriques?id=eq.${produitId}&select=id,slug,fichier_path`);
+    const jeton = String(body.jeton || "");
+    if (jeton) {
+      // Achat express sans compte : le jeton secret remplace la connexion.
+      if (!/^[a-f0-9]{48}$/.test(jeton)) return json({ error: "Lien invalide" }, 400);
+      const r = await sb(`/rest/v1/paiements?type=eq.produit&metadata->>jeton=eq.${jeton}&select=statut,metadata&limit=1`);
+      const achat = r.ok ? (await r.json())[0] : null;
+      if (!achat) return json({ error: "Lien invalide" }, 404);
+      if (achat.statut === "attente") return json({ statut: "attente" });
+      if (achat.statut !== "confirme") return json({ error: "Paiement refusé" }, 403);
+      produitId = Math.trunc(Number(achat.metadata?.produit_id) || 0);
+    } else {
+      const user = await identifierAppelant(req);
+      if (!user) return json({ error: "Non authentifié" }, 401);
+      produitId = Math.trunc(Number(body.produit_id) || 0);
+      if (!produitId) return json({ error: "produit_id requis" }, 400);
+      if (!(await aAcces(user, produitId))) return json({ error: "Achat requis pour télécharger ce produit" }, 403);
+    }
+
+    const pr = await sb(`/rest/v1/produits_numeriques?id=eq.${produitId}&select=id,slug,titre,fichier_path`);
     const produit = pr.ok ? (await pr.json())[0] : null;
     if (!produit || !produit.fichier_path) return json({ error: "Fichier indisponible" }, 404);
-
-    if (!(await aAcces(user, produitId))) return json({ error: "Achat requis pour télécharger ce produit" }, 403);
 
     const nomFichier = `${produit.slug}.pdf`;
     const s = await sb(`/storage/v1/object/sign/${BUCKET}/${produit.fichier_path}`, {
@@ -73,7 +87,7 @@ Deno.serve(async (req: Request) => {
     });
     const signe = s.ok ? await s.json() : null;
     if (!signe || !signe.signedURL) return json({ error: "Lien de téléchargement indisponible" }, 500);
-    return json({ url: `${SUPABASE_URL}/storage/v1${signe.signedURL}&download=${encodeURIComponent(nomFichier)}`, expire_dans: DUREE_LIEN_S });
+    return json({ url: `${SUPABASE_URL}/storage/v1${signe.signedURL}&download=${encodeURIComponent(nomFichier)}`, expire_dans: DUREE_LIEN_S, titre: produit.titre, produit_id: produit.id });
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
