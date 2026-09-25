@@ -281,6 +281,9 @@ h1 .or {{ color: #F0A830; }}
 <div class="c-bas"><span>{html.escape(meta['edition'])} · Côte d'Ivoire</span><span>Usage personnel · ne pas partager</span></div>
 </section></body></html>"""
 
+    # Pied de page du PDF : « Le Grenier CI » par défaut (produits de la marque),
+    # mais un récit personnel peut le retirer (meta « pied: <texte> » ou « pied: » pour rien).
+    pied = meta.get("pied", f"{meta['titre']} · Le Grenier CI")
     corps_html = f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{html.escape(meta['titre'])}</title>
 <style>{POLICES}{CSS_COMMUN}{variables}
 @page {{ size: A5; margin: 14mm 13mm 16mm; }}
@@ -355,7 +358,7 @@ blockquote p:last-child {{ margin: 0; }}
 .atoi-titre {{ display: inline-block; background: var(--c); color: #fff; font-weight: 800; font-size: 8.4pt; padding: 1mm 3mm; border-radius: 99px; margin-bottom: 2.5mm; }}
 .atoi p:last-child, .atoi ul:last-child, .atoi table:last-child {{ margin-bottom: 0; }}
 {css_recit}
-</style></head><body>
+</style></head><body data-pied="{html.escape(pied)}">
 {preface}
 <section class="sommaire"><h2>{html.escape(meta.get("sommaire_titre", "Au programme"))}</h2>
 <div class="intro">{html.escape(meta.get("sommaire_intro", "Lis un chapitre par jour et coche les cases au fur et à mesure."))}</div><ol>{sommaire}</ol></section>
@@ -365,15 +368,17 @@ blockquote p:last-child {{ margin: 0; }}
     DIST.mkdir(exist_ok=True)
     (DIST / f"{slug}-couverture.html").write_text(couverture, encoding="utf-8")
     (DIST / f"{slug}-corps.html").write_text(corps_html, encoding="utf-8")
-    return slug, meta["titre"]
+    # Métadonnées du fichier PDF (visibles dans les propriétés du document) : un récit
+    # personnel porte le nom réel de son auteur, pas la marque, via meta « pdf_auteur ».
+    return slug, meta["titre"], meta.get("pdf_auteur", "Le Grenier CI")
 
 
-def assembler(slug):
+def assembler(slug, titre, auteur):
     sortie = PdfWriter()
     for partie in ("couverture", "corps"):
         for page in PdfReader(DIST / f"{slug}-{partie}.pdf").pages:
             sortie.add_page(page)
-    sortie.add_metadata({"/Title": slug, "/Author": "Le Grenier CI"})
+    sortie.add_metadata({"/Title": titre, "/Author": auteur})
     with open(DIST / f"{slug}.pdf", "wb") as f:
         sortie.write(f)
     for partie in ("couverture", "corps"):
@@ -385,6 +390,6 @@ if __name__ == "__main__":
     # « python3 build.py livre » ne reconstruit que les fichiers dont le nom contient « livre ».
     filtre = sys.argv[1] if len(sys.argv) > 1 else ""
     guides = [construire(f) for f in sorted(SRC.glob("guide-*.md")) + sorted(SRC.glob("livre-*.md")) if filtre in f.stem]
-    subprocess.run(["node", str(RACINE / "build-pdf.js")] + [s for s, _ in guides], check=True)
-    for slug, _ in guides:
-        assembler(slug)
+    subprocess.run(["node", str(RACINE / "build-pdf.js")] + [s for s, _, _ in guides], check=True)
+    for slug, titre, auteur in guides:
+        assembler(slug, titre, auteur)

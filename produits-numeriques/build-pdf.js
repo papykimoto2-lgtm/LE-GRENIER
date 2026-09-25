@@ -19,7 +19,9 @@ const DIST = path.join(__dirname, 'dist');
 
     await page.goto('file://' + path.join(DIST, slug + '-corps.html'), { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready);
-    const titre = (await page.title()).replace(/</g, '&lt;');
+    // « data-pied » (posé par build.py) porte le texte exact du pied de page ; il peut
+    // omettre la marque pour un récit personnel — voir l'option meta « pied » du guide.
+    const pied = (await page.locator('body').getAttribute('data-pied')) || '';
     await page.pdf({
       path: path.join(DIST, slug + '-corps.pdf'),
       preferCSSPageSize: true,
@@ -27,7 +29,7 @@ const DIST = path.join(__dirname, 'dist');
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
       footerTemplate: `<div style="font-size:7px;width:100%;padding:0 13mm;color:#8A857B;display:flex;justify-content:space-between;font-family:Arial">
-        <span>${titre} · Le Grenier CI</span><span class="pageNumber"></span></div>`,
+        <span>${pied}</span><span class="pageNumber"></span></div>`,
     });
   }
   await navigateur.close();
