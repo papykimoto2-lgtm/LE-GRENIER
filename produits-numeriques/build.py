@@ -21,14 +21,42 @@ import re
 import subprocess
 import sys
 
+import json
+
 import markdown
+from PIL import Image
 from pypdf import PdfReader, PdfWriter
 
 RACINE = pathlib.Path(__file__).parent
 SRC = RACINE / "src"
 DIST = RACINE / "dist"
+PHOTOS_BRUTES = RACINE / "photos-brutes"
+PHOTOS = RACINE / "photos"
+# Signature de la préface (à confirmer par l'auteur).
+AUTEUR = "Fondateur de Le Grenier CI · SANIX AFRICA Technologies"
 sys.path.insert(0, str(RACINE))
 from scenes import SCENES  # noqa: E402
+
+
+def photo(ident, w, h, fy=0.5, fx=0.5, zoom=1.0):
+    """Recadre une photo au format w×h autour du point (fx, fy) ; renvoie son chemin relatif à dist/."""
+    PHOTOS.mkdir(exist_ok=True)
+    sortie = PHOTOS / f"{ident}-{w}x{h}-{fx}-{fy}-{zoom}.jpg"
+    if not sortie.exists():
+        img = Image.open(PHOTOS_BRUTES / f"{ident}.jpg").convert("RGB")
+        iw, ih = img.size
+        ratio = w / h
+        cw, ch = (iw, iw / ratio) if iw / ih < ratio else (ih * ratio, ih)
+        cw, ch = cw / zoom, ch / zoom
+        x0 = min(max(fx * iw - cw / 2, 0), iw - cw)
+        y0 = min(max(fy * ih - ch / 2, 0), ih - ch)
+        img.crop((int(x0), int(y0), int(x0 + cw), int(y0 + ch))).resize((w, h), Image.LANCZOS).save(sortie, quality=86)
+    return f"../photos/{sortie.name}"
+
+
+def credits_photos(idents):
+    tous = json.loads((PHOTOS_BRUTES / "credits.json").read_text(encoding="utf-8"))
+    return ", ".join(sorted({tous[i]["auteur"] for i in idents if i in tous}))
 
 
 def lire(fichier):
@@ -116,7 +144,11 @@ def ouvertures(h, slug, meta):
         mc = re.match(r"Chapitre (\d+) — (.*)", brut)
         label, titre = (f"Chapitre {mc.group(1)}", mc.group(2)) if mc else ("", brut)
         titres.append((label, titre))
-        illus = scenes[i]() if i < len(scenes) else ""
+        sc = scenes[i] if i < len(scenes) else None
+        if isinstance(sc, tuple):
+            illus = f'<img class="ouv-photo" src="{photo(sc[1], 1500, 700, sc[2])}" alt="">'
+        else:
+            illus = sc() if sc else ""
         return (f'<section class="ouverture{"" if illus else " sans-illus"}">'
                 + (f'<div class="ouv-illus">{illus}</div>' if illus else "")
                 + (f'<div class="ouv-label">{label}</div>' if label else "")
@@ -145,6 +177,20 @@ def construire(fichier):
         for l, t in titres)
 
     variables = f":root {{ --c: {c}; --f: {f}; }}"
+    cp = SCENES[slug].get("couverture_photo")
+    if cp:
+        fond_couverture = (f'<img class="c-photo" src="{photo(cp[0], 1480, 2100, cp[2], cp[1])}" alt="">'
+                           '<div class="c-degrade"></div>')
+    else:
+        fond_couverture = f"<div class=\"c-illus\">{SCENES[slug]['couverture']().replace('xMidYMid meet', 'xMidYMax slice')}</div>"
+    idents = [sc[1] for sc in SCENES[slug]["chapitres"] if isinstance(sc, tuple)] + ([cp[0]] if cp else [])
+    preface_md = (SRC / "preface.md").read_text(encoding="utf-8").replace("{titre}", meta["titre"])
+    preface = ""
+    if (PHOTOS_BRUTES / "auteur.jpg").exists():
+        preface = (f'<section class="preface"><div class="pf-label">Préface</div><h2>Le mot de l\'auteur</h2>'
+                   f'<div class="pf-grille"><img class="pf-photo" src="{photo("auteur", 800, 1000, 0.5, 0.72, 1.45)}" alt="">'
+                   f'<div class="pf-texte">{markdown.markdown(preface_md)}'
+                   f'<div class="pf-signature">{html.escape(AUTEUR)}</div></div></div></section>')
     couverture = f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{html.escape(meta['titre'])}</title>
 <style>{POLICES}{CSS_COMMUN}{variables}
 @page {{ size: A5; margin: 0; }}
@@ -157,12 +203,14 @@ h1 {{ font-family: 'Fraunces', serif; font-weight: 900; font-size: 25pt; line-he
 .badges span {{ background: #F0A830; color: #1F1A17; font-size: 7.4pt; font-weight: 800; padding: 1.5mm 3mm; border-radius: 99px; }}
 .c-illus {{ flex: 1; display: flex; align-items: flex-end; margin-top: 2mm; }}
 .c-illus svg {{ width: 100%; height: 100%; display: block; }}
-.c-bas {{ position: absolute; left: 0; right: 0; bottom: 0; padding: 3mm 12mm; font-size: 7pt; background: rgba(0,0,0,.28); display: flex; justify-content: space-between; }}
+.c-photo {{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }}
+.c-degrade {{ position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, var(--f) 0%, color-mix(in srgb, var(--f) 88%, transparent) 30%, transparent 58%, transparent 80%, rgba(0,0,0,.55) 100%); }}
+.c-bas {{ z-index: 2; position: absolute; left: 0; right: 0; bottom: 0; padding: 3mm 12mm; font-size: 7pt; background: rgba(0,0,0,.28); display: flex; justify-content: space-between; }}
 </style></head><body><section class="couverture">
 <div class="c-haut"><div class="marque">Le Grenier CI · Guide pratique</div>
 <h1>{html.escape(meta['titre'])}</h1><div class="sous">{html.escape(meta['sous_titre'])}</div>
 <div class="badges">{badges}</div></div>
-<div class="c-illus">{SCENES[slug]['couverture']().replace('xMidYMid meet', 'xMidYMax slice')}</div>
+{fond_couverture}
 <div class="c-bas"><span>{html.escape(meta['edition'])} · Côte d'Ivoire</span><span>Usage personnel · ne pas partager</span></div>
 </section></body></html>"""
 
@@ -178,6 +226,14 @@ body {{ font-size: 9pt; line-height: 1.6; }}
 .som-num {{ flex: 0 0 7mm; height: 7mm; border-radius: 50%; background: var(--c); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; }}
 .ouverture {{ page-break-before: always; margin-bottom: 5mm; }}
 .ouv-illus svg {{ width: 100%; height: auto; display: block; border-radius: 4mm; }}
+.ouv-photo {{ width: 100%; height: auto; aspect-ratio: 1500 / 700; object-fit: cover; display: block; border-radius: 4mm; }}
+.preface {{ page-break-after: always; }}
+.pf-label {{ display: inline-block; background: var(--c); color: #fff; font-size: 7.4pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 1.2mm 3mm; border-radius: 99px; }}
+.preface h2 {{ font-family: 'Fraunces', serif; font-weight: 900; font-size: 19pt; color: var(--f); margin: 2.5mm 0 4mm; }}
+.pf-photo {{ float: right; width: 46mm; height: 57.5mm; object-fit: cover; border-radius: 3mm; margin: 0 0 3mm 4mm; box-shadow: 0 1mm 3mm rgba(0,0,0,.18); }}
+.pf-texte {{ font-size: 9.2pt; }}
+.pf-signature {{ margin-top: 4mm; padding-top: 2.5mm; border-top: 2px solid var(--c); font-family: 'Fraunces', serif; font-weight: 700; color: var(--f); font-size: 10pt; clear: both; }}
+.credits {{ margin-top: 8mm; font-size: 7pt; color: #8A857B; border-top: 1px solid #E4DED3; padding-top: 2mm; }}
 .ouv-label {{ display: inline-block; margin-top: 4mm; background: var(--c); color: #fff; font-size: 7.4pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 1.2mm 3mm; border-radius: 99px; }}
 .ouverture h2 {{ font-family: 'Fraunces', serif; font-weight: 900; font-size: 18pt; line-height: 1.15; color: var(--f); margin: 2.5mm 0 0; }}
 .sans-illus {{ background: var(--f); color: #fff; border-radius: 4mm; padding: 7mm 6mm; }}
@@ -231,9 +287,11 @@ blockquote p:last-child {{ margin: 0; }}
 .atoi-titre {{ display: inline-block; background: var(--c); color: #fff; font-weight: 800; font-size: 8.4pt; padding: 1mm 3mm; border-radius: 99px; margin-bottom: 2.5mm; }}
 .atoi p:last-child, .atoi ul:last-child, .atoi table:last-child {{ margin-bottom: 0; }}
 </style></head><body>
+{preface}
 <section class="sommaire"><h2>Au programme</h2>
 <div class="intro">Lis un chapitre par jour et coche les cases au fur et à mesure.</div><ol>{sommaire}</ol></section>
 {h}
+<div class="credits">Photos : {html.escape(credits_photos(idents))} (Pexels, licence Pexels). Illustrations : Le Grenier CI.</div>
 </body></html>"""
     DIST.mkdir(exist_ok=True)
     (DIST / f"{slug}-couverture.html").write_text(couverture, encoding="utf-8")
@@ -255,7 +313,7 @@ def assembler(slug):
 
 
 if __name__ == "__main__":
-    guides = [construire(f) for f in sorted(SRC.glob("*.md"))]
+    guides = [construire(f) for f in sorted(SRC.glob("guide-*.md"))]
     subprocess.run(["node", str(RACINE / "build-pdf.js")] + [s for s, _ in guides], check=True)
     for slug, _ in guides:
         assembler(slug)

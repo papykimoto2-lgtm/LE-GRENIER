@@ -288,15 +288,21 @@ def g2_plan():
     return scene(c, W, H)
 
 
+# Chaque ouverture de chapitre est soit une scène dessinée (fonction), soit une
+# photo réelle Pexels : ("photo", identifiant, point d'intérêt vertical 0→1).
+# Les pages chiffrées (graphiques, paiement, calendrier) restent dessinées.
 SCENES = {
     "guide-vendre-whatsapp-facebook": {
         "couverture": g1_couverture,
-        "chapitres": [g1_intro, g1_choisir, g1_whatsapp, g1_photos, g1_facebook, g1_vente,
-                      g1_paiement, g1_livraison, g1_plan, g1_grenier],
+        "couverture_photo": ("30677594", 0.5, 0.35),
+        "chapitres": [("photo", "6612222", 0.42), ("photo", "36943009", 0.5), ("photo", "27398372", 0.45),
+                      ("photo", "8154650", 0.55), ("photo", "17722443", 0.35), g1_vente,
+                      g1_paiement, ("photo", "34635135", 0.62), ("photo", "7191994", 0.5), ("photo", "7362929", 0.45)],
     },
     "guide-boutique-50000": {
         "couverture": g2_couverture,
-        "chapitres": [g2_intro, g2_mental, g2_produit, g2_repartition, g2_prix, g2_boutique,
-                      g2_clients, g2_caisse, g2_grandir, g2_plan],
+        "couverture_photo": ("30840030", 0.62, 0.4),
+        "chapitres": [g2_intro, ("photo", "19834923", 0.35), ("photo", "33490144", 0.3), g2_repartition, g2_prix,
+                      ("photo", "16779591", 0.3), g2_clients, ("photo", "7491011", 0.5), ("photo", "7552575", 0.4), g2_plan],
     },
 }
