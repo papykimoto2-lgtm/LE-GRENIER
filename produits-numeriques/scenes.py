@@ -393,6 +393,14 @@ SCENES = {
                       g3_prompt, ("photo", "33672079", 0.45), g3_paiement, g3_plateformes, g3_securite,
                       ("photo", "30690398", 0.4), g3_plan],
     },
+    # Récit : photo de l'auteur en couverture, une photo réelle par partie.
+    "livre-ne-plus-abandonner": {
+        "couverture_photo": ("auteur", 0.62, 0.42),
+        "titre_en_bas": True,
+        "par_label": {"Partie I": ("photo", "5700195", 0.3), "Partie II": ("photo", "5669619", 0.5),
+                      "Partie III": ("photo", "5668484", 0.4), "Partie IV": ("photo", "6578426", 0.5),
+                      "Partie V": ("photo", "7552141", 0.6)},
+    },
     "guide-boutique-50000": {
         "couverture": g2_couverture,
         "couverture_photo": ("30840030", 0.62, 0.4),
