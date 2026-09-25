@@ -3,3 +3,4 @@
 # stockage privé Supabase.
 src/
 dist/
+__pycache__/
