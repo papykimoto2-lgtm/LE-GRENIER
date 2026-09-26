@@ -27,6 +27,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //                                     la confirmation active le service acheté.
 //    GET  /paiement/mes-echeances  → mes paiements en plusieurs fois (BNPL) en cours
 //    POST /paiement/echeance       → règle une échéance en attente (Mobile Money direct)
+//    POST /paiement/achat-protege  → paiement séquestre SANS COMPTE : l'acheteur envoie le
+//                                     prix de l'article + frais de protection au Grenier
+//                                     (jamais au vendeur) ; suivi/confirmation ensuite via
+//                                     l'edge function "achat-protege" (jeton).
 // ════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -41,6 +45,14 @@ const CP_V1_BASE = CINETPAY_API_KEY.startsWith("sk_live_") ? "https://api.cinetp
 const PASSERELLE_MANUELLE = "Mobile Money direct";
 const CANAUX_MANUELS = ["wave", "orange", "mtn", "moov"];
 const TYPES_MANUELS = ["commission", "abonnement", "boost", "verification", "livraison", "formation", "pub", "produit", "autre"];
+
+// Frais de protection acheteur (paiement séquestre) : 3% du prix de
+// l'article, minimum 300 F — à la charge de l'acheteur.
+const FRAIS_PROTECTION_PCT = 3;
+const FRAIS_PROTECTION_MIN = 300;
+// Délai avant confirmation automatique de réception si l'acheteur ne
+// signale rien (cf. confirmer_achats_proteges_expires en base).
+const DELAI_CONFIRMATION_JOURS = 5;
 
 // Paiement en plusieurs fois (BNPL) : uniquement pour les frais vendeur avec
 // activation automatique — jamais pour une vente entre particuliers (déjà
@@ -509,6 +521,59 @@ async function declarerAchatInvite(req: Request) {
   return json({ reference, jeton });
 }
 
+// Achat protégé (paiement séquestre) : l'acheteur (avec ou sans compte)
+// déclare avoir envoyé le prix de l'article + les frais de protection au
+// numéro du Grenier — jamais directement au vendeur. Le prix officiel est
+// TOUJOURS celui de l'annonce en base, jamais un montant envoyé par le
+// client. Rien n'est retenu ni versé avant validation admin (cf.
+// validerPaiementManuel), qui crée la ligne "achats_proteges".
+async function declarerAchatProtege(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const annonceId = Number(body.annonce_id);
+  if (!annonceId) return json({ error: "annonce_id requis" }, 400);
+
+  const canal = String(body.canal || "").toLowerCase();
+  if (!CANAUX_MANUELS.includes(canal)) return json({ error: "Moyen de paiement invalide" }, 400);
+  const txnId = String(body.txn_id || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txnId)) return json({ error: "ID de transaction invalide" }, 400);
+  const nom = String(body.nom || "").trim().slice(0, 80);
+  if (nom.length < 2) return json({ error: "Nom requis" }, 400);
+  const telAcheteur = String(body.tel || "").replace(/[^\d+]/g, "").slice(0, 20);
+  if (telAcheteur.replace(/\D/g, "").length < 8) return json({ error: "Numéro WhatsApp requis" }, 400);
+
+  const aRes = await sb(`/rest/v1/annonces?id=eq.${annonceId}&statut=eq.actif&select=id,titre,valeur,vendeur_id`);
+  const aRows = aRes.ok ? await aRes.json() : [];
+  if (!aRows.length) return json({ error: "Annonce indisponible" }, 400);
+  const annonce = aRows[0];
+  if (!annonce.vendeur_id) return json({ error: "Annonce indisponible" }, 400);
+
+  const montantArticle = Number(annonce.valeur) || 0;
+  if (montantArticle < 500) return json({ error: "Achat protégé indisponible pour cette annonce" }, 400);
+  const fraisProtection = Math.max(FRAIS_PROTECTION_MIN, Math.round(montantArticle * FRAIS_PROTECTION_PCT / 100));
+
+  const dejaRes = await sb(`/rest/v1/paiements?metadata->>txn_id=eq.${encodeURIComponent(txnId)}&select=id&limit=1`);
+  if (dejaRes.ok && (await dejaRes.json()).length) return json({ error: "Cet ID de transaction a déjà été déclaré" }, 409);
+
+  const jeton = nouveauJeton();
+  const reference = "MM" + Date.now().toString().slice(-10) + Math.floor(Math.random() * 900 + 100);
+  const insertRes = await sb(`/rest/v1/paiements`, {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      vendeur_id: annonce.vendeur_id, annonce_titre: "Achat protégé : " + annonce.titre,
+      valeur: montantArticle + fraisProtection, commission: fraisProtection,
+      ref: reference, passerelle: PASSERELLE_MANUELLE, moyen: canal, statut: "attente",
+      plan_vendeur: null, type: "achat_protege",
+      metadata: {
+        annonce_id: annonce.id, montant_article: montantArticle, frais_protection: fraisProtection,
+        acheteur_nom: nom, acheteur_tel: telAcheteur, txn_id: txnId, tel_payeur: telAcheteur, jeton,
+      },
+    }),
+  });
+  if (!insertRes.ok) return json({ error: "Échec d'enregistrement du paiement" }, 500);
+  return json({ reference, jeton, montant_article: montantArticle, frais_protection: fraisProtection });
+}
+
 async function creerAnnoncePourPaiement(paiement: any) {
   const meta = paiement.metadata || {};
   if (!meta.titre) return; // commission sans contenu d'annonce (ex. vente déjà en ligne)
@@ -595,6 +660,19 @@ async function validerPaiementManuel(req: Request, user: any) {
     active = "badge vérifié";
   } else if (paiement.type === "produit") {
     active = "téléchargement du produit";
+  } else if (paiement.type === "achat_protege") {
+    const m = paiement.metadata || {};
+    const dateLimite = new Date(Date.now() + DELAI_CONFIRMATION_JOURS * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    await sb("/rest/v1/achats_proteges", {
+      method: "POST", headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        annonce_id: m.annonce_id || null, vendeur_id: paiement.vendeur_id, paiement_ref: paiement.ref,
+        acheteur_nom: m.acheteur_nom || "Client", acheteur_tel: m.acheteur_tel || "",
+        montant_article: m.montant_article || paiement.valeur, frais_protection: m.frais_protection || paiement.commission || 0,
+        jeton: m.jeton, date_limite_confirmation: dateLimite,
+      }),
+    });
+    active = "achat protégé — en attente de livraison";
   } else if (paiement.type === "commission") {
     await creerAnnoncePourPaiement(paiement);
     active = paiement.metadata?.titre ? "annonce (en modération)" : "";
@@ -608,6 +686,9 @@ Deno.serve(async (req: Request) => {
     const path = new URL(req.url).pathname;
     if (req.method === "POST" && path.endsWith("/invite")) {
       return await declarerAchatInvite(req);
+    }
+    if (req.method === "POST" && path.endsWith("/achat-protege")) {
+      return await declarerAchatProtege(req);
     }
 
     const user = await identifierAppelant(req);
