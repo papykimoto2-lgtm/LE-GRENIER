@@ -347,6 +347,7 @@
   .pay-methode.sel .pm-nom{color:var(--vert)}
   .pay-check{position:absolute;top:6px;right:6px;width:16px;height:16px;background:var(--vert);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:9px;color:#fff}
   .pay-methode.sel .pay-check{display:flex}
+  .pay-echelon-btn.sel{border-color:#C68A0D !important;background:#FFF3DC !important;color:#7A5200}
 
   /* Séparateur catégorie */
   .pay-cat-sep{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gris-text);padding:14px 18px 6px;display:flex;align-items:center;gap:8px}
@@ -1237,7 +1238,7 @@
   .parrainage-card{background:linear-gradient(135deg,#F8EDFA,#fff);border:1.5px solid rgba(134,46,156,.15);border-radius:var(--radius-lg);padding:20px;margin-top:16px}
   .parrainage-code-display{font-family:monospace;font-size:22px;font-weight:900;letter-spacing:.18em;color:#862E9C;background:#fff;border:2px dashed rgba(134,46,156,.25);border-radius:10px;padding:14px;text-align:center;margin:12px 0;cursor:pointer;transition:var(--transition)}
   .parrainage-code-display:hover{background:#F8EDFA;transform:scale(1.02)}
-  .parrainage-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .parrainage-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
   .parrainage-stat{background:#fff;border-radius:10px;padding:12px;text-align:center;border:1px solid rgba(134,46,156,.1)}
   .parrainage-stat strong{display:block;font-family:var(--font-titre);font-size:24px;color:#862E9C}
   .parrainage-stat span{font-size:11px;color:var(--gris-text);font-weight:600}
@@ -3130,7 +3131,8 @@
       desc: row.desc_txt, ville: row.ville, vendeurId: row.vendeur_id, statut: row.statut,
       vues: row.vues, emoji: row.emoji, typeTab: row.type_tab, lat: row.lat, lng: row.lng,
       photos: row.photos || [], date: (row.created_at || '').slice(0, 10),
-      flagIA: row.flag_ia || null, flagIaRaison: row.flag_ia_raison || null
+      flagIA: row.flag_ia || null, flagIaRaison: row.flag_ia_raison || null,
+      captureLead: !!row.capture_lead
     };
     if (table === 'utilisateurs') return {
       id: row.id, authId: row.auth_id, prenom: row.prenom, nom: row.nom, email: row.email,
@@ -3140,7 +3142,8 @@
       adminPermissions: row.admin_permissions || null,
       dateInscription: (row.created_at || '').slice(0, 10),
       dateValidation: row.date_validation ? row.date_validation.slice(0, 10) : null,
-      validePar: row.valide_par || null
+      validePar: row.valide_par || null,
+      creditsContact: row.credits_contact || 0
     };
     if (table === 'paiements') return {
       id: row.id, vendeurId: row.vendeur_id, annonce: row.annonce_titre, valeur: Number(row.valeur),
@@ -7534,6 +7537,11 @@ const ENTREPRISE = {
           <input type="password" id="reg-pass-confirm" placeholder="Répéter le mot de passe" autocomplete="new-password">
         </div>
 
+        <div class="form-group">
+          <label>Code de parrainage (facultatif)</label>
+          <input type="text" id="reg-code-parrain" placeholder="Ex: AMICD1234" style="text-transform:uppercase" maxlength="20">
+        </div>
+
         <!-- Récap géo -->
         <div id="reg-recap-geo" style="background:var(--vert-pale);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:13px;border:1px solid rgba(13,92,53,.12);display:none">
           <div style="font-weight:700;color:var(--vert);margin-bottom:4px">Votre position enregistrée</div>
@@ -7663,10 +7671,21 @@ const ENTREPRISE = {
           </table>
         </div>
         <button class="btn btn-primary mt-16" onclick="goDepotWithType('')">+ Nouvelle annonce</button>
+
+        <div style="margin-top:24px;background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div style="font-weight:700;font-size:14px">📨 Mes leads <span style="color:var(--gris-text);font-weight:400;font-size:12px">— clic 📨 sur une annonce pour activer la capture</span></div>
+            <div style="font-size:12px;font-weight:700">Crédits : <span id="leads-credits" style="color:var(--vert)">0</span> <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;margin-left:6px" onclick="ouvrirAchatCreditsContact()">+ Recharger</button></div>
+          </div>
+          <div id="mes-leads-liste" style="margin-top:12px;font-size:13px;color:var(--gris-text)">—</div>
+        </div>
       </div>
       <!-- TAB PAIEMENTS -->
       <div id="tab-paiements" class="hidden">
         <div class="dash-titre">Mes paiements & commissions</div>
+
+        <!-- Paiements en plusieurs fois (BNPL) en cours -->
+        <div id="mes-echeances-bloc" style="display:none;margin-bottom:18px"></div>
 
         <!-- KPIs financiers personnels -->
         <div class="stats-grid" style="margin-bottom:18px">
@@ -7739,8 +7758,8 @@ const ENTREPRISE = {
         <div class="dash-titre">Mon programme de parrainage</div>
         <div style="max-width:520px">
           <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:22px;box-shadow:var(--shadow-sm)">
-            <div style="font-weight:700;font-size:15px;margin-bottom:6px">Invitez vos amis, gagnez des crédits</div>
-            <div style="font-size:13px;color:var(--gris-text);margin-bottom:14px">Chaque ami inscrit avec votre code vous offre <strong style="color:var(--vert)">1 annonce gratuite</strong>. Votre ami reçoit lui aussi <strong style="color:var(--or)">-50% sur sa 1ère commission</strong>.</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px">Devenez ambassadeur, gagnez de l'argent</div>
+            <div style="font-size:13px;color:var(--gris-text);margin-bottom:14px">Chaque vendeur inscrit avec votre code vous rapporte une <strong style="color:var(--vert)">vraie commission en FCFA</strong> sur ses paiements (vente, abonnement, boost, vérification) pendant ses 90 premiers jours.</div>
             <div style="font-size:12px;font-weight:700;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Votre code personnel</div>
             <div class="parrainage-code-display" id="parrainage-code-display" onclick="copierCodeParrainage()" title="Cliquer pour copier">—</div>
             <div style="font-size:12px;color:var(--gris-text);text-align:center;margin-bottom:16px">Cliquer pour copier · Partager sur WhatsApp, SMS...</div>
@@ -7748,8 +7767,9 @@ const ENTREPRISE = {
               📲 Partager via WhatsApp
             </button>
             <div class="parrainage-stats">
-              <div class="parrainage-stat"><strong id="parr-nb-filleuls">0</strong><span>Amis parrainés</span></div>
-              <div class="parrainage-stat"><strong id="parr-credits">0</strong><span>Annonces gratuites</span></div>
+              <div class="parrainage-stat"><strong id="parr-nb-filleuls">0</strong><span>Vendeurs parrainés</span></div>
+              <div class="parrainage-stat"><strong id="parr-credits">0 F</strong><span>Commissions à payer</span></div>
+              <div class="parrainage-stat"><strong id="parr-payees">0 F</strong><span>Déjà versées</span></div>
             </div>
           </div>
           <div style="margin-top:20px">
@@ -8604,6 +8624,8 @@ const ENTREPRISE = {
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-promos')">Codes Promo</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-pub')">Publicités</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-abonnements')">Abonnements</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-parrainage')">Parrainage</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-achats-proteges')">Achats protégés</button>
       </div>
       <div class="admin-nav">
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
@@ -8858,6 +8880,59 @@ const ENTREPRISE = {
       <div class="admin-section">
         <div class="admin-section-titre">Bannières en cours</div>
         <div id="pub-liste" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════
+         TAB PARRAINAGE (ambassadeurs)
+    ══════════════════════════════ -->
+    <div id="admin-parrainage" class="hidden">
+      <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:20px">
+        <div class="kpi"><div class="kpi-val" id="kpi-parr-a-payer">0 F</div><div class="kpi-label">Commissions à payer</div></div>
+        <div class="kpi"><div class="kpi-val" id="kpi-parr-nb">0</div><div class="kpi-label">Lignes en attente</div></div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">Commissions d'ambassadeurs à régler</div>
+        <div style="font-size:12px;color:var(--gris-text);margin:-6px 0 14px">Payez l'ambassadeur par Mobile Money (hors app), puis marquez la ligne comme réglée.</div>
+        <div class="table-wrap-scroll" style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid)">
+          <table class="table">
+            <thead>
+              <tr><th>Date</th><th>Ambassadeur</th><th>Filleul</th><th>Réf. paiement</th><th>Montant</th><th></th></tr>
+            </thead>
+            <tbody id="admin-parrainage-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════
+         TAB ACHATS PROTÉGÉS (escrow)
+    ══════════════════════════════ -->
+    <div id="admin-achats-proteges" class="hidden">
+      <div class="admin-section">
+        <div class="admin-section-titre">🛡️ À verser au vendeur (réception confirmée)</div>
+        <div style="font-size:12px;color:var(--gris-text);margin:-6px 0 14px">Payez le vendeur par Mobile Money (prix de l'article, hors frais de protection), puis marquez la ligne comme réglée.</div>
+        <div class="table-wrap-scroll" style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid)">
+          <table class="table">
+            <thead>
+              <tr><th>Confirmé le</th><th>Vendeur</th><th>Acheteur</th><th>Réf.</th><th>À verser</th><th></th></tr>
+            </thead>
+            <tbody id="admin-achats-proteges-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">⚠️ Litiges en attente de décision</div>
+        <div class="table-wrap-scroll" style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid)">
+          <table class="table">
+            <thead>
+              <tr><th>Date</th><th>Vendeur</th><th>Acheteur</th><th>Motif</th><th>Montant</th><th></th></tr>
+            </thead>
+            <tbody id="admin-achats-proteges-disputes-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -9482,6 +9557,9 @@ const ENTREPRISE = {
         <button class="msg-btn" style="background:linear-gradient(135deg,var(--vert),var(--vert-vif))" onclick="appellerVendeurAnnonce()">Appeler</button>
       </div>
       <button class="msg-btn" style="background:linear-gradient(135deg,#DC2626,#EF4444);margin-top:10px;width:100%" onclick="demanderLivraisonAnnonce()">Faire livrer cet article</button>
+      <button class="msg-btn" style="background:linear-gradient(135deg,#0D5C35,#128C7E);margin-top:10px;width:100%" onclick="demanderAchatProtege()">🛡️ Achat protégé — payer en sécurité</button>
+      <div style="font-size:11px;color:var(--gris-text);text-align:center;margin-top:6px">L'argent est retenu par Le Grenier jusqu'à ce que vous confirmiez avoir bien reçu l'article.</div>
+      <button id="btn-demander-lead" class="msg-btn" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6);margin-top:10px;width:100%;display:none" onclick="demanderContactLead()">📨 Demander à être contacté</button>
       <div style="text-align:center;margin-top:10px">
         <button onclick="signalerAnnonce()" style="background:none;border:none;color:var(--rouge);font-size:13px;cursor:pointer">Signaler cette annonce</button>
       </div>
@@ -9592,6 +9670,16 @@ const ENTREPRISE = {
 </div>
 
 <!-- MODAL PAIEMENT -->
+<div class="modal-overlay" id="modal-suivi-achat">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div style="font-family:var(--font-titre);font-size:18px;font-weight:600">🛡️ Suivi de mon achat protégé</div>
+      <button class="modal-close" onclick="fermerSuiviAchatProtege()">✕</button>
+    </div>
+    <div class="modal-body" id="suivi-achat-corps"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-paiement">
   <div class="modal-pay">
 
@@ -9665,6 +9753,19 @@ const ENTREPRISE = {
           <div class="pm-nom">Virement</div>
           <div class="pm-tag">SGBCI · BICICI</div>
         </div>
+      </div>
+
+      <!-- Paiement en plusieurs fois (BNPL) — visible uniquement pour un
+           abonnement, un boost ou une vérification, jamais pour une vente
+           entre particuliers ni un produit numérique. -->
+      <div id="pay-echelon-bloc" style="display:none;margin:14px 18px 0;padding:14px;background:#FFF8ED;border:1.5px solid rgba(198,138,13,.25);border-radius:12px">
+        <div style="font-weight:700;font-size:13px;color:#7A5200;margin-bottom:8px">💳 Vous pouvez aussi payer en plusieurs fois</div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="pay-echelon-btn sel" id="pe-1" onclick="selPayEchelon(0)" style="flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid var(--gris-mid);background:#fff;font-size:12px;font-weight:700;cursor:pointer">1 fois</button>
+          <button type="button" class="pay-echelon-btn" id="pe-2" onclick="selPayEchelon(2)" style="flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid var(--gris-mid);background:#fff;font-size:12px;font-weight:700;cursor:pointer">2 fois</button>
+          <button type="button" class="pay-echelon-btn" id="pe-3" onclick="selPayEchelon(3)" style="flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid var(--gris-mid);background:#fff;font-size:12px;font-weight:700;cursor:pointer">3 fois</button>
+        </div>
+        <div id="pay-echelon-detail" style="font-size:12px;color:#7A5200;margin-top:8px;display:none"></div>
       </div>
 
       <!-- Récap -->
@@ -9787,7 +9888,7 @@ const ENTREPRISE = {
         </div>
         <div class="pay-input-group">
           <label for="pay-manuel-tel" id="pay-manuel-tel-label">Numéro qui a envoyé l'argent</label>
-          <input class="pay-input" type="tel" id="pay-manuel-tel" placeholder="07 XX XX XX XX" maxlength="14" oninput="formatPayNum(this)">
+          <input class="pay-input" type="tel" id="pay-manuel-tel" placeholder="07 XX XX XX XX" maxlength="14" oninput="formatPayNum(this)" onblur="majCashbackAffiche()">
         </div>
         <div class="pay-input-group">
           <label for="pay-manuel-txn">ID de transaction (dans le SMS)</label>
@@ -11457,9 +11558,13 @@ function sInscrire() {
   window.DB_INSCRIPTIONS.unshift(newUser);
 
   // Persistance Supabase — fiche en attente de validation admin (pas de compte Auth encore)
+  // code_parrain : résolu automatiquement en base (trigger resoudre_code_parrainage) —
+  // si invalide ou absent, ignoré silencieusement, l'inscription n'est jamais bloquée.
+  const codeParrain = (document.getElementById('reg-code-parrain')?.value || '').trim();
   if (MODE === 'remote') {
     _xhr('POST', SUPABASE_URL + '/rest/v1/utilisateurs', {
-      prenom, nom, email, tel, ville, role: 'user', statut: 'attente'
+      prenom, nom, email, tel, ville, role: 'user', statut: 'attente',
+      ...(codeParrain ? { code_parrain: codeParrain } : {})
     }, { Prefer: 'return=representation' }).then(r => {
       if (r.error) console.error('[persist] pré-inscription', r.error);
       else if (r.data && r.data[0]) newUser._supabaseId = r.data[0].id;
@@ -12144,6 +12249,8 @@ function ouvrirAnnonce(id) {
   a.vues++;
   annonceCourante = a;
   const vendeur = DAO._local.utilisateurs.find(u=>u.id===a.vendeurId);
+  const btnLeadAffiche = document.getElementById('btn-demander-lead');
+  if (btnLeadAffiche) btnLeadAffiche.style.display = a.captureLead ? 'block' : 'none';
   document.getElementById('modal-titre').textContent = a.titre;
   const dist = GEO.userCoords ? distanceKm(GEO.userCoords, coordsAnnonce(a)) : null;
   const distTxt = dist !== null ? ` · 📡 ${dist < 1 ? '< 1 km' : Math.round(dist)+' km de vous'}` : '';
@@ -12572,6 +12679,20 @@ const PAY_METHODES = {
 
 let payMethodeActive = 'wave';
 
+// Paiement en plusieurs fois (BNPL) : simple aperçu client (le serveur
+// recalcule toujours lui-même le prix officiel et les frais réels).
+const PAY_ECHELON_TYPES = ['abonnement', 'boost', 'verification'];
+const PAY_ECHELON_FRAIS = { 2: 6, 3: 10 };
+
+function calculerEcheancesApercu(prixRef, n) {
+  const fraisPct = PAY_ECHELON_FRAIS[n] || 0;
+  const total = Math.round(prixRef * (1 + fraisPct / 100));
+  const base = Math.floor(total / n);
+  const montants = Array(n).fill(base);
+  montants[n - 1] = total - base * (n - 1);
+  return { total, fraisPct, montants };
+}
+
 function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   payMethodeActive = 'wave';
   window._payOnSuccess = onSuccess || null;
@@ -12580,16 +12701,45 @@ function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   window._payLibelleCourant = libelle || 'Commission publication';
   window._payTypeCourant = (opts && opts.type) || 'commission';
   window._payMetadataCourant = (opts && opts.metadata) || null;
-  // Achat express sans compte (produit numérique via QR code / lien partagé)
+  window._payEchelonnerCourant = 0;
+  // Achat express sans compte (produit numérique via QR code / lien partagé,
+  // ou achat protégé — l'acheteur n'a pas toujours de compte non plus)
   window._payInvite = !!(opts && opts.invite);
+  window._payAchatProtege = !!(opts && opts.achatProtege);
+  window._payCashbackApplique = 0;
   // Mettre à jour l'affichage
   document.getElementById('pay-montant-display').textContent = fmtFCFA(montant);
   document.getElementById('pay-annonce-display').textContent = libelle || 'Commission publication';
+  // Bloc "payer en plusieurs fois" : uniquement pour abonnement/boost/vérification.
+  const echelonBloc = document.getElementById('pay-echelon-bloc');
+  const eligible = PAY_ECHELON_TYPES.includes(window._payTypeCourant) && montant >= 1000;
+  if (echelonBloc) echelonBloc.style.display = eligible ? 'block' : 'none';
+  document.querySelectorAll('.pay-echelon-btn').forEach(b => b.classList.remove('sel'));
+  document.getElementById('pe-1')?.classList.add('sel');
+  document.getElementById('pay-echelon-detail').style.display = 'none';
   // Récap
   renderPayRecap(montant, libelle);
   // Réinitialiser toutes les étapes
   payShowEtape(1);
   document.getElementById('modal-paiement').classList.add('open');
+}
+
+function selPayEchelon(n) {
+  window._payEchelonnerCourant = n;
+  document.querySelectorAll('.pay-echelon-btn').forEach(b => b.classList.remove('sel'));
+  document.getElementById('pe-' + (n || 1))?.classList.add('sel');
+  const detail = document.getElementById('pay-echelon-detail');
+  const montant = window._payMontantCourant || 0;
+  if (!n) {
+    document.getElementById('pay-montant-display').textContent = fmtFCFA(montant);
+    detail.style.display = 'none';
+  } else {
+    const plan = calculerEcheancesApercu(montant, n);
+    document.getElementById('pay-montant-display').textContent = fmtFCFA(plan.montants[0]);
+    detail.innerHTML = `1ère échéance aujourd'hui, le reste tous les 30 jours · Total avec frais de service (${plan.fraisPct}%) : <strong>${fmtFCFA(plan.total)}</strong>`;
+    detail.style.display = 'block';
+  }
+  renderPayRecap(montant, window._payLibelleCourant);
 }
 
 function fermerModalPaiement() {
@@ -12608,10 +12758,21 @@ function renderPayRecap(montant, libelle) {
   const planUser = getPlanUser(SESSION?.id);
   const tauxLabel = planUser ? planUser.limites.commission : CFG.comm_taux_gratuit;
   const estCommission = (window._payTypeCourant || 'commission') === 'commission';
-  const recap = `
-    <div class="pay-recap-row"><span>${estCommission ? 'Annonce' : 'Achat'}</span><span style="font-weight:600;max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libelle||'—'}</span></div>
-    <div class="pay-recap-row"><span>${estCommission ? `Commission (${tauxLabel}%)` : 'Prix'}</span><span>${fmtFCFA(montant)}</span></div>
-    <div class="pay-recap-row"><span>Total à payer</span><span>${fmtFCFA(montant)}</span></div>`;
+  const estAchatProtege = window._payTypeCourant === 'achat_protege';
+  let recap;
+  if (estAchatProtege) {
+    const m = window._payMetadataCourant || {};
+    recap = `
+      <div class="pay-recap-row"><span>Article</span><span style="font-weight:600;max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libelle||'—'}</span></div>
+      <div class="pay-recap-row"><span>Prix de l'article</span><span>${fmtFCFA(m.montant_article||0)}</span></div>
+      <div class="pay-recap-row"><span>Frais de protection</span><span>${fmtFCFA(m.frais_protection||0)}</span></div>
+      <div class="pay-recap-row"><span>Total à payer</span><span>${fmtFCFA(montant)}</span></div>`;
+  } else {
+    recap = `
+      <div class="pay-recap-row"><span>${estCommission ? 'Annonce' : 'Achat'}</span><span style="font-weight:600;max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libelle||'—'}</span></div>
+      <div class="pay-recap-row"><span>${estCommission ? `Commission (${tauxLabel}%)` : 'Prix'}</span><span>${fmtFCFA(montant)}</span></div>
+      <div class="pay-recap-row"><span>Total à payer</span><span>${fmtFCFA(montant)}</span></div>`;
+  }
   ['pay-recap','pay-recap-2','pay-recap-carte'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = recap;
@@ -12669,7 +12830,7 @@ function paySetupEtape2() {
 }
 
 function payEtape2() {
-  if (window._payInvite) {
+  if (window._payInvite || window._payAchatProtege) {
     if (!payManuelDisponible(payMethodeActive)) { toast('Sans compte, payez par Wave, Orange Money, MTN ou Moov', 'erreur'); return; }
     payManuelPreparer();
     return;
@@ -12853,6 +13014,7 @@ async function lancerPaiementReel() {
     tel:         document.getElementById('pay-numero-mm')?.value || (SESSION && SESSION.tel) || '',
     return_url:  window.location.origin + window.location.pathname,
     annonce:     window._payMetadataCourant || depotEnCours || null,
+    echelonner:  window._payEchelonnerCourant || 0,
   };
 
   try {
@@ -12899,10 +13061,36 @@ function payManuelNumeroLocal(num) {
   return d.length === 10 ? d.replace(/(\d{2})(?=\d)/g, '$1 ') : String(num || '');
 }
 
+function payManuelMontantDu() {
+  const montant = window._payMontantCourant || 0;
+  const n = window._payEchelonnerCourant || 0;
+  const base = n ? calculerEcheancesApercu(montant, n).montants[0] : montant;
+  return Math.max(0, base - (window._payCashbackApplique || 0));
+}
+
+// Cashback (invité/achat protégé uniquement) : dès que l'acheteur a saisi
+// son numéro, on vérifie son solde et on l'affiche déduit — le serveur
+// appliquera exactement la même déduction à la déclaration du paiement.
+async function majCashbackAffiche() {
+  window._payCashbackApplique = 0;
+  if (!(window._payInvite || window._payAchatProtege)) return;
+  const tel = document.getElementById('pay-manuel-tel')?.value.replace(/\s/g, '') || '';
+  if (tel.replace(/\D/g, '').length < 8) return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/lead/cashback?tel=' + encodeURIComponent(tel));
+    const solde = (r.data && r.data.solde) || 0;
+    if (solde > 0) {
+      window._payCashbackApplique = Math.min(solde, window._payMontantCourant || 0);
+      document.getElementById('pay-manuel-montant').textContent = fmtFCFA(payManuelMontantDu());
+      toast('🎁 ' + fmtFCFA(window._payCashbackApplique) + ' de cashback déduits automatiquement !');
+    }
+  } catch (e) { /* silencieux : le cashback est un bonus, jamais bloquant */ }
+}
+
 function payManuelPreparer(note) {
   const m = PAY_METHODES[payMethodeActive];
   const p = window.ADMIN_PROFIL || {};
-  document.getElementById('pay-manuel-montant').textContent = fmtFCFA(window._payMontantCourant || 0);
+  document.getElementById('pay-manuel-montant').textContent = fmtFCFA(payManuelMontantDu());
   document.getElementById('pay-manuel-canal').textContent = m.nom;
   document.getElementById('pay-manuel-numero').textContent = payManuelNumeroLocal(m.destinataire);
   document.getElementById('pay-manuel-benef').textContent =
@@ -12916,8 +13104,8 @@ function payManuelPreparer(note) {
   noteEl.textContent = note || '';
   const tel = document.getElementById('pay-manuel-tel');
   if (!tel.value && SESSION && SESSION.tel) { tel.value = SESSION.tel; formatPayNum(tel); }
-  document.getElementById('pay-manuel-nom-groupe').style.display = window._payInvite ? 'block' : 'none';
-  document.getElementById('pay-manuel-tel-label').textContent = window._payInvite
+  document.getElementById('pay-manuel-nom-groupe').style.display = (window._payInvite || window._payAchatProtege) ? 'block' : 'none';
+  document.getElementById('pay-manuel-tel-label').textContent = (window._payInvite || window._payAchatProtege)
     ? 'Votre numéro WhatsApp (celui qui a payé)' : 'Numéro qui a envoyé l\'argent';
   document.getElementById('pay-manuel-txn').value = '';
   document.getElementById('pay-manuel-form').style.display = 'block';
@@ -12935,6 +13123,7 @@ function payManuelCopier() {
 
 async function payManuelEnvoyer() {
   if (window._payInvite) return payManuelEnvoyerInvite();
+  if (window._payAchatProtege) return payManuelEnvoyerAchatProtege();
   if (!SESSION) { fermerModalPaiement(); goScreen('screen-login'); return; }
   const tel = document.getElementById('pay-manuel-tel').value.replace(/\s/g, '');
   const txn = document.getElementById('pay-manuel-txn').value.trim().toUpperCase().replace(/\s+/g, '');
@@ -12951,6 +13140,7 @@ async function payManuelEnvoyer() {
     description: window._payLibelleCourant || 'Paiement Le Grenier CI',
     tel, txn_id: txn,
     annonce: contenu,
+    echelonner: window._payEchelonnerCourant || 0,
   };
   try {
     const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/manuel', payload);
@@ -12963,8 +13153,8 @@ async function payManuelEnvoyer() {
     if (depotEnCours && !window._payMetadataCourant) { depotEnCours = null; DEPOT_PHOTOS = []; }
     document.getElementById('pay-manuel-ref').textContent = 'REF: ' + ref;
     const msg = 'Bonjour, je viens de payer sur Le Grenier CI.\n\n' +
-      '• Achat : ' + payload.description + '\n' +
-      '• Montant : ' + fmtFCFA(payload.montant) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Achat : ' + payload.description + (payload.echelonner ? ' (1ère échéance sur ' + payload.echelonner + ')' : '') + '\n' +
+      '• Montant : ' + fmtFCFA(payManuelMontantDu()) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
       '• Envoyé depuis : ' + tel + '\n' +
       '• ID transaction : ' + txn + '\n' +
       '• Référence : ' + ref + '\n\nMerci de valider.';
@@ -12996,16 +13186,17 @@ async function payManuelEnvoyerInvite() {
   try {
     const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/invite', {
       montant: window._payMontantCourant || 0, canal: payMethodeActive, txn_id: txn, tel, nom,
-      produit_id: meta.produit_id, source: meta.source || null,
+      produit_id: meta.produit_id, source: meta.source || null, utiliser_cashback: true,
     });
     if (r.error || !r.data || !r.data.jeton) {
       throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Réponse invalide');
     }
     BoutiqueNum.memoriserAchatInvite(meta.produit_id, r.data.jeton);
+    const montantDu = r.data.montant_a_payer ?? window._payMontantCourant ?? 0;
     document.getElementById('pay-manuel-ref').textContent = 'REF: ' + r.data.reference;
     const msg = 'Bonjour, je viens d\'acheter un guide sur Le Grenier CI (sans compte).\n\n' +
       '• Guide : ' + (window._payLibelleCourant || '') + '\n' +
-      '• Montant : ' + fmtFCFA(window._payMontantCourant || 0) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Montant : ' + fmtFCFA(montantDu) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
       '• Nom : ' + nom + ' · WhatsApp : ' + tel + '\n' +
       '• ID transaction : ' + txn + '\n' +
       '• Référence : ' + r.data.reference + '\n\nMerci de m\'envoyer mon lien de téléchargement.';
@@ -13019,6 +13210,127 @@ async function payManuelEnvoyerInvite() {
     toast('❌ ' + (err.message || 'Envoi impossible, réessayez'), 'erreur');
   } finally {
     btn.disabled = false; btn.textContent = '✅ J\'ai envoyé l\'argent';
+  }
+}
+
+// Achat protégé (paiement séquestre) : l'acheteur envoie le prix de
+// l'article + les frais de protection au Grenier, jamais au vendeur.
+// L'argent n'est versé au vendeur qu'après confirmation de réception.
+function memoriserAchatProtege(jeton) {
+  try {
+    const liste = JSON.parse(localStorage.getItem('lg_achats_proteges') || '[]').filter(j => j !== jeton);
+    liste.push(jeton);
+    localStorage.setItem('lg_achats_proteges', JSON.stringify(liste));
+  } catch (e) {}
+}
+
+function lienSuiviAchatProtege(jeton) {
+  const base = /^https?:/.test(location.origin) ? location.origin + location.pathname : 'https://le-grenier.vercel.app/';
+  return base + '?suivi_achat=' + jeton;
+}
+
+async function payManuelEnvoyerAchatProtege() {
+  const nom = document.getElementById('pay-manuel-nom').value.trim();
+  const tel = document.getElementById('pay-manuel-tel').value.replace(/\s/g, '');
+  const txn = document.getElementById('pay-manuel-txn').value.trim().toUpperCase().replace(/\s+/g, '');
+  if (nom.length < 2) { toast('Entrez votre nom', 'erreur'); return; }
+  if (tel.replace(/\D/g, '').length < 8) { toast('Entrez votre numéro WhatsApp', 'erreur'); return; }
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txn)) { toast('Entrez l\'ID de transaction reçu par SMS', 'erreur'); return; }
+  const meta = window._payMetadataCourant || {};
+  const btn = document.getElementById('pay-manuel-btn');
+  btn.disabled = true; btn.textContent = '⏳ Envoi…';
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/achat-protege', {
+      annonce_id: meta.annonce_id, canal: payMethodeActive, txn_id: txn, tel, nom, utiliser_cashback: true,
+    });
+    if (r.error || !r.data || !r.data.jeton) {
+      throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Réponse invalide');
+    }
+    memoriserAchatProtege(r.data.jeton);
+    const montantDu = r.data.montant_a_payer ?? window._payMontantCourant ?? 0;
+    const lienSuivi = lienSuiviAchatProtege(r.data.jeton);
+    document.getElementById('pay-manuel-ref').textContent = 'REF: ' + r.data.reference;
+    const msg = 'Bonjour, je viens de faire un achat protégé sur Le Grenier CI.\n\n' +
+      '• Article : ' + (window._payLibelleCourant || '') + '\n' +
+      '• Montant : ' + fmtFCFA(montantDu) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Nom : ' + nom + ' · WhatsApp : ' + tel + '\n' +
+      '• ID transaction : ' + txn + '\n' +
+      '• Référence : ' + r.data.reference + '\n\nMerci de valider ma transaction. Mon lien de suivi : ' + lienSuivi;
+    document.getElementById('pay-manuel-wa').href = 'https://wa.me/' + (window._ADMIN_WA || '2250779181075') + '?text=' + encodeURIComponent(msg);
+    document.getElementById('pay-manuel-form').style.display = 'none';
+    document.getElementById('pay-manuel-actions').style.display = 'none';
+    document.getElementById('pay-manuel-ok').style.display = 'block';
+    toast('✅ Achat protégé enregistré ! Gardez ce lien de suivi : ' + lienSuivi);
+  } catch (err) {
+    console.error('[ACHAT PROTÉGÉ]', err);
+    toast('❌ ' + (err.message || 'Envoi impossible, réessayez'), 'erreur');
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ J\'ai envoyé l\'argent';
+  }
+}
+
+// ── Suivi d'un achat protégé (acheteur, avec ou sans compte, par jeton) ──
+const ACHAT_PROTEGE_LABELS = {
+  attente_livraison: { texte: '📦 En attente de livraison — l\'argent est retenu par Le Grenier', couleur: '#D97706' },
+  confirme_recu: { texte: '✅ Réception confirmée — le vendeur va être payé', couleur: '#16A34A' },
+  dispute: { texte: '⚠️ Litige signalé — en cours d\'examen par l\'admin', couleur: '#DC2626' },
+  rembourse: { texte: '↩️ Remboursé à l\'acheteur', couleur: '#6B7280' },
+  vendeur_paye: { texte: '✅ Terminé — le vendeur a été payé', couleur: '#16A34A' },
+};
+
+async function ouvrirSuiviAchatProtege(jeton) {
+  window._suiviAchatJeton = jeton;
+  const modal = document.getElementById('modal-suivi-achat');
+  if (!modal) return;
+  modal.classList.add('open');
+  const corps = document.getElementById('suivi-achat-corps');
+  corps.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gris-text)">Chargement…</div>';
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/achat-protege/statut?jeton=' + encodeURIComponent(jeton));
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Achat introuvable');
+    const a = r.data;
+    const info = ACHAT_PROTEGE_LABELS[a.statut] || { texte: a.statut, couleur: '#6B7280' };
+    corps.innerHTML = `
+      <div style="text-align:center;font-weight:700;color:${info.couleur};margin-bottom:10px">${info.texte}</div>
+      <div class="pay-recap-row"><span>Prix de l'article</span><span>${fmtFCFA(a.montant_article)}</span></div>
+      <div class="pay-recap-row"><span>Frais de protection</span><span>${fmtFCFA(a.frais_protection)}</span></div>
+      ${a.statut === 'attente_livraison' ? `<div style="font-size:12px;color:var(--gris-text);margin:10px 0">Confirmation automatique le ${new Date(a.date_limite_confirmation).toLocaleDateString('fr-CI')} si vous ne signalez rien.</div>
+        <button class="btn btn-primary w-full" style="margin-top:8px" onclick="achatProtegeConfirmerReception()">✅ J'ai bien reçu mon article</button>
+        <button class="btn btn-outline w-full" style="margin-top:8px" onclick="achatProtegeSignalerProbleme()">⚠️ Signaler un problème</button>` : ''}
+    `;
+  } catch (e) {
+    corps.innerHTML = `<div style="text-align:center;padding:20px;color:var(--rouge)">${e.message}</div>`;
+  }
+}
+
+function fermerSuiviAchatProtege() {
+  document.getElementById('modal-suivi-achat')?.classList.remove('open');
+}
+
+async function achatProtegeConfirmerReception() {
+  if (!window._suiviAchatJeton) return;
+  if (!window.confirm('Confirmer que vous avez bien reçu votre article ? Le vendeur sera payé.')) return;
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/achat-protege/confirmer', { jeton: window._suiviAchatJeton });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || 'Échec');
+    toast('✅ Réception confirmée, merci !');
+    ouvrirSuiviAchatProtege(window._suiviAchatJeton);
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
+}
+
+async function achatProtegeSignalerProbleme() {
+  if (!window._suiviAchatJeton) return;
+  const motif = (window.prompt('Décrivez le problème (article non reçu, non conforme...) :') || '').trim();
+  if (!motif) return;
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/achat-protege/signaler', { jeton: window._suiviAchatJeton, motif });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || 'Échec');
+    toast('⚠️ Problème signalé, l\'argent reste bloqué en attendant l\'examen de l\'admin.');
+    ouvrirSuiviAchatProtege(window._suiviAchatJeton);
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
   }
 }
 
@@ -13367,7 +13679,7 @@ function renderDashboard() {
   mesA.forEach(a => rows.push({
     ico: a.emoji||'📦', titre: a.titre, soustitre: a.cat,
     valeur: fmtFCFA(a.valeur), statut: a.statut, vues: a.vues,
-    type: 'marché', id: a.id
+    type: 'marché', id: a.id, captureLead: !!a.captureLead
   }));
   // Boulots
   mesBoulots.forEach(b => rows.push({
@@ -13425,6 +13737,7 @@ function renderDashboard() {
     const btnEdit = `<button class="btn btn-sm" onclick="modifierAnnonce('${t}',${id})" style="background:var(--vert);color:#fff;padding:4px 8px;font-size:12px;margin-right:4px">✏️</button>`;
     const btnDelete = `<button class="btn btn-danger btn-sm" onclick="supprimerAnnonce('${t}',${id})" style="padding:4px 8px;font-size:12px">🗑</button>`;
     const btnBoost = (t==='marché' && r.statut==='en-ligne') ? `<button class="btn btn-sm" onclick="Boost.open(${id})" style="background:#f59e0b;color:#1f1300;padding:4px 8px;font-size:12px;margin-right:4px">⚡</button>` : '';
+    const btnLead = (t==='marché' && r.statut==='en-ligne') ? `<button class="btn btn-sm" onclick="toggleCaptureLead(${id},${!r.captureLead})" title="${r.captureLead ? 'Capture de leads activée — 1 crédit par contact reçu' : 'Activer la capture de leads (1 crédit par contact reçu)'}" style="background:${r.captureLead ? '#0D5C35' : '#E5E7EB'};color:${r.captureLead ? '#fff' : '#374151'};padding:4px 8px;font-size:12px;margin-right:4px">📨</button>` : '';
     const statusClass = r.statut==='en-ligne'?'badge-en-ligne':r.statut==='attente'?'badge-attente':'badge-expiree';
     return `<tr>
       <td style="max-width:200px">
@@ -13434,7 +13747,7 @@ function renderDashboard() {
       <td style="font-weight:600;color:var(--vert);white-space:nowrap">${r.valeur}</td>
       <td><span class="badge-statut ${statusClass}">${r.statut}</span></td>
       <td>${r.vues||0}</td>
-      <td style="white-space:nowrap">${btnBoost}${btnEdit}${btnDelete}</td>
+      <td style="white-space:nowrap">${btnBoost}${btnLead}${btnEdit}${btnDelete}</td>
     </tr>`
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--gris-text);padding:20px">Aucune publication</td></tr>';
 
@@ -13472,7 +13785,7 @@ function dashTab(el, tabId) {
   el.classList.add('actif');
   document.querySelectorAll('#tab-annonces,#tab-paiements,#tab-profil,#tab-avis,#tab-parrainage').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
-  if (tabId === 'tab-paiements') renderMesPaiements('');
+  if (tabId === 'tab-paiements') { renderMesPaiements(''); renderMesEcheances(); }
   toggleDashSidebar(false); // referme le tiroir mobile après un choix
 }
 
@@ -13542,6 +13855,69 @@ function renderMesPaiements(typeFilter) {
       <td style="font-family:monospace;font-size:10px;color:var(--gris-text)">${p.ref||'—'}</td>
     </tr>`
   }).join('');
+}
+
+/* ---------- Paiement en plusieurs fois (BNPL) — mes échéanciers ---------- */
+const ECHEANCE_LABELS = { abonnement: 'Abonnement', boost: 'Boost annonce', verification: 'Badge vérifié' };
+
+async function renderMesEcheances() {
+  const bloc = document.getElementById('mes-echeances-bloc');
+  if (!bloc || typeof MODE === 'undefined' || MODE !== 'remote') return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/paiement/mes-echeances');
+    if (r.error) throw new Error(r.error);
+    const echeanciers = (r.data && r.data.echeanciers || []).filter(e => e.statut !== 'termine');
+    if (!echeanciers.length) { bloc.style.display = 'none'; return; }
+
+    bloc.style.display = 'block';
+    bloc.innerHTML = echeanciers.map(e => {
+      const label = ECHEANCE_LABELS[e.type] || e.type;
+      const enDefaut = e.statut === 'defaillant';
+      const lignes = (e.echeances || []).slice().sort((a,b) => a.numero - b.numero).map(ech => {
+        const couleur = ech.statut === 'payee' ? '#16A34A' : ech.statut === 'en_retard' ? '#DC2626' : '#6B7280';
+        const label2 = ech.statut === 'payee' ? '✓ Payée' : ech.statut === 'en_retard' ? '⚠️ En retard' : 'À venir';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--gris-mid)">
+          <div><div style="font-weight:600;font-size:13px">Échéance ${ech.numero}/${e.nb_echeances} — ${fmtFCFA(ech.montant)}</div>
+          <div style="font-size:11px;color:${couleur}">${label2}${ech.statut!=='payee' ? ' · prévue le '+new Date(ech.date_prevue).toLocaleDateString('fr-CI') : ''}</div></div>
+          ${ech.statut !== 'payee' ? `<button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="payerEcheanceManuel(${ech.id},${ech.montant})">Régler</button>` : ''}
+        </div>`;
+      }).join('');
+      return `<div style="background:#fff;border:1.5px solid ${enDefaut?'#DC2626':'rgba(198,138,13,.3)'};border-radius:12px;padding:16px">
+        <div style="font-weight:700;font-size:14px">💳 ${label} en ${e.nb_echeances} fois — Total ${fmtFCFA(e.montant_total)}</div>
+        ${enDefaut ? '<div style="font-size:12px;color:#DC2626;font-weight:700;margin-top:2px">⚠️ Service suspendu pour impayé — réglez l\'échéance en retard pour le réactiver.</div>' : ''}
+        ${lignes}
+      </div>`;
+    }).join('<div style="height:10px"></div>');
+  } catch (e) {
+    console.error('[echeances]', e);
+    bloc.style.display = 'none';
+  }
+}
+
+// Règlement d'une échéance par Mobile Money direct — flux minimal (l'argent
+// est envoyé manuellement, puis déclaré ici avec son ID de transaction SMS,
+// exactement comme un paiement manuel classique).
+async function payerEcheanceManuel(echeanceId, montant) {
+  const p = window.ADMIN_PROFIL || {};
+  const canaux = ['wave','orange','mtn','moov'].filter(c => p[c + 'Actif'] && p[c]);
+  if (!canaux.length) { toast('Aucun moyen de paiement configuré, contactez l\'admin', 'erreur'); return; }
+  const canal = canaux[0];
+  const numero = p[canal];
+  toast(`Envoyez ${fmtFCFA(montant)} par ${PAY_METHODES[canal].nom} au ${payManuelNumeroLocal(numero)}, puis saisissez l'ID reçu par SMS.`);
+  const txn = (window.prompt(`ID de transaction ${PAY_METHODES[canal].nom} reçu par SMS :`) || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!txn) return;
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txn)) { toast('ID de transaction invalide', 'erreur'); return; }
+  const tel = (SESSION && SESSION.tel) || '';
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/echeance', { echeance_id: echeanceId, canal, txn_id: txn, tel });
+    if (r.error || !r.data || !r.data.reference) throw new Error((r.data && r.data.error) || 'Réponse invalide');
+    toast('✅ Déclaration envoyée, elle sera validée sous 24h par l\'admin.');
+    const msg = encodeURIComponent(`Bonjour, je viens de régler une échéance sur Le Grenier CI.\n\n• Montant : ${fmtFCFA(montant)} par ${PAY_METHODES[canal].nom}\n• ID transaction : ${txn}\n• Référence : ${r.data.reference}\n\nMerci de valider.`);
+    window.open('https://wa.me/' + (window._ADMIN_WA || '2250779181075') + '?text=' + msg, '_blank');
+    renderMesEcheances();
+  } catch (e) {
+    toast('Échec : ' + (e.message || 'réessayez'), 'erreur');
+  }
 }
 
 async function sauverProfil() {
@@ -15046,42 +15422,163 @@ function renderPromoHistorique() {
     </div>`).join('');
 }
 
-/* ---------- Parrainage dashboard ---------- */
-function genererCodeParrainage(user) {
-  if (!user) return '—';
-  const initiales = (user.prenom[0] + (user.nom[0]||'')).toUpperCase();
-  return 'AMI' + initiales + String(user.id).padStart(3,'0');
-}
+/* ---------- Parrainage dashboard (réseau d'ambassadeurs, commission réelle) ---------- */
+let _parrainageCodeActuel = '—';
 
 function copierCodeParrainage() {
-  const code = document.getElementById('parrainage-code-display').textContent;
-  if (code === '—') return;
-  navigator.clipboard.writeText(code).catch(()=>{});
-  toast('Code copié : ' + code + ' ✓');
+  if (_parrainageCodeActuel === '—') return;
+  navigator.clipboard.writeText(_parrainageCodeActuel).catch(()=>{});
+  toast('Code copié : ' + _parrainageCodeActuel + ' ✓');
 }
 
 function partagerParrainage() {
-  const code = document.getElementById('parrainage-code-display').textContent;
-  if (code === '—') return;
-  const msg = encodeURIComponent(`🛒 Rejoins Le Grenier, la marketplace de Côte d'Ivoire ! Utilise mon code *${code}* pour avoir -50% sur ta 1ère commission. 👉 https://legrenier.ci`);
+  if (_parrainageCodeActuel === '—') return;
+  const msg = encodeURIComponent(`🛒 Rejoins Le Grenier, la marketplace de Côte d'Ivoire ! Utilise mon code *${_parrainageCodeActuel}* à l'inscription. 👉 https://legrenier.ci`);
   window.open(`https://wa.me/?text=${msg}`, '_blank');
 }
 
-function renderParrainageDash() {
+async function renderParrainageDash() {
   if (!SESSION) return;
   const codeEl = document.getElementById('parrainage-code-display');
-  const code = genererCodeParrainage(SESSION);
-  if (codeEl) codeEl.textContent = code;
-
-  // Compter filleuls (simulé)
-  const promo = DAO._local.promos.find(p => p.code === code);
-  const nbFilleuls = promo ? promo.usages : Math.floor(Math.random() * 4);
   const el1 = document.getElementById('parr-nb-filleuls');
   const el2 = document.getElementById('parr-credits');
-  if (el1) el1.textContent = nbFilleuls;
-  if (el2) el2.textContent = nbFilleuls; // 1 crédit par filleul
+  const el3 = document.getElementById('parr-payees');
+
+  if (typeof MODE === 'undefined' || MODE !== 'remote') {
+    if (codeEl) codeEl.textContent = '—';
+    return;
+  }
+
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/parrainage/mes-stats');
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Réponse invalide');
+    _parrainageCodeActuel = r.data.code || '—';
+    if (codeEl) codeEl.textContent = _parrainageCodeActuel;
+    if (el1) el1.textContent = r.data.nb_filleuls || 0;
+    if (el2) el2.textContent = fmtFCFA(r.data.commissions_a_payer || 0);
+    if (el3) el3.textContent = fmtFCFA(r.data.commissions_payees || 0);
+  } catch (e) {
+    console.error('[parrainage] mes-stats', e);
+    if (codeEl) codeEl.textContent = '—';
+  }
 
   renderPromoHistorique();
+}
+
+/* ---------- ADMIN : commissions d'ambassadeurs à régler ---------- */
+async function renderAdminParrainage() {
+  const tbody = document.getElementById('admin-parrainage-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gris-text)">Chargement…</td></tr>';
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/parrainage/a-payer');
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Réponse invalide');
+    const rows = r.data.commissions || [];
+
+    const total = rows.reduce((s, c) => s + Number(c.montant), 0);
+    const elTotal = document.getElementById('kpi-parr-a-payer');
+    const elNb = document.getElementById('kpi-parr-nb');
+    if (elTotal) elTotal.textContent = fmtFCFA(total);
+    if (elNb) elNb.textContent = rows.length;
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gris-text)">Aucune commission en attente</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(c => {
+      const amb = c.ambassadeurs || {};
+      const filleul = c.utilisateurs || {};
+      return `<tr>
+        <td style="white-space:nowrap;font-size:12px">${new Date(c.created_at).toLocaleDateString('fr-CI')}</td>
+        <td style="font-family:monospace;font-weight:700">${amb.code || '—'}</td>
+        <td>${[filleul.prenom, filleul.nom].filter(Boolean).join(' ') || '—'}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--gris-text)">${c.paiement_ref || '—'}</td>
+        <td><strong style="color:var(--vert)">${fmtFCFA(c.montant)}</strong></td>
+        <td><button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="adminMarquerCommissionPayee(${c.id})">Marquer payé</button></td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--rouge)">Erreur : ${e.message}</td></tr>`;
+  }
+}
+
+async function adminMarquerCommissionPayee(commissionId) {
+  if (!window.confirm('Confirmer que cette commission a bien été versée à l\'ambassadeur ?')) return;
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/parrainage/marquer-paye', { commission_id: commissionId });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Échec');
+    toast('✅ Commission marquée comme payée');
+    renderAdminParrainage();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
+}
+
+/* ---------- ADMIN : achats protégés (paiement séquestre) ---------- */
+async function renderAdminAchatsProteges() {
+  const tbody = document.getElementById('admin-achats-proteges-tbody');
+  const tbodyDisputes = document.getElementById('admin-achats-proteges-disputes-tbody');
+  if (!tbody || !tbodyDisputes) return;
+  tbody.innerHTML = tbodyDisputes.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gris-text)">Chargement…</td></tr>';
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/achat-protege/a-verser');
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Réponse invalide');
+    const aVerser = r.data.a_verser || [];
+    const disputes = r.data.disputes || [];
+
+    tbody.innerHTML = aVerser.length ? aVerser.map(a => {
+      const v = a.utilisateurs || {};
+      return `<tr>
+        <td style="white-space:nowrap;font-size:12px">${new Date(a.confirme_le).toLocaleDateString('fr-CI')}</td>
+        <td>${[v.prenom, v.nom].filter(Boolean).join(' ') || '—'}</td>
+        <td>${a.acheteur_nom} <span style="color:var(--gris-text);font-size:11px">(${a.acheteur_tel})</span></td>
+        <td style="font-family:monospace;font-size:11px;color:var(--gris-text)">${a.paiement_ref}</td>
+        <td><strong style="color:var(--vert)">${fmtFCFA(a.montant_article)}</strong></td>
+        <td><button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="adminMarquerAchatVerse(${a.id})">Marquer versé</button></td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gris-text)">Rien à verser pour le moment</td></tr>';
+
+    tbodyDisputes.innerHTML = disputes.length ? disputes.map(d => {
+      const v = d.utilisateurs || {};
+      return `<tr>
+        <td style="white-space:nowrap;font-size:12px">${new Date(d.created_at).toLocaleDateString('fr-CI')}</td>
+        <td>${[v.prenom, v.nom].filter(Boolean).join(' ') || '—'}</td>
+        <td>${d.acheteur_nom} <span style="color:var(--gris-text);font-size:11px">(${d.acheteur_tel})</span></td>
+        <td style="font-size:12px;max-width:200px">${d.motif_dispute}</td>
+        <td><strong>${fmtFCFA(d.montant_article)}</strong></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-outline" style="padding:6px 10px;font-size:11px" onclick="adminTrancherLitige(${d.id},'rembourser')">Rembourser</button>
+          <button class="btn btn-outline" style="padding:6px 10px;font-size:11px" onclick="adminTrancherLitige(${d.id},'verser')">Verser au vendeur</button>
+        </td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gris-text)">Aucun litige en attente</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = tbodyDisputes.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--rouge)">Erreur : ${e.message}</td></tr>`;
+  }
+}
+
+async function adminMarquerAchatVerse(id) {
+  if (!window.confirm('Confirmer que le vendeur a bien été payé (Mobile Money) ?')) return;
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/achat-protege/marquer-verse', { id });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Échec');
+    toast('✅ Versement au vendeur enregistré');
+    renderAdminAchatsProteges();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
+}
+
+async function adminTrancherLitige(id, decision) {
+  const note = (window.prompt(decision === 'rembourser' ? 'Note sur le remboursement (facultatif) :' : 'Note sur la décision de verser au vendeur (facultatif) :') || '').trim();
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/achat-protege/trancher', { id, decision, note });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Échec');
+    toast(decision === 'rembourser' ? '↩️ Litige tranché : remboursement acheteur' : '✅ Litige tranché : versement au vendeur');
+    renderAdminAchatsProteges();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
 }
 
 /* ---------- ADMIN : gestion codes promo ---------- */
@@ -15255,12 +15752,71 @@ renderAdmin = function() {
   renderAdminPromos();
 };
 
-/* ---------- Surcharge renderDashboard pour parrainage ---------- */
+/* ---------- Surcharge renderDashboard pour parrainage + leads ---------- */
 const _renderDashboardOriginal = renderDashboard;
 renderDashboard = function() {
   _renderDashboardOriginal();
   renderParrainageDash();
+  renderMesLeadsBloc();
 };
+
+/* ---------- Pay-per-lead : capture de contacts qualifiés ---------- */
+const PACKS_CREDITS_CONTACT = { 10: { nb: 10, prix: 2000 }, 30: { nb: 30, prix: 5000 }, 100: { nb: 100, prix: 15000 } };
+
+async function toggleCaptureLead(annonceId, activer) {
+  try {
+    const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/annonces?id=eq.' + annonceId, { capture_lead: activer }, { Prefer: 'return=representation' });
+    if (r.error) throw new Error(r.error.message || 'Échec');
+    const a = DAO._local.annonces.find(x => x.id === annonceId);
+    if (a) a.captureLead = activer;
+    toast(activer ? '📨 Capture de leads activée — 1 crédit par contact reçu' : 'Capture de leads désactivée');
+    if (typeof renderMesAnnonces === 'function') renderMesAnnonces();
+    else if (typeof renderDashboard === 'function') renderDashboard();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
+}
+
+async function renderMesLeadsBloc() {
+  if (!SESSION || typeof MODE === 'undefined' || MODE !== 'remote') return;
+  const elCredits = document.getElementById('leads-credits');
+  const elListe = document.getElementById('mes-leads-liste');
+  if (!elCredits || !elListe) return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/lead/mes-leads');
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Réponse invalide');
+    elCredits.textContent = r.data.credits_contact || 0;
+    const leads = r.data.leads || [];
+    if (!leads.length) { elListe.innerHTML = 'Aucun lead reçu pour le moment.'; return; }
+    elListe.innerHTML = leads.slice(0, 20).map(l => {
+      const verrouille = l.statut === 'sans_credit';
+      const annonce = (l.annonces && l.annonces.titre) || '—';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--gris-mid)">
+        <div>
+          <div style="font-weight:600;font-size:13px">${verrouille ? '🔒 Lead verrouillé' : l.acheteur_nom} <span style="color:var(--gris-text);font-size:11px">— ${annonce}</span></div>
+          ${verrouille
+            ? '<div style="font-size:11px;color:#D97706">Rechargez vos crédits pour voir ce contact</div>'
+            : `<div style="font-size:11px;color:var(--gris-text)">${l.acheteur_tel}${l.message ? ' · ' + l.message : ''}</div>`}
+        </div>
+        <div style="font-size:11px;color:var(--gris-text);white-space:nowrap">${new Date(l.created_at).toLocaleDateString('fr-CI')}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    elListe.innerHTML = '<span style="color:var(--rouge)">Erreur de chargement</span>';
+  }
+}
+
+function ouvrirAchatCreditsContact() {
+  if (!SESSION) return;
+  const choix = window.prompt('Choisissez un pack de crédits contact :\n1 = 10 crédits (2 000 F)\n2 = 30 crédits (5 000 F, ~167 F/lead)\n3 = 100 crédits (15 000 F, 150 F/lead)\n\nTapez 1, 2 ou 3 :');
+  const packParChoix = { '1': '10', '2': '30', '3': '100' };
+  const pack = packParChoix[(choix || '').trim()];
+  if (!pack) return;
+  const info = PACKS_CREDITS_CONTACT[pack];
+  ouvrirModalPaiement(info.prix, `${info.nb} crédits contact`, () => renderMesLeadsBloc(), {
+    type: 'credits_contact', metadata: { pack },
+  });
+}
 
 /* ---------- Réinitialiser promo quand on quitte le dépôt ---------- */
 const _goScreenOriginal = goScreen;
@@ -15691,6 +16247,45 @@ function appellerVendeurAnnonce() {
   window.location.href = 'tel:' + tel.replace(/\s/g,'');
   toast(`📞 Appel vers ${vendeur.prenom}…`);
   fermerModal();
+}
+
+// Paiement séquestre : l'acheteur envoie le prix de l'article + des frais de
+// protection au Grenier (jamais au vendeur) — l'argent n'est versé au
+// vendeur qu'après confirmation de réception. Fonctionne sans compte.
+function demanderAchatProtege() {
+  if (!annonceCourante) return;
+  if (typeof MODE === 'undefined' || MODE !== 'remote') { toast('Achat protégé indisponible en mode démo', 'erreur'); return; }
+  const montantArticle = Number(annonceCourante.valeur) || 0;
+  if (montantArticle < 500) { toast('Achat protégé indisponible pour cette annonce', 'erreur'); return; }
+  const fraisProtection = Math.max(300, Math.round(montantArticle * 0.03));
+  ouvrirModalPaiement(montantArticle + fraisProtection, '🛡️ ' + annonceCourante.titre, null, {
+    type: 'achat_protege', achatProtege: true,
+    metadata: { annonce_id: annonceCourante.id, montant_article: montantArticle, frais_protection: fraisProtection },
+  });
+  fermerModal();
+}
+
+// Pay-per-lead : au lieu du contact direct, l'acheteur laisse son nom/tel/
+// message — le vendeur (qui a activé la capture sur cette annonce) reçoit
+// le lead et se voit débiter 1 crédit contact.
+async function demanderContactLead() {
+  if (!annonceCourante || !annonceCourante.captureLead) return;
+  if (typeof MODE === 'undefined' || MODE !== 'remote') { toast('Indisponible en mode démo', 'erreur'); return; }
+  const nom = (window.prompt('Votre nom :') || '').trim();
+  if (nom.length < 2) return;
+  const tel = (window.prompt('Votre numéro de téléphone :') || '').trim();
+  if (tel.replace(/\D/g, '').length < 8) { toast('Numéro de téléphone requis', 'erreur'); return; }
+  const message = (window.prompt('Votre message (facultatif) :') || '').trim();
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/lead/soumettre', {
+      annonce_id: annonceCourante.id, nom, tel, message: message || null,
+    });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Échec');
+    toast('✅ Votre demande a été envoyée au vendeur, il devrait vous contacter rapidement.');
+    fermerModal();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
 }
 
 function contacterBoulot(id) {
@@ -18809,6 +19404,8 @@ const ADMIN_PERMISSIONS_LISTE = [
   { key:'admin-promos',       label:'Codes Promo' },
   { key:'admin-pub',          label:'Publicités' },
   { key:'admin-abonnements',  label:'Abonnements' },
+  { key:'admin-parrainage',   label:'Parrainage' },
+  { key:'admin-achats-proteges', label:'Achats protégés' },
   { key:'admin-finances',     label:'Finances' },
   { key:'admin-livraisons',   label:'Livraisons' },
   { key:'admin-inscriptions', label:'Inscriptions' },
@@ -18839,12 +19436,14 @@ async function adminTab(el, tabId) {
   if (!adminAPermission(tabId)) { toast('⛔ Accès non autorisé à cette section', 'erreur'); return; }
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
   el?.classList.add('actif');
-  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
+  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-parrainage,#admin-achats-proteges,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
   if (tabId==='admin-contenus') chargerAdminContenus();
   if (tabId==='admin-annonces') { await _adminRafraichirCache(['annonces','utilisateurs']); renderAdmin(); }
   if (tabId==='admin-pub') { await _adminRafraichirCache(['bannieres']); renderAdminPub(); }
   if (tabId==='admin-abonnements') { await _adminRafraichirCache(['abonnements','plans']); renderAdminAbonnements(); }
+  if (tabId==='admin-parrainage') renderAdminParrainage();
+  if (tabId==='admin-achats-proteges') renderAdminAchatsProteges();
   if (tabId==='admin-promos') { await _adminRafraichirCache(['promos','bannieres','annonces']); renderAdminPromos(); peuplerSelectsPromo(); }
   if (tabId==='admin-finances') { await _adminRafraichirCache(['paiements','abonnements','bannieres']); renderAdminFinancesComplet(); }
   if (tabId==='admin-litiges') { await _adminRafraichirCache(['litiges','utilisateurs']); renderAdminLitiges(); }
@@ -23694,6 +24293,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     try { await verifierRetourPaiementReel(); }
     catch (e) { console.warn('[INIT] verification retour paiement echouee', e); }
   }
+  // Suivi d'un achat protégé : ?suivi_achat=<jeton> (lien envoyé par l'acheteur à lui-même).
+  { const j = new URLSearchParams(location.search).get('suivi_achat');
+    if (j && typeof ouvrirSuiviAchatProtege === 'function') ouvrirSuiviAchatProtege(j); }
   if (typeof window._syncInscriptionsDepuisSupabase === 'function') window._syncInscriptionsDepuisSupabase();
   if (typeof window.enregistrerVisite === 'function') window.enregistrerVisite('accueil');
   if (typeof window.chargerLivraisonsDepuisSupabase === 'function') await window.chargerLivraisonsDepuisSupabase();
