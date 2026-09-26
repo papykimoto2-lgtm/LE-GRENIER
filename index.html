@@ -347,6 +347,7 @@
   .pay-methode.sel .pm-nom{color:var(--vert)}
   .pay-check{position:absolute;top:6px;right:6px;width:16px;height:16px;background:var(--vert);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:9px;color:#fff}
   .pay-methode.sel .pay-check{display:flex}
+  .pay-echelon-btn.sel{border-color:#C68A0D !important;background:#FFF3DC !important;color:#7A5200}
 
   /* Séparateur catégorie */
   .pay-cat-sep{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gris-text);padding:14px 18px 6px;display:flex;align-items:center;gap:8px}
@@ -1237,7 +1238,7 @@
   .parrainage-card{background:linear-gradient(135deg,#F8EDFA,#fff);border:1.5px solid rgba(134,46,156,.15);border-radius:var(--radius-lg);padding:20px;margin-top:16px}
   .parrainage-code-display{font-family:monospace;font-size:22px;font-weight:900;letter-spacing:.18em;color:#862E9C;background:#fff;border:2px dashed rgba(134,46,156,.25);border-radius:10px;padding:14px;text-align:center;margin:12px 0;cursor:pointer;transition:var(--transition)}
   .parrainage-code-display:hover{background:#F8EDFA;transform:scale(1.02)}
-  .parrainage-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .parrainage-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
   .parrainage-stat{background:#fff;border-radius:10px;padding:12px;text-align:center;border:1px solid rgba(134,46,156,.1)}
   .parrainage-stat strong{display:block;font-family:var(--font-titre);font-size:24px;color:#862E9C}
   .parrainage-stat span{font-size:11px;color:var(--gris-text);font-weight:600}
@@ -7534,6 +7535,11 @@ const ENTREPRISE = {
           <input type="password" id="reg-pass-confirm" placeholder="Répéter le mot de passe" autocomplete="new-password">
         </div>
 
+        <div class="form-group">
+          <label>Code de parrainage (facultatif)</label>
+          <input type="text" id="reg-code-parrain" placeholder="Ex: AMICD1234" style="text-transform:uppercase" maxlength="20">
+        </div>
+
         <!-- Récap géo -->
         <div id="reg-recap-geo" style="background:var(--vert-pale);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:13px;border:1px solid rgba(13,92,53,.12);display:none">
           <div style="font-weight:700;color:var(--vert);margin-bottom:4px">Votre position enregistrée</div>
@@ -7668,6 +7674,9 @@ const ENTREPRISE = {
       <div id="tab-paiements" class="hidden">
         <div class="dash-titre">Mes paiements & commissions</div>
 
+        <!-- Paiements en plusieurs fois (BNPL) en cours -->
+        <div id="mes-echeances-bloc" style="display:none;margin-bottom:18px"></div>
+
         <!-- KPIs financiers personnels -->
         <div class="stats-grid" style="margin-bottom:18px">
           <div class="stat-card"><div class="stat-val" id="pay-stat-total">0 F</div><div class="stat-label">Total payé</div></div>
@@ -7739,8 +7748,8 @@ const ENTREPRISE = {
         <div class="dash-titre">Mon programme de parrainage</div>
         <div style="max-width:520px">
           <div style="background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:22px;box-shadow:var(--shadow-sm)">
-            <div style="font-weight:700;font-size:15px;margin-bottom:6px">Invitez vos amis, gagnez des crédits</div>
-            <div style="font-size:13px;color:var(--gris-text);margin-bottom:14px">Chaque ami inscrit avec votre code vous offre <strong style="color:var(--vert)">1 annonce gratuite</strong>. Votre ami reçoit lui aussi <strong style="color:var(--or)">-50% sur sa 1ère commission</strong>.</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px">Devenez ambassadeur, gagnez de l'argent</div>
+            <div style="font-size:13px;color:var(--gris-text);margin-bottom:14px">Chaque vendeur inscrit avec votre code vous rapporte une <strong style="color:var(--vert)">vraie commission en FCFA</strong> sur ses paiements (vente, abonnement, boost, vérification) pendant ses 90 premiers jours.</div>
             <div style="font-size:12px;font-weight:700;color:var(--gris-text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Votre code personnel</div>
             <div class="parrainage-code-display" id="parrainage-code-display" onclick="copierCodeParrainage()" title="Cliquer pour copier">—</div>
             <div style="font-size:12px;color:var(--gris-text);text-align:center;margin-bottom:16px">Cliquer pour copier · Partager sur WhatsApp, SMS...</div>
@@ -7748,8 +7757,9 @@ const ENTREPRISE = {
               📲 Partager via WhatsApp
             </button>
             <div class="parrainage-stats">
-              <div class="parrainage-stat"><strong id="parr-nb-filleuls">0</strong><span>Amis parrainés</span></div>
-              <div class="parrainage-stat"><strong id="parr-credits">0</strong><span>Annonces gratuites</span></div>
+              <div class="parrainage-stat"><strong id="parr-nb-filleuls">0</strong><span>Vendeurs parrainés</span></div>
+              <div class="parrainage-stat"><strong id="parr-credits">0 F</strong><span>Commissions à payer</span></div>
+              <div class="parrainage-stat"><strong id="parr-payees">0 F</strong><span>Déjà versées</span></div>
             </div>
           </div>
           <div style="margin-top:20px">
@@ -9667,6 +9677,19 @@ const ENTREPRISE = {
         </div>
       </div>
 
+      <!-- Paiement en plusieurs fois (BNPL) — visible uniquement pour un
+           abonnement, un boost ou une vérification, jamais pour une vente
+           entre particuliers ni un produit numérique. -->
+      <div id="pay-echelon-bloc" style="display:none;margin:14px 18px 0;padding:14px;background:#FFF8ED;border:1.5px solid rgba(198,138,13,.25);border-radius:12px">
+        <div style="font-weight:700;font-size:13px;color:#7A5200;margin-bottom:8px">💳 Vous pouvez aussi payer en plusieurs fois</div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="pay-echelon-btn sel" id="pe-1" onclick="selPayEchelon(0)" style="flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid var(--gris-mid);background:#fff;font-size:12px;font-weight:700;cursor:pointer">1 fois</button>
+          <button type="button" class="pay-echelon-btn" id="pe-2" onclick="selPayEchelon(2)" style="flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid var(--gris-mid);background:#fff;font-size:12px;font-weight:700;cursor:pointer">2 fois</button>
+          <button type="button" class="pay-echelon-btn" id="pe-3" onclick="selPayEchelon(3)" style="flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid var(--gris-mid);background:#fff;font-size:12px;font-weight:700;cursor:pointer">3 fois</button>
+        </div>
+        <div id="pay-echelon-detail" style="font-size:12px;color:#7A5200;margin-top:8px;display:none"></div>
+      </div>
+
       <!-- Récap -->
       <div class="pay-recap-box" id="pay-recap"></div>
 
@@ -11457,9 +11480,13 @@ function sInscrire() {
   window.DB_INSCRIPTIONS.unshift(newUser);
 
   // Persistance Supabase — fiche en attente de validation admin (pas de compte Auth encore)
+  // code_parrain : résolu automatiquement en base (trigger resoudre_code_parrainage) —
+  // si invalide ou absent, ignoré silencieusement, l'inscription n'est jamais bloquée.
+  const codeParrain = (document.getElementById('reg-code-parrain')?.value || '').trim();
   if (MODE === 'remote') {
     _xhr('POST', SUPABASE_URL + '/rest/v1/utilisateurs', {
-      prenom, nom, email, tel, ville, role: 'user', statut: 'attente'
+      prenom, nom, email, tel, ville, role: 'user', statut: 'attente',
+      ...(codeParrain ? { code_parrain: codeParrain } : {})
     }, { Prefer: 'return=representation' }).then(r => {
       if (r.error) console.error('[persist] pré-inscription', r.error);
       else if (r.data && r.data[0]) newUser._supabaseId = r.data[0].id;
@@ -12572,6 +12599,20 @@ const PAY_METHODES = {
 
 let payMethodeActive = 'wave';
 
+// Paiement en plusieurs fois (BNPL) : simple aperçu client (le serveur
+// recalcule toujours lui-même le prix officiel et les frais réels).
+const PAY_ECHELON_TYPES = ['abonnement', 'boost', 'verification'];
+const PAY_ECHELON_FRAIS = { 2: 6, 3: 10 };
+
+function calculerEcheancesApercu(prixRef, n) {
+  const fraisPct = PAY_ECHELON_FRAIS[n] || 0;
+  const total = Math.round(prixRef * (1 + fraisPct / 100));
+  const base = Math.floor(total / n);
+  const montants = Array(n).fill(base);
+  montants[n - 1] = total - base * (n - 1);
+  return { total, fraisPct, montants };
+}
+
 function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   payMethodeActive = 'wave';
   window._payOnSuccess = onSuccess || null;
@@ -12580,16 +12621,42 @@ function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   window._payLibelleCourant = libelle || 'Commission publication';
   window._payTypeCourant = (opts && opts.type) || 'commission';
   window._payMetadataCourant = (opts && opts.metadata) || null;
+  window._payEchelonnerCourant = 0;
   // Achat express sans compte (produit numérique via QR code / lien partagé)
   window._payInvite = !!(opts && opts.invite);
   // Mettre à jour l'affichage
   document.getElementById('pay-montant-display').textContent = fmtFCFA(montant);
   document.getElementById('pay-annonce-display').textContent = libelle || 'Commission publication';
+  // Bloc "payer en plusieurs fois" : uniquement pour abonnement/boost/vérification.
+  const echelonBloc = document.getElementById('pay-echelon-bloc');
+  const eligible = PAY_ECHELON_TYPES.includes(window._payTypeCourant) && montant >= 1000;
+  if (echelonBloc) echelonBloc.style.display = eligible ? 'block' : 'none';
+  document.querySelectorAll('.pay-echelon-btn').forEach(b => b.classList.remove('sel'));
+  document.getElementById('pe-1')?.classList.add('sel');
+  document.getElementById('pay-echelon-detail').style.display = 'none';
   // Récap
   renderPayRecap(montant, libelle);
   // Réinitialiser toutes les étapes
   payShowEtape(1);
   document.getElementById('modal-paiement').classList.add('open');
+}
+
+function selPayEchelon(n) {
+  window._payEchelonnerCourant = n;
+  document.querySelectorAll('.pay-echelon-btn').forEach(b => b.classList.remove('sel'));
+  document.getElementById('pe-' + (n || 1))?.classList.add('sel');
+  const detail = document.getElementById('pay-echelon-detail');
+  const montant = window._payMontantCourant || 0;
+  if (!n) {
+    document.getElementById('pay-montant-display').textContent = fmtFCFA(montant);
+    detail.style.display = 'none';
+  } else {
+    const plan = calculerEcheancesApercu(montant, n);
+    document.getElementById('pay-montant-display').textContent = fmtFCFA(plan.montants[0]);
+    detail.innerHTML = `1ère échéance aujourd'hui, le reste tous les 30 jours · Total avec frais de service (${plan.fraisPct}%) : <strong>${fmtFCFA(plan.total)}</strong>`;
+    detail.style.display = 'block';
+  }
+  renderPayRecap(montant, window._payLibelleCourant);
 }
 
 function fermerModalPaiement() {
@@ -12853,6 +12920,7 @@ async function lancerPaiementReel() {
     tel:         document.getElementById('pay-numero-mm')?.value || (SESSION && SESSION.tel) || '',
     return_url:  window.location.origin + window.location.pathname,
     annonce:     window._payMetadataCourant || depotEnCours || null,
+    echelonner:  window._payEchelonnerCourant || 0,
   };
 
   try {
@@ -12899,10 +12967,16 @@ function payManuelNumeroLocal(num) {
   return d.length === 10 ? d.replace(/(\d{2})(?=\d)/g, '$1 ') : String(num || '');
 }
 
+function payManuelMontantDu() {
+  const montant = window._payMontantCourant || 0;
+  const n = window._payEchelonnerCourant || 0;
+  return n ? calculerEcheancesApercu(montant, n).montants[0] : montant;
+}
+
 function payManuelPreparer(note) {
   const m = PAY_METHODES[payMethodeActive];
   const p = window.ADMIN_PROFIL || {};
-  document.getElementById('pay-manuel-montant').textContent = fmtFCFA(window._payMontantCourant || 0);
+  document.getElementById('pay-manuel-montant').textContent = fmtFCFA(payManuelMontantDu());
   document.getElementById('pay-manuel-canal').textContent = m.nom;
   document.getElementById('pay-manuel-numero').textContent = payManuelNumeroLocal(m.destinataire);
   document.getElementById('pay-manuel-benef').textContent =
@@ -12951,6 +13025,7 @@ async function payManuelEnvoyer() {
     description: window._payLibelleCourant || 'Paiement Le Grenier CI',
     tel, txn_id: txn,
     annonce: contenu,
+    echelonner: window._payEchelonnerCourant || 0,
   };
   try {
     const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/manuel', payload);
@@ -12963,8 +13038,8 @@ async function payManuelEnvoyer() {
     if (depotEnCours && !window._payMetadataCourant) { depotEnCours = null; DEPOT_PHOTOS = []; }
     document.getElementById('pay-manuel-ref').textContent = 'REF: ' + ref;
     const msg = 'Bonjour, je viens de payer sur Le Grenier CI.\n\n' +
-      '• Achat : ' + payload.description + '\n' +
-      '• Montant : ' + fmtFCFA(payload.montant) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Achat : ' + payload.description + (payload.echelonner ? ' (1ère échéance sur ' + payload.echelonner + ')' : '') + '\n' +
+      '• Montant : ' + fmtFCFA(payManuelMontantDu()) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
       '• Envoyé depuis : ' + tel + '\n' +
       '• ID transaction : ' + txn + '\n' +
       '• Référence : ' + ref + '\n\nMerci de valider.';
@@ -13472,7 +13547,7 @@ function dashTab(el, tabId) {
   el.classList.add('actif');
   document.querySelectorAll('#tab-annonces,#tab-paiements,#tab-profil,#tab-avis,#tab-parrainage').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
-  if (tabId === 'tab-paiements') renderMesPaiements('');
+  if (tabId === 'tab-paiements') { renderMesPaiements(''); renderMesEcheances(); }
   toggleDashSidebar(false); // referme le tiroir mobile après un choix
 }
 
@@ -13542,6 +13617,69 @@ function renderMesPaiements(typeFilter) {
       <td style="font-family:monospace;font-size:10px;color:var(--gris-text)">${p.ref||'—'}</td>
     </tr>`
   }).join('');
+}
+
+/* ---------- Paiement en plusieurs fois (BNPL) — mes échéanciers ---------- */
+const ECHEANCE_LABELS = { abonnement: 'Abonnement', boost: 'Boost annonce', verification: 'Badge vérifié' };
+
+async function renderMesEcheances() {
+  const bloc = document.getElementById('mes-echeances-bloc');
+  if (!bloc || typeof MODE === 'undefined' || MODE !== 'remote') return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/paiement/mes-echeances');
+    if (r.error) throw new Error(r.error);
+    const echeanciers = (r.data && r.data.echeanciers || []).filter(e => e.statut !== 'termine');
+    if (!echeanciers.length) { bloc.style.display = 'none'; return; }
+
+    bloc.style.display = 'block';
+    bloc.innerHTML = echeanciers.map(e => {
+      const label = ECHEANCE_LABELS[e.type] || e.type;
+      const enDefaut = e.statut === 'defaillant';
+      const lignes = (e.echeances || []).slice().sort((a,b) => a.numero - b.numero).map(ech => {
+        const couleur = ech.statut === 'payee' ? '#16A34A' : ech.statut === 'en_retard' ? '#DC2626' : '#6B7280';
+        const label2 = ech.statut === 'payee' ? '✓ Payée' : ech.statut === 'en_retard' ? '⚠️ En retard' : 'À venir';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--gris-mid)">
+          <div><div style="font-weight:600;font-size:13px">Échéance ${ech.numero}/${e.nb_echeances} — ${fmtFCFA(ech.montant)}</div>
+          <div style="font-size:11px;color:${couleur}">${label2}${ech.statut!=='payee' ? ' · prévue le '+new Date(ech.date_prevue).toLocaleDateString('fr-CI') : ''}</div></div>
+          ${ech.statut !== 'payee' ? `<button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="payerEcheanceManuel(${ech.id},${ech.montant})">Régler</button>` : ''}
+        </div>`;
+      }).join('');
+      return `<div style="background:#fff;border:1.5px solid ${enDefaut?'#DC2626':'rgba(198,138,13,.3)'};border-radius:12px;padding:16px">
+        <div style="font-weight:700;font-size:14px">💳 ${label} en ${e.nb_echeances} fois — Total ${fmtFCFA(e.montant_total)}</div>
+        ${enDefaut ? '<div style="font-size:12px;color:#DC2626;font-weight:700;margin-top:2px">⚠️ Service suspendu pour impayé — réglez l\'échéance en retard pour le réactiver.</div>' : ''}
+        ${lignes}
+      </div>`;
+    }).join('<div style="height:10px"></div>');
+  } catch (e) {
+    console.error('[echeances]', e);
+    bloc.style.display = 'none';
+  }
+}
+
+// Règlement d'une échéance par Mobile Money direct — flux minimal (l'argent
+// est envoyé manuellement, puis déclaré ici avec son ID de transaction SMS,
+// exactement comme un paiement manuel classique).
+async function payerEcheanceManuel(echeanceId, montant) {
+  const p = window.ADMIN_PROFIL || {};
+  const canaux = ['wave','orange','mtn','moov'].filter(c => p[c + 'Actif'] && p[c]);
+  if (!canaux.length) { toast('Aucun moyen de paiement configuré, contactez l\'admin', 'erreur'); return; }
+  const canal = canaux[0];
+  const numero = p[canal];
+  toast(`Envoyez ${fmtFCFA(montant)} par ${PAY_METHODES[canal].nom} au ${payManuelNumeroLocal(numero)}, puis saisissez l'ID reçu par SMS.`);
+  const txn = (window.prompt(`ID de transaction ${PAY_METHODES[canal].nom} reçu par SMS :`) || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!txn) return;
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txn)) { toast('ID de transaction invalide', 'erreur'); return; }
+  const tel = (SESSION && SESSION.tel) || '';
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/echeance', { echeance_id: echeanceId, canal, txn_id: txn, tel });
+    if (r.error || !r.data || !r.data.reference) throw new Error((r.data && r.data.error) || 'Réponse invalide');
+    toast('✅ Déclaration envoyée, elle sera validée sous 24h par l\'admin.');
+    const msg = encodeURIComponent(`Bonjour, je viens de régler une échéance sur Le Grenier CI.\n\n• Montant : ${fmtFCFA(montant)} par ${PAY_METHODES[canal].nom}\n• ID transaction : ${txn}\n• Référence : ${r.data.reference}\n\nMerci de valider.`);
+    window.open('https://wa.me/' + (window._ADMIN_WA || '2250779181075') + '?text=' + msg, '_blank');
+    renderMesEcheances();
+  } catch (e) {
+    toast('Échec : ' + (e.message || 'réessayez'), 'erreur');
+  }
 }
 
 async function sauverProfil() {
@@ -15046,40 +15184,45 @@ function renderPromoHistorique() {
     </div>`).join('');
 }
 
-/* ---------- Parrainage dashboard ---------- */
-function genererCodeParrainage(user) {
-  if (!user) return '—';
-  const initiales = (user.prenom[0] + (user.nom[0]||'')).toUpperCase();
-  return 'AMI' + initiales + String(user.id).padStart(3,'0');
-}
+/* ---------- Parrainage dashboard (réseau d'ambassadeurs, commission réelle) ---------- */
+let _parrainageCodeActuel = '—';
 
 function copierCodeParrainage() {
-  const code = document.getElementById('parrainage-code-display').textContent;
-  if (code === '—') return;
-  navigator.clipboard.writeText(code).catch(()=>{});
-  toast('Code copié : ' + code + ' ✓');
+  if (_parrainageCodeActuel === '—') return;
+  navigator.clipboard.writeText(_parrainageCodeActuel).catch(()=>{});
+  toast('Code copié : ' + _parrainageCodeActuel + ' ✓');
 }
 
 function partagerParrainage() {
-  const code = document.getElementById('parrainage-code-display').textContent;
-  if (code === '—') return;
-  const msg = encodeURIComponent(`🛒 Rejoins Le Grenier, la marketplace de Côte d'Ivoire ! Utilise mon code *${code}* pour avoir -50% sur ta 1ère commission. 👉 https://legrenier.ci`);
+  if (_parrainageCodeActuel === '—') return;
+  const msg = encodeURIComponent(`🛒 Rejoins Le Grenier, la marketplace de Côte d'Ivoire ! Utilise mon code *${_parrainageCodeActuel}* à l'inscription. 👉 https://legrenier.ci`);
   window.open(`https://wa.me/?text=${msg}`, '_blank');
 }
 
-function renderParrainageDash() {
+async function renderParrainageDash() {
   if (!SESSION) return;
   const codeEl = document.getElementById('parrainage-code-display');
-  const code = genererCodeParrainage(SESSION);
-  if (codeEl) codeEl.textContent = code;
-
-  // Compter filleuls (simulé)
-  const promo = DAO._local.promos.find(p => p.code === code);
-  const nbFilleuls = promo ? promo.usages : Math.floor(Math.random() * 4);
   const el1 = document.getElementById('parr-nb-filleuls');
   const el2 = document.getElementById('parr-credits');
-  if (el1) el1.textContent = nbFilleuls;
-  if (el2) el2.textContent = nbFilleuls; // 1 crédit par filleul
+  const el3 = document.getElementById('parr-payees');
+
+  if (typeof MODE === 'undefined' || MODE !== 'remote') {
+    if (codeEl) codeEl.textContent = '—';
+    return;
+  }
+
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/parrainage/mes-stats');
+    if (r.error) throw new Error(r.error);
+    _parrainageCodeActuel = r.code || '—';
+    if (codeEl) codeEl.textContent = _parrainageCodeActuel;
+    if (el1) el1.textContent = r.nb_filleuls || 0;
+    if (el2) el2.textContent = fmtFCFA(r.commissions_a_payer || 0);
+    if (el3) el3.textContent = fmtFCFA(r.commissions_payees || 0);
+  } catch (e) {
+    console.error('[parrainage] mes-stats', e);
+    if (codeEl) codeEl.textContent = '—';
+  }
 
   renderPromoHistorique();
 }

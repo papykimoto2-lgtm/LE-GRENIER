@@ -12,19 +12,21 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //  valeur envoyée par le client.
 //
 //  Routes :
-//    POST /paiement           → paiement CinetPay (redirection)
-//    GET  /paiement/statut    → statut d'un paiement du client connecté
-//    POST /paiement/manuel    → le client déclare un transfert Mobile Money
-//                               direct (Wave/Orange/MTN/Moov) vers le numéro
-//                               du Grenier, avec l'ID de transaction reçu par SMS
-//    POST /paiement/invite    → achat express d'un produit numérique SANS compte
-//                               (QR code, lien partagé) : transfert Mobile Money
-//                               direct + nom et WhatsApp du client ; renvoie un
-//                               jeton secret qui ouvrira le téléchargement une
-//                               fois le paiement confirmé par l'admin
-//    POST /paiement/valider   → (admin) confirme ou refuse un paiement manuel
-//                               après l'avoir vu arriver sur son téléphone ;
-//                               la confirmation active le service acheté.
+//    POST /paiement                → paiement CinetPay (redirection)
+//    GET  /paiement/statut         → statut d'un paiement du client connecté
+//    POST /paiement/manuel         → le client déclare un transfert Mobile Money
+//                                     direct (Wave/Orange/MTN/Moov) vers le numéro
+//                                     du Grenier, avec l'ID de transaction reçu par SMS
+//    POST /paiement/invite         → achat express d'un produit numérique SANS compte
+//                                     (QR code, lien partagé) : transfert Mobile Money
+//                                     direct + nom et WhatsApp du client ; renvoie un
+//                                     jeton secret qui ouvrira le téléchargement une
+//                                     fois le paiement confirmé par l'admin
+//    POST /paiement/valider        → (admin) confirme ou refuse un paiement manuel
+//                                     après l'avoir vu arriver sur son téléphone ;
+//                                     la confirmation active le service acheté.
+//    GET  /paiement/mes-echeances  → mes paiements en plusieurs fois (BNPL) en cours
+//    POST /paiement/echeance       → règle une échéance en attente (Mobile Money direct)
 // ════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -39,6 +41,14 @@ const CP_V1_BASE = CINETPAY_API_KEY.startsWith("sk_live_") ? "https://api.cinetp
 const PASSERELLE_MANUELLE = "Mobile Money direct";
 const CANAUX_MANUELS = ["wave", "orange", "mtn", "moov"];
 const TYPES_MANUELS = ["commission", "abonnement", "boost", "verification", "livraison", "formation", "pub", "produit", "autre"];
+
+// Paiement en plusieurs fois (BNPL) : uniquement pour les frais vendeur avec
+// activation automatique — jamais pour une vente entre particuliers (déjà
+// réglée directement) ni pour un produit numérique (livraison immédiate).
+const TYPES_ECHELONNABLES = ["abonnement", "boost", "verification"];
+// Frais de service pour l'échelonnement, en % du prix — couvre le risque
+// d'impayé et incite à payer en une fois quand c'est possible.
+const FRAIS_ECHELONNEMENT: Record<number, number> = { 2: 6, 3: 10 };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -106,6 +116,62 @@ async function produitAchete(metadata: any, montant: number): Promise<any | null
   return rows[0];
 }
 
+// Prix officiel du service demandé, jamais celui envoyé par le client —
+// c'est sur cette valeur que l'échelonnement (BNPL) calcule ses échéances.
+async function prixReference(type: string, metadata: any, montantEnvoye: number): Promise<number | null> {
+  if (type === "abonnement") {
+    const nom = metadata && typeof metadata.plan === "string" ? metadata.plan : "";
+    if (!nom) return null;
+    const r = await sb(`/rest/v1/plans?nom=eq.${encodeURIComponent(nom)}&select=prix`);
+    const rows = r.ok ? await r.json() : [];
+    return rows.length && Number(rows[0].prix) > 0 ? Number(rows[0].prix) : null;
+  }
+  if (type === "boost") {
+    const code = metadata && typeof metadata.boost_plan === "string" ? metadata.boost_plan : "";
+    if (!code) return null;
+    const r = await sb(`/rest/v1/boost_plans?code=eq.${encodeURIComponent(code)}&active=eq.true&select=price_fcfa`);
+    const rows = r.ok ? await r.json() : [];
+    return rows.length && Number(rows[0].price_fcfa) > 0 ? Number(rows[0].price_fcfa) : null;
+  }
+  if (type === "verification") return montantEnvoye > 0 ? montantEnvoye : null;
+  return null;
+}
+
+// Répartit le prix + frais de service sur N échéances égales (la dernière
+// absorbe l'arrondi).
+function calculerEcheances(prixRef: number, n: number): { montantTotal: number; fraisPct: number; montants: number[] } {
+  const fraisPct = FRAIS_ECHELONNEMENT[n] || 0;
+  const montantTotal = Math.round(prixRef * (1 + fraisPct / 100));
+  const base = Math.floor(montantTotal / n);
+  const montants = Array(n).fill(base);
+  montants[n - 1] = montantTotal - base * (n - 1);
+  return { montantTotal, fraisPct, montants };
+}
+
+async function creerEcheancier(utilisateurId: number, type: string, referenceInitiale: string, plan: { montantTotal: number; fraisPct: number; montants: number[] }) {
+  const insEch = await sb(`/rest/v1/echeanciers`, {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      utilisateur_id: utilisateurId, type, paiement_initial_ref: referenceInitiale,
+      montant_total: plan.montantTotal, frais_pct: plan.fraisPct, nb_echeances: plan.montants.length,
+    }),
+  });
+  const rows = insEch.ok ? await insEch.json() : [];
+  if (!rows.length) return;
+  const echeancierId = rows[0].id;
+  const jourMs = 24 * 3600 * 1000;
+  const lignes = plan.montants.map((montant, i) => ({
+    echeancier_id: echeancierId,
+    numero: i + 1,
+    montant,
+    date_prevue: new Date(Date.now() + (i + 1) * 30 * jourMs).toISOString().slice(0, 10),
+    // La 1ère échéance correspond au paiement qu'on vient d'initier.
+    paiement_ref: i === 0 ? referenceInitiale : null,
+  }));
+  await sb(`/rest/v1/echeances`, { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(lignes) });
+}
+
 // Appel à l'API CinetPay v1 : connexion (clé + mot de passe API) → jeton
 // JWT, puis requête authentifiée. Renvoie le JSON de la réponse.
 async function cinetpayV1(method: string, path: string, body?: unknown): Promise<any> {
@@ -139,7 +205,7 @@ async function initierPaiement(req: Request, user: any) {
   const canal = String(body.canal || "").toLowerCase();
   const channels = canal === "carte" ? "CREDIT_CARD" : "MOBILE_MONEY";
   const description = String(body.description || "Paiement Le Grenier CI").slice(0, 255);
-  const type = ["commission", "abonnement", "boost", "produit"].includes(body.type) ? body.type : "commission";
+  const type = ["commission", "abonnement", "boost", "produit", "verification"].includes(body.type) ? body.type : "commission";
   const reference = genererReference();
 
   const { pct, planNom } = await commissionPourUtilisateur(user.id);
@@ -150,15 +216,35 @@ async function initierPaiement(req: Request, user: any) {
   // du contenu (titre/description/photos...), aucune valeur financière
   // n'y est relue.
   const metadata = body.annonce && typeof body.annonce === "object" ? body.annonce : null;
-  const planVendeur = type === "abonnement" ? (await planAchete(metadata, montant)) : planNom;
-  if (type === "abonnement" && !planVendeur) return json({ error: "Plan d'abonnement invalide" }, 400);
+
+  // Paiement en plusieurs fois (BNPL) : le prix officiel du service décide
+  // des échéances, jamais le montant envoyé par le client.
+  const nEchelons = [2, 3].includes(Number(body.echelonner)) ? Number(body.echelonner) : 0;
+  let planEcheances: { montantTotal: number; fraisPct: number; montants: number[] } | null = null;
+  let montantAPayerMaintenant = montant;
+  if (nEchelons && TYPES_ECHELONNABLES.includes(type)) {
+    const prixRef = await prixReference(type, metadata, montant);
+    if (!prixRef || prixRef < 1000) return json({ error: "Échelonnement indisponible pour ce service" }, 400);
+    planEcheances = calculerEcheances(prixRef, nEchelons);
+    montantAPayerMaintenant = planEcheances.montants[0];
+  }
+
+  let planVendeur: string | null;
+  if (type === "abonnement") {
+    planVendeur = planEcheances
+      ? (typeof metadata?.plan === "string" ? metadata.plan : null)
+      : await planAchete(metadata, montant);
+    if (!planVendeur) return json({ error: "Plan d'abonnement invalide" }, 400);
+  } else {
+    planVendeur = planNom;
+  }
   if (type === "produit" && !(await produitAchete(metadata, montant))) return json({ error: "Produit indisponible ou montant invalide" }, 400);
 
   const insertRes = await sb(`/rest/v1/paiements`, {
     method: "POST",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
-      vendeur_id: user.id, annonce_titre: description, valeur: montant, commission,
+      vendeur_id: user.id, annonce_titre: description, valeur: montantAPayerMaintenant, commission,
       ref: reference, passerelle: "CinetPay", moyen: canal || "mobile_money",
       statut: "attente", plan_vendeur: planVendeur, type, metadata,
     }),
@@ -187,7 +273,7 @@ async function initierPaiement(req: Request, user: any) {
       cp = await cinetpayV1("POST", "/v1/payment", {
         currency: "XOF",
         merchant_transaction_id: reference,
-        amount: montant,
+        amount: montantAPayerMaintenant,
         lang: "fr",
         designation: description,
         client_email: user.email || "client@legrenier.ci",
@@ -208,7 +294,8 @@ async function initierPaiement(req: Request, user: any) {
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({ metadata: { ...(metadata || {}), cp_transaction_id: cp.transaction_id || null, cp_notify_token: cp.notify_token || null } }),
     });
-    return json({ payment_url: cp.payment_url, reference });
+    if (planEcheances) await creerEcheancier(user.id, type, reference, planEcheances);
+    return json({ payment_url: cp.payment_url, reference, echeancier: planEcheances });
   }
 
   const cpRes = await fetch("https://api-checkout.cinetpay.com/v2/payment", {
@@ -218,7 +305,7 @@ async function initierPaiement(req: Request, user: any) {
       apikey: CINETPAY_API_KEY,
       site_id: CINETPAY_SITE_ID,
       transaction_id: reference,
-      amount: montant,
+      amount: montantAPayerMaintenant,
       currency: "XOF",
       description,
       notify_url: notifyUrl,
@@ -235,7 +322,8 @@ async function initierPaiement(req: Request, user: any) {
     return await echec(cpData && cpData.message);
   }
 
-  return json({ payment_url: cpData.data.payment_url, reference });
+  if (planEcheances) await creerEcheancier(user.id, type, reference, planEcheances);
+  return json({ payment_url: cpData.data.payment_url, reference, echeancier: planEcheances });
 }
 
 async function statutPaiement(req: Request, user: any) {
@@ -248,6 +336,67 @@ async function statutPaiement(req: Request, user: any) {
   const p = rows[0];
   const statut = p.statut === "confirme" ? "paye" : p.statut === "echoue" ? "echec" : "en_attente";
   return json({ statut, valeur: p.valeur, commission: p.commission, type: p.type, annonce_titre: p.annonce_titre });
+}
+
+// ── Mes échéanciers en cours (BNPL) : pour l'écran "Mes paiements" du tableau
+// de bord vendeur — affiche ce qui reste à payer et les retards éventuels.
+async function mesEcheances(req: Request, user: any) {
+  await sb("/rest/v1/rpc/verifier_echeances_retard", { method: "POST" }).catch(() => {});
+  const r = await sb(`/rest/v1/echeanciers?utilisateur_id=eq.${user.id}&order=created_at.desc&select=id,type,montant_total,frais_pct,nb_echeances,statut,created_at,echeances(id,numero,montant,date_prevue,statut,payee_le)`);
+  const rows = r.ok ? await r.json() : [];
+  return json({ echeanciers: rows });
+}
+
+// ── Règlement d'une échéance en attente/retard, par transfert Mobile Money
+// direct (même principe que /paiement/manuel, mais pour une échéance existante
+// plutôt qu'un nouvel achat). Le service reste actif tant que l'échéancier
+// n'a pas basculé "défaillant" (5 jours de retard, cf. verifier_echeances_retard).
+async function payerEcheance(req: Request, user: any) {
+  const body = await req.json().catch(() => ({}));
+  const echeanceId = Number(body.echeance_id);
+  if (!echeanceId) return json({ error: "echeance_id requis" }, 400);
+
+  const canal = String(body.canal || "").toLowerCase();
+  if (!CANAUX_MANUELS.includes(canal)) return json({ error: "Moyen de paiement invalide" }, 400);
+  const txnId = String(body.txn_id || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!/^[A-Z0-9.\-_]{4,40}$/.test(txnId)) return json({ error: "ID de transaction invalide" }, 400);
+
+  const echRes = await sb(`/rest/v1/echeances?id=eq.${echeanceId}&select=id,numero,montant,statut,paiement_ref,echeancier_id,echeanciers(id,type,utilisateur_id,statut)`);
+  const echRows = echRes.ok ? await echRes.json() : [];
+  if (!echRows.length) return json({ error: "Échéance introuvable" }, 404);
+  const ech = echRows[0];
+  const echeancier = ech.echeanciers;
+  if (!echeancier || echeancier.utilisateur_id !== user.id) return json({ error: "Échéance introuvable" }, 404);
+  if (!["a_venir", "en_retard"].includes(ech.statut)) return json({ error: "Cette échéance est déjà réglée" }, 409);
+
+  const dejaRes = await sb(`/rest/v1/paiements?metadata->>txn_id=eq.${encodeURIComponent(txnId)}&select=id&limit=1`);
+  if (dejaRes.ok && (await dejaRes.json()).length) return json({ error: "Cet ID de transaction a déjà été déclaré" }, 409);
+
+  const reference = "MM" + Date.now().toString().slice(-10) + Math.floor(Math.random() * 900 + 100);
+  const telPayeur = String(body.tel || "").replace(/[^\d+]/g, "").slice(0, 20);
+
+  // On rattache d'abord la référence à l'échéance (le trigger de confirmation
+  // se contente ensuite de faire correspondre paiements.ref = echeances.paiement_ref).
+  const majEch = await sb(`/rest/v1/echeances?id=eq.${echeanceId}&statut=in.(a_venir,en_retard)`, {
+    method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ paiement_ref: reference }),
+  });
+  const majEchRows = majEch.ok ? await majEch.json() : [];
+  if (!majEchRows.length) return json({ error: "Échéance déjà réglée entre-temps" }, 409);
+
+  const insertRes = await sb(`/rest/v1/paiements`, {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      vendeur_id: user.id, annonce_titre: `Échéance ${ech.numero}/${echeancier.type}`, valeur: ech.montant, commission: 0,
+      ref: reference, passerelle: PASSERELLE_MANUELLE, moyen: canal, statut: "attente",
+      plan_vendeur: null, type: echeancier.type, metadata: { txn_id: txnId, tel_payeur: telPayeur, echeancier_id: echeancier.id },
+    }),
+  });
+  if (!insertRes.ok) {
+    await sb(`/rest/v1/echeances?id=eq.${echeanceId}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ paiement_ref: null }) });
+    return json({ error: "Échec d'enregistrement du paiement" }, 500);
+  }
+  return json({ reference });
 }
 
 // ── Paiement Mobile Money direct : le client a déjà envoyé l'argent sur le
@@ -273,6 +422,17 @@ async function declarerPaiementManuel(req: Request, user: any) {
   const description = String(body.description || "Paiement Le Grenier CI").slice(0, 255);
   const contenu = body.annonce && typeof body.annonce === "object" ? body.annonce : {};
   const telPayeur = String(body.tel || "").replace(/[^\d+]/g, "").slice(0, 20);
+
+  const nEchelons = [2, 3].includes(Number(body.echelonner)) ? Number(body.echelonner) : 0;
+  let planEcheances: { montantTotal: number; fraisPct: number; montants: number[] } | null = null;
+  let montantAPayerMaintenant = montant;
+  if (nEchelons && TYPES_ECHELONNABLES.includes(type)) {
+    const prixRef = await prixReference(type, contenu, montant);
+    if (!prixRef || prixRef < 1000) return json({ error: "Échelonnement indisponible pour ce service" }, 400);
+    planEcheances = calculerEcheances(prixRef, nEchelons);
+    montantAPayerMaintenant = planEcheances.montants[0];
+  }
+
   const metadata = { ...contenu, txn_id: txnId, tel_payeur: telPayeur };
 
   if (type === "produit" && !(await produitAchete(contenu, montant))) {
@@ -281,7 +441,9 @@ async function declarerPaiementManuel(req: Request, user: any) {
 
   let planVendeur: string | null;
   if (type === "abonnement") {
-    planVendeur = await planAchete(contenu, montant);
+    planVendeur = planEcheances
+      ? (typeof contenu?.plan === "string" ? contenu.plan : null)
+      : await planAchete(contenu, montant);
     if (!planVendeur) return json({ error: "Plan d'abonnement invalide" }, 400);
   } else {
     planVendeur = (await commissionPourUtilisateur(user.id)).planNom;
@@ -292,14 +454,15 @@ async function declarerPaiementManuel(req: Request, user: any) {
     method: "POST",
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({
-      vendeur_id: user.id, annonce_titre: description, valeur: montant,
-      commission: type === "commission" ? montant : 0,
+      vendeur_id: user.id, annonce_titre: description, valeur: montantAPayerMaintenant,
+      commission: type === "commission" ? montantAPayerMaintenant : 0,
       ref: reference, passerelle: PASSERELLE_MANUELLE, moyen: canal,
       statut: "attente", plan_vendeur: planVendeur, type, metadata,
     }),
   });
   if (!insertRes.ok) return json({ error: "Échec d'enregistrement du paiement" }, 500);
-  return json({ reference });
+  if (planEcheances) await creerEcheancier(user.id, type, reference, planEcheances);
+  return json({ reference, echeancier: planEcheances });
 }
 
 function nouveauJeton(): string {
@@ -372,6 +535,9 @@ async function creerAnnoncePourPaiement(paiement: any) {
 }
 
 // L'admin a vu l'argent arriver : l'abonnement est actif immédiatement.
+// `dureeJours` : durée pleine du plan pour un 1er paiement (30j par défaut,
+// éventuellement multipliée si l'échéancier couvre plusieurs mois) ; une
+// échéance suivante (2e/3e règlement) ne prolonge rien, elle règle juste la dette.
 async function activerAbonnementManuel(paiement: any) {
   const debut = new Date().toISOString().slice(0, 10);
   const fin = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -382,6 +548,17 @@ async function activerAbonnementManuel(paiement: any) {
       actif: true, statut: "actif", moyen: paiement.moyen, ref: paiement.ref,
     }),
   });
+}
+
+// Une échéance suivante (2e/3e règlement d'un échéancier) ne doit jamais
+// réactiver le service depuis zéro — seule la 1ère échéance (celle qui porte
+// la référence de paiement_initial_ref d'un échéancier, ou aucun échéancier)
+// déclenche l'activation normale.
+async function estEcheanceSuivante(paiement: any): Promise<boolean> {
+  if (!paiement.metadata?.echeancier_id) return false;
+  const r = await sb(`/rest/v1/echeanciers?id=eq.${paiement.metadata.echeancier_id}&select=paiement_initial_ref`);
+  const rows = r.ok ? await r.json() : [];
+  return rows.length ? rows[0].paiement_initial_ref !== paiement.ref : false;
 }
 
 async function validerPaiementManuel(req: Request, user: any) {
@@ -402,8 +579,11 @@ async function validerPaiementManuel(req: Request, user: any) {
   if (decision === "refuser") return json({ ok: true, statut: "echoue" });
 
   const paiement = rows[0];
+  const suivante = await estEcheanceSuivante(paiement);
   let active = "";
-  if (paiement.type === "abonnement") {
+  if (suivante) {
+    active = "échéance réglée";
+  } else if (paiement.type === "abonnement") {
     await activerAbonnementManuel(paiement); active = "abonnement " + paiement.plan_vendeur;
   } else if (paiement.type === "boost") {
     const b = await sb("/rest/v1/rpc/activer_boost", { method: "POST", body: JSON.stringify({ p_ref: paiement.ref }) });
@@ -435,6 +615,12 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "GET" && path.endsWith("/statut")) {
       return await statutPaiement(req, user);
+    }
+    if (req.method === "GET" && path.endsWith("/mes-echeances")) {
+      return await mesEcheances(req, user);
+    }
+    if (req.method === "POST" && path.endsWith("/echeance")) {
+      return await payerEcheance(req, user);
     }
     if (req.method === "POST" && path.endsWith("/manuel")) {
       return await declarerPaiementManuel(req, user);
