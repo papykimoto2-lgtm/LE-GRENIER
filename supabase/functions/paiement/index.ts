@@ -44,7 +44,7 @@ const CP_V1_BASE = CINETPAY_API_KEY.startsWith("sk_live_") ? "https://api.cinetp
 
 const PASSERELLE_MANUELLE = "Mobile Money direct";
 const CANAUX_MANUELS = ["wave", "orange", "mtn", "moov"];
-const TYPES_MANUELS = ["commission", "abonnement", "boost", "verification", "livraison", "formation", "pub", "produit", "autre"];
+const TYPES_MANUELS = ["commission", "abonnement", "boost", "verification", "livraison", "formation", "pub", "produit", "credits_contact", "autre"];
 
 // Frais de protection acheteur (paiement séquestre) : 3% du prix de
 // l'article, minimum 300 F — à la charge de l'acheteur.
@@ -53,6 +53,15 @@ const FRAIS_PROTECTION_MIN = 300;
 // Délai avant confirmation automatique de réception si l'acheteur ne
 // signale rien (cf. confirmer_achats_proteges_expires en base).
 const DELAI_CONFIRMATION_JOURS = 5;
+
+// Packs de crédits contact (pay-per-lead vendeur) — doit rester identique
+// à la grille de l'edge function "lead" (routeTarifs), qui ne fait que
+// l'afficher : c'est ICI que le prix payé est validé.
+const PACKS_CREDITS: Record<string, { nb: number; prix: number }> = {
+  "10": { nb: 10, prix: 2000 },
+  "30": { nb: 30, prix: 5000 },
+  "100": { nb: 100, prix: 15000 },
+};
 
 // Paiement en plusieurs fois (BNPL) : uniquement pour les frais vendeur avec
 // activation automatique — jamais pour une vente entre particuliers (déjà
@@ -217,7 +226,7 @@ async function initierPaiement(req: Request, user: any) {
   const canal = String(body.canal || "").toLowerCase();
   const channels = canal === "carte" ? "CREDIT_CARD" : "MOBILE_MONEY";
   const description = String(body.description || "Paiement Le Grenier CI").slice(0, 255);
-  const type = ["commission", "abonnement", "boost", "produit", "verification"].includes(body.type) ? body.type : "commission";
+  const type = ["commission", "abonnement", "boost", "produit", "verification", "credits_contact"].includes(body.type) ? body.type : "commission";
   const reference = genererReference();
 
   const { pct, planNom } = await commissionPourUtilisateur(user.id);
@@ -251,6 +260,12 @@ async function initierPaiement(req: Request, user: any) {
     planVendeur = planNom;
   }
   if (type === "produit" && !(await produitAchete(metadata, montant))) return json({ error: "Produit indisponible ou montant invalide" }, 400);
+  let metadataFinale = metadata;
+  if (type === "credits_contact") {
+    const pack = PACKS_CREDITS[String(metadata?.pack)];
+    if (!pack || montant < pack.prix) return json({ error: "Pack de crédits invalide" }, 400);
+    metadataFinale = { ...(metadata || {}), nb_credits: pack.nb };
+  }
 
   const insertRes = await sb(`/rest/v1/paiements`, {
     method: "POST",
@@ -258,7 +273,7 @@ async function initierPaiement(req: Request, user: any) {
     body: JSON.stringify({
       vendeur_id: user.id, annonce_titre: description, valeur: montantAPayerMaintenant, commission,
       ref: reference, passerelle: "CinetPay", moyen: canal || "mobile_money",
-      statut: "attente", plan_vendeur: planVendeur, type, metadata,
+      statut: "attente", plan_vendeur: planVendeur, type, metadata: metadataFinale,
     }),
   });
   if (!insertRes.ok) {
@@ -304,7 +319,7 @@ async function initierPaiement(req: Request, user: any) {
     await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ metadata: { ...(metadata || {}), cp_transaction_id: cp.transaction_id || null, cp_notify_token: cp.notify_token || null } }),
+      body: JSON.stringify({ metadata: { ...(metadataFinale || {}), cp_transaction_id: cp.transaction_id || null, cp_notify_token: cp.notify_token || null } }),
     });
     if (planEcheances) await creerEcheancier(user.id, type, reference, planEcheances);
     return json({ payment_url: cp.payment_url, reference, echeancier: planEcheances });
@@ -445,10 +460,15 @@ async function declarerPaiementManuel(req: Request, user: any) {
     montantAPayerMaintenant = planEcheances.montants[0];
   }
 
-  const metadata = { ...contenu, txn_id: txnId, tel_payeur: telPayeur };
+  const metadata: any = { ...contenu, txn_id: txnId, tel_payeur: telPayeur };
 
   if (type === "produit" && !(await produitAchete(contenu, montant))) {
     return json({ error: "Produit indisponible ou montant invalide" }, 400);
+  }
+  if (type === "credits_contact") {
+    const pack = PACKS_CREDITS[String(contenu.pack)];
+    if (!pack || montant < pack.prix) return json({ error: "Pack de crédits invalide" }, 400);
+    metadata.nb_credits = pack.nb; // jamais celui envoyé par le client
   }
 
   let planVendeur: string | null;
@@ -518,7 +538,8 @@ async function declarerAchatInvite(req: Request) {
     }),
   });
   if (!insertRes.ok) return json({ error: "Échec d'enregistrement du paiement" }, 500);
-  return json({ reference, jeton });
+  const montantFinal = await appliquerCashbackSiDemande(body, reference, tel, montant);
+  return json({ reference, jeton, montant_a_payer: montantFinal });
 }
 
 // Achat protégé (paiement séquestre) : l'acheteur (avec ou sans compte)
@@ -541,7 +562,7 @@ async function declarerAchatProtege(req: Request) {
   const telAcheteur = String(body.tel || "").replace(/[^\d+]/g, "").slice(0, 20);
   if (telAcheteur.replace(/\D/g, "").length < 8) return json({ error: "Numéro WhatsApp requis" }, 400);
 
-  const aRes = await sb(`/rest/v1/annonces?id=eq.${annonceId}&statut=eq.actif&select=id,titre,valeur,vendeur_id`);
+  const aRes = await sb(`/rest/v1/annonces?id=eq.${annonceId}&statut=eq.en-ligne&select=id,titre,valeur,vendeur_id`);
   const aRows = aRes.ok ? await aRes.json() : [];
   if (!aRows.length) return json({ error: "Annonce indisponible" }, 400);
   const annonce = aRows[0];
@@ -556,12 +577,13 @@ async function declarerAchatProtege(req: Request) {
 
   const jeton = nouveauJeton();
   const reference = "MM" + Date.now().toString().slice(-10) + Math.floor(Math.random() * 900 + 100);
+  const montantTotal = montantArticle + fraisProtection;
   const insertRes = await sb(`/rest/v1/paiements`, {
     method: "POST",
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({
       vendeur_id: annonce.vendeur_id, annonce_titre: "Achat protégé : " + annonce.titre,
-      valeur: montantArticle + fraisProtection, commission: fraisProtection,
+      valeur: montantTotal, commission: fraisProtection,
       ref: reference, passerelle: PASSERELLE_MANUELLE, moyen: canal, statut: "attente",
       plan_vendeur: null, type: "achat_protege",
       metadata: {
@@ -571,7 +593,35 @@ async function declarerAchatProtege(req: Request) {
     }),
   });
   if (!insertRes.ok) return json({ error: "Échec d'enregistrement du paiement" }, 500);
-  return json({ reference, jeton, montant_article: montantArticle, frais_protection: fraisProtection });
+
+  // Cashback consommé APRÈS l'insertion réussie seulement, jamais avant :
+  // en cas d'échec d'enregistrement, l'acheteur ne perd rien de son solde.
+  const montantFinal = await appliquerCashbackSiDemande(body, reference, telAcheteur, montantTotal);
+  return json({ reference, jeton, montant_article: montantArticle, frais_protection: fraisProtection, montant_a_payer: montantFinal });
+}
+
+// Applique le cashback disponible (si demandé) au paiement déjà inséré, en
+// réduisant son montant réel — jamais avant que l'enregistrement du
+// paiement ait réussi (cf. commentaires aux points d'appel).
+async function appliquerCashbackSiDemande(body: any, reference: string, tel: string, montantTotal: number): Promise<number> {
+  if (!body.utiliser_cashback) return montantTotal;
+  const rc = await sb("/rest/v1/rpc/consommer_cashback", { method: "POST", body: JSON.stringify({ p_tel: tel, p_montant: montantTotal }) });
+  const cashbackUtilise = rc.ok ? Number(await rc.json().catch(() => 0)) || 0 : 0;
+  if (cashbackUtilise <= 0) return montantTotal;
+  const montantFinal = montantTotal - cashbackUtilise;
+  await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
+    method: "PATCH", headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ valeur: montantFinal }),
+  });
+  // metadata.cashback_utilise fusionné séparément pour ne pas écraser le reste.
+  const cur = await sb(`/rest/v1/paiements?ref=eq.${reference}&select=metadata`);
+  const curRows = cur.ok ? await cur.json() : [];
+  const meta = curRows.length ? curRows[0].metadata || {} : {};
+  await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
+    method: "PATCH", headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ metadata: { ...meta, cashback_utilise: cashbackUtilise } }),
+  });
+  return montantFinal;
 }
 
 async function creerAnnoncePourPaiement(paiement: any) {

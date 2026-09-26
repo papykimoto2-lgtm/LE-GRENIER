@@ -3131,7 +3131,8 @@
       desc: row.desc_txt, ville: row.ville, vendeurId: row.vendeur_id, statut: row.statut,
       vues: row.vues, emoji: row.emoji, typeTab: row.type_tab, lat: row.lat, lng: row.lng,
       photos: row.photos || [], date: (row.created_at || '').slice(0, 10),
-      flagIA: row.flag_ia || null, flagIaRaison: row.flag_ia_raison || null
+      flagIA: row.flag_ia || null, flagIaRaison: row.flag_ia_raison || null,
+      captureLead: !!row.capture_lead
     };
     if (table === 'utilisateurs') return {
       id: row.id, authId: row.auth_id, prenom: row.prenom, nom: row.nom, email: row.email,
@@ -3141,7 +3142,8 @@
       adminPermissions: row.admin_permissions || null,
       dateInscription: (row.created_at || '').slice(0, 10),
       dateValidation: row.date_validation ? row.date_validation.slice(0, 10) : null,
-      validePar: row.valide_par || null
+      validePar: row.valide_par || null,
+      creditsContact: row.credits_contact || 0
     };
     if (table === 'paiements') return {
       id: row.id, vendeurId: row.vendeur_id, annonce: row.annonce_titre, valeur: Number(row.valeur),
@@ -7669,6 +7671,14 @@ const ENTREPRISE = {
           </table>
         </div>
         <button class="btn btn-primary mt-16" onclick="goDepotWithType('')">+ Nouvelle annonce</button>
+
+        <div style="margin-top:24px;background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gris-mid);padding:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div style="font-weight:700;font-size:14px">📨 Mes leads <span style="color:var(--gris-text);font-weight:400;font-size:12px">— clic 📨 sur une annonce pour activer la capture</span></div>
+            <div style="font-size:12px;font-weight:700">Crédits : <span id="leads-credits" style="color:var(--vert)">0</span> <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;margin-left:6px" onclick="ouvrirAchatCreditsContact()">+ Recharger</button></div>
+          </div>
+          <div id="mes-leads-liste" style="margin-top:12px;font-size:13px;color:var(--gris-text)">—</div>
+        </div>
       </div>
       <!-- TAB PAIEMENTS -->
       <div id="tab-paiements" class="hidden">
@@ -9549,6 +9559,7 @@ const ENTREPRISE = {
       <button class="msg-btn" style="background:linear-gradient(135deg,#DC2626,#EF4444);margin-top:10px;width:100%" onclick="demanderLivraisonAnnonce()">Faire livrer cet article</button>
       <button class="msg-btn" style="background:linear-gradient(135deg,#0D5C35,#128C7E);margin-top:10px;width:100%" onclick="demanderAchatProtege()">🛡️ Achat protégé — payer en sécurité</button>
       <div style="font-size:11px;color:var(--gris-text);text-align:center;margin-top:6px">L'argent est retenu par Le Grenier jusqu'à ce que vous confirmiez avoir bien reçu l'article.</div>
+      <button id="btn-demander-lead" class="msg-btn" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6);margin-top:10px;width:100%;display:none" onclick="demanderContactLead()">📨 Demander à être contacté</button>
       <div style="text-align:center;margin-top:10px">
         <button onclick="signalerAnnonce()" style="background:none;border:none;color:var(--rouge);font-size:13px;cursor:pointer">Signaler cette annonce</button>
       </div>
@@ -9877,7 +9888,7 @@ const ENTREPRISE = {
         </div>
         <div class="pay-input-group">
           <label for="pay-manuel-tel" id="pay-manuel-tel-label">Numéro qui a envoyé l'argent</label>
-          <input class="pay-input" type="tel" id="pay-manuel-tel" placeholder="07 XX XX XX XX" maxlength="14" oninput="formatPayNum(this)">
+          <input class="pay-input" type="tel" id="pay-manuel-tel" placeholder="07 XX XX XX XX" maxlength="14" oninput="formatPayNum(this)" onblur="majCashbackAffiche()">
         </div>
         <div class="pay-input-group">
           <label for="pay-manuel-txn">ID de transaction (dans le SMS)</label>
@@ -12238,6 +12249,8 @@ function ouvrirAnnonce(id) {
   a.vues++;
   annonceCourante = a;
   const vendeur = DAO._local.utilisateurs.find(u=>u.id===a.vendeurId);
+  const btnLeadAffiche = document.getElementById('btn-demander-lead');
+  if (btnLeadAffiche) btnLeadAffiche.style.display = a.captureLead ? 'block' : 'none';
   document.getElementById('modal-titre').textContent = a.titre;
   const dist = GEO.userCoords ? distanceKm(GEO.userCoords, coordsAnnonce(a)) : null;
   const distTxt = dist !== null ? ` · 📡 ${dist < 1 ? '< 1 km' : Math.round(dist)+' km de vous'}` : '';
@@ -12693,6 +12706,7 @@ function ouvrirModalPaiement(montant, libelle, onSuccess, opts) {
   // ou achat protégé — l'acheteur n'a pas toujours de compte non plus)
   window._payInvite = !!(opts && opts.invite);
   window._payAchatProtege = !!(opts && opts.achatProtege);
+  window._payCashbackApplique = 0;
   // Mettre à jour l'affichage
   document.getElementById('pay-montant-display').textContent = fmtFCFA(montant);
   document.getElementById('pay-annonce-display').textContent = libelle || 'Commission publication';
@@ -13050,7 +13064,27 @@ function payManuelNumeroLocal(num) {
 function payManuelMontantDu() {
   const montant = window._payMontantCourant || 0;
   const n = window._payEchelonnerCourant || 0;
-  return n ? calculerEcheancesApercu(montant, n).montants[0] : montant;
+  const base = n ? calculerEcheancesApercu(montant, n).montants[0] : montant;
+  return Math.max(0, base - (window._payCashbackApplique || 0));
+}
+
+// Cashback (invité/achat protégé uniquement) : dès que l'acheteur a saisi
+// son numéro, on vérifie son solde et on l'affiche déduit — le serveur
+// appliquera exactement la même déduction à la déclaration du paiement.
+async function majCashbackAffiche() {
+  window._payCashbackApplique = 0;
+  if (!(window._payInvite || window._payAchatProtege)) return;
+  const tel = document.getElementById('pay-manuel-tel')?.value.replace(/\s/g, '') || '';
+  if (tel.replace(/\D/g, '').length < 8) return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/lead/cashback?tel=' + encodeURIComponent(tel));
+    const solde = (r.data && r.data.solde) || 0;
+    if (solde > 0) {
+      window._payCashbackApplique = Math.min(solde, window._payMontantCourant || 0);
+      document.getElementById('pay-manuel-montant').textContent = fmtFCFA(payManuelMontantDu());
+      toast('🎁 ' + fmtFCFA(window._payCashbackApplique) + ' de cashback déduits automatiquement !');
+    }
+  } catch (e) { /* silencieux : le cashback est un bonus, jamais bloquant */ }
 }
 
 function payManuelPreparer(note) {
@@ -13152,16 +13186,17 @@ async function payManuelEnvoyerInvite() {
   try {
     const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/invite', {
       montant: window._payMontantCourant || 0, canal: payMethodeActive, txn_id: txn, tel, nom,
-      produit_id: meta.produit_id, source: meta.source || null,
+      produit_id: meta.produit_id, source: meta.source || null, utiliser_cashback: true,
     });
     if (r.error || !r.data || !r.data.jeton) {
       throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Réponse invalide');
     }
     BoutiqueNum.memoriserAchatInvite(meta.produit_id, r.data.jeton);
+    const montantDu = r.data.montant_a_payer ?? window._payMontantCourant ?? 0;
     document.getElementById('pay-manuel-ref').textContent = 'REF: ' + r.data.reference;
     const msg = 'Bonjour, je viens d\'acheter un guide sur Le Grenier CI (sans compte).\n\n' +
       '• Guide : ' + (window._payLibelleCourant || '') + '\n' +
-      '• Montant : ' + fmtFCFA(window._payMontantCourant || 0) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Montant : ' + fmtFCFA(montantDu) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
       '• Nom : ' + nom + ' · WhatsApp : ' + tel + '\n' +
       '• ID transaction : ' + txn + '\n' +
       '• Référence : ' + r.data.reference + '\n\nMerci de m\'envoyer mon lien de téléchargement.';
@@ -13206,17 +13241,18 @@ async function payManuelEnvoyerAchatProtege() {
   btn.disabled = true; btn.textContent = '⏳ Envoi…';
   try {
     const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/paiement/achat-protege', {
-      annonce_id: meta.annonce_id, canal: payMethodeActive, txn_id: txn, tel, nom,
+      annonce_id: meta.annonce_id, canal: payMethodeActive, txn_id: txn, tel, nom, utiliser_cashback: true,
     });
     if (r.error || !r.data || !r.data.jeton) {
       throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Réponse invalide');
     }
     memoriserAchatProtege(r.data.jeton);
+    const montantDu = r.data.montant_a_payer ?? window._payMontantCourant ?? 0;
     const lienSuivi = lienSuiviAchatProtege(r.data.jeton);
     document.getElementById('pay-manuel-ref').textContent = 'REF: ' + r.data.reference;
     const msg = 'Bonjour, je viens de faire un achat protégé sur Le Grenier CI.\n\n' +
       '• Article : ' + (window._payLibelleCourant || '') + '\n' +
-      '• Montant : ' + fmtFCFA(window._payMontantCourant || 0) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
+      '• Montant : ' + fmtFCFA(montantDu) + ' par ' + PAY_METHODES[payMethodeActive].nom + '\n' +
       '• Nom : ' + nom + ' · WhatsApp : ' + tel + '\n' +
       '• ID transaction : ' + txn + '\n' +
       '• Référence : ' + r.data.reference + '\n\nMerci de valider ma transaction. Mon lien de suivi : ' + lienSuivi;
@@ -13643,7 +13679,7 @@ function renderDashboard() {
   mesA.forEach(a => rows.push({
     ico: a.emoji||'📦', titre: a.titre, soustitre: a.cat,
     valeur: fmtFCFA(a.valeur), statut: a.statut, vues: a.vues,
-    type: 'marché', id: a.id
+    type: 'marché', id: a.id, captureLead: !!a.captureLead
   }));
   // Boulots
   mesBoulots.forEach(b => rows.push({
@@ -13701,6 +13737,7 @@ function renderDashboard() {
     const btnEdit = `<button class="btn btn-sm" onclick="modifierAnnonce('${t}',${id})" style="background:var(--vert);color:#fff;padding:4px 8px;font-size:12px;margin-right:4px">✏️</button>`;
     const btnDelete = `<button class="btn btn-danger btn-sm" onclick="supprimerAnnonce('${t}',${id})" style="padding:4px 8px;font-size:12px">🗑</button>`;
     const btnBoost = (t==='marché' && r.statut==='en-ligne') ? `<button class="btn btn-sm" onclick="Boost.open(${id})" style="background:#f59e0b;color:#1f1300;padding:4px 8px;font-size:12px;margin-right:4px">⚡</button>` : '';
+    const btnLead = (t==='marché' && r.statut==='en-ligne') ? `<button class="btn btn-sm" onclick="toggleCaptureLead(${id},${!r.captureLead})" title="${r.captureLead ? 'Capture de leads activée — 1 crédit par contact reçu' : 'Activer la capture de leads (1 crédit par contact reçu)'}" style="background:${r.captureLead ? '#0D5C35' : '#E5E7EB'};color:${r.captureLead ? '#fff' : '#374151'};padding:4px 8px;font-size:12px;margin-right:4px">📨</button>` : '';
     const statusClass = r.statut==='en-ligne'?'badge-en-ligne':r.statut==='attente'?'badge-attente':'badge-expiree';
     return `<tr>
       <td style="max-width:200px">
@@ -13710,7 +13747,7 @@ function renderDashboard() {
       <td style="font-weight:600;color:var(--vert);white-space:nowrap">${r.valeur}</td>
       <td><span class="badge-statut ${statusClass}">${r.statut}</span></td>
       <td>${r.vues||0}</td>
-      <td style="white-space:nowrap">${btnBoost}${btnEdit}${btnDelete}</td>
+      <td style="white-space:nowrap">${btnBoost}${btnLead}${btnEdit}${btnDelete}</td>
     </tr>`
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--gris-text);padding:20px">Aucune publication</td></tr>';
 
@@ -15715,12 +15752,71 @@ renderAdmin = function() {
   renderAdminPromos();
 };
 
-/* ---------- Surcharge renderDashboard pour parrainage ---------- */
+/* ---------- Surcharge renderDashboard pour parrainage + leads ---------- */
 const _renderDashboardOriginal = renderDashboard;
 renderDashboard = function() {
   _renderDashboardOriginal();
   renderParrainageDash();
+  renderMesLeadsBloc();
 };
+
+/* ---------- Pay-per-lead : capture de contacts qualifiés ---------- */
+const PACKS_CREDITS_CONTACT = { 10: { nb: 10, prix: 2000 }, 30: { nb: 30, prix: 5000 }, 100: { nb: 100, prix: 15000 } };
+
+async function toggleCaptureLead(annonceId, activer) {
+  try {
+    const r = await _xhr('PATCH', SUPABASE_URL + '/rest/v1/annonces?id=eq.' + annonceId, { capture_lead: activer }, { Prefer: 'return=representation' });
+    if (r.error) throw new Error(r.error.message || 'Échec');
+    const a = DAO._local.annonces.find(x => x.id === annonceId);
+    if (a) a.captureLead = activer;
+    toast(activer ? '📨 Capture de leads activée — 1 crédit par contact reçu' : 'Capture de leads désactivée');
+    if (typeof renderMesAnnonces === 'function') renderMesAnnonces();
+    else if (typeof renderDashboard === 'function') renderDashboard();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
+}
+
+async function renderMesLeadsBloc() {
+  if (!SESSION || typeof MODE === 'undefined' || MODE !== 'remote') return;
+  const elCredits = document.getElementById('leads-credits');
+  const elListe = document.getElementById('mes-leads-liste');
+  if (!elCredits || !elListe) return;
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/lead/mes-leads');
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Réponse invalide');
+    elCredits.textContent = r.data.credits_contact || 0;
+    const leads = r.data.leads || [];
+    if (!leads.length) { elListe.innerHTML = 'Aucun lead reçu pour le moment.'; return; }
+    elListe.innerHTML = leads.slice(0, 20).map(l => {
+      const verrouille = l.statut === 'sans_credit';
+      const annonce = (l.annonces && l.annonces.titre) || '—';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--gris-mid)">
+        <div>
+          <div style="font-weight:600;font-size:13px">${verrouille ? '🔒 Lead verrouillé' : l.acheteur_nom} <span style="color:var(--gris-text);font-size:11px">— ${annonce}</span></div>
+          ${verrouille
+            ? '<div style="font-size:11px;color:#D97706">Rechargez vos crédits pour voir ce contact</div>'
+            : `<div style="font-size:11px;color:var(--gris-text)">${l.acheteur_tel}${l.message ? ' · ' + l.message : ''}</div>`}
+        </div>
+        <div style="font-size:11px;color:var(--gris-text);white-space:nowrap">${new Date(l.created_at).toLocaleDateString('fr-CI')}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    elListe.innerHTML = '<span style="color:var(--rouge)">Erreur de chargement</span>';
+  }
+}
+
+function ouvrirAchatCreditsContact() {
+  if (!SESSION) return;
+  const choix = window.prompt('Choisissez un pack de crédits contact :\n1 = 10 crédits (2 000 F)\n2 = 30 crédits (5 000 F, ~167 F/lead)\n3 = 100 crédits (15 000 F, 150 F/lead)\n\nTapez 1, 2 ou 3 :');
+  const packParChoix = { '1': '10', '2': '30', '3': '100' };
+  const pack = packParChoix[(choix || '').trim()];
+  if (!pack) return;
+  const info = PACKS_CREDITS_CONTACT[pack];
+  ouvrirModalPaiement(info.prix, `${info.nb} crédits contact`, () => renderMesLeadsBloc(), {
+    type: 'credits_contact', metadata: { pack },
+  });
+}
 
 /* ---------- Réinitialiser promo quand on quitte le dépôt ---------- */
 const _goScreenOriginal = goScreen;
@@ -16167,6 +16263,29 @@ function demanderAchatProtege() {
     metadata: { annonce_id: annonceCourante.id, montant_article: montantArticle, frais_protection: fraisProtection },
   });
   fermerModal();
+}
+
+// Pay-per-lead : au lieu du contact direct, l'acheteur laisse son nom/tel/
+// message — le vendeur (qui a activé la capture sur cette annonce) reçoit
+// le lead et se voit débiter 1 crédit contact.
+async function demanderContactLead() {
+  if (!annonceCourante || !annonceCourante.captureLead) return;
+  if (typeof MODE === 'undefined' || MODE !== 'remote') { toast('Indisponible en mode démo', 'erreur'); return; }
+  const nom = (window.prompt('Votre nom :') || '').trim();
+  if (nom.length < 2) return;
+  const tel = (window.prompt('Votre numéro de téléphone :') || '').trim();
+  if (tel.replace(/\D/g, '').length < 8) { toast('Numéro de téléphone requis', 'erreur'); return; }
+  const message = (window.prompt('Votre message (facultatif) :') || '').trim();
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/lead/soumettre', {
+      annonce_id: annonceCourante.id, nom, tel, message: message || null,
+    });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Échec');
+    toast('✅ Votre demande a été envoyée au vendeur, il devrait vous contacter rapidement.');
+    fermerModal();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
 }
 
 function contacterBoulot(id) {
