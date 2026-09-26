@@ -92,8 +92,12 @@ p { text-align: justify; hyphens: auto; }
 .sommaire li { padding: .7mm 0; font-size: 8.8pt; }
 .sommaire li.som-partie { margin-top: 2mm; border-bottom: 2px solid var(--c); }
 .sommaire li.som-partie .som-num { background: var(--f); }
-.sans-illus { background: none; color: inherit; border-radius: 0; padding: 14mm 0 2mm; border-bottom: 2px solid #F0A830; }
-.sans-illus h2 { color: var(--f); font-size: 20pt; }
+.sans-illus { background: none; color: inherit; border-radius: 0; padding: 10mm 0 3mm; position: relative;
+  border-top: 3px solid var(--c); }
+.sans-illus::after { content: ''; position: absolute; left: 0; bottom: 0; width: 100%; height: 1px; background: #E4DED3; }
+.sans-illus h2 { color: var(--f); font-size: 21pt; margin-top: 2mm; }
+.chap-num { font-family: 'Fraunces', serif; font-weight: 900; font-size: 46pt; line-height: 1; color: var(--c);
+  opacity: .16; position: absolute; top: 6mm; right: 0; }
 .ouverture + p { font-family: 'Fraunces', serif; font-weight: 700; font-size: 13pt; line-height: 1.35; color: var(--c); text-align: left; }
 .sommaire li { break-inside: avoid; }
 .sep { text-align: center; color: #F0A830; font-size: 11pt; margin: 4mm 0; letter-spacing: .5em; }
@@ -106,8 +110,9 @@ p { text-align: justify; hyphens: auto; }
 .partie .ouv-label { background: #F0A830; color: #1F1A17; align-self: flex-start; }
 .partie h2 { font-family: 'Fraunces', serif; font-weight: 900; font-size: 26pt; line-height: 1.05; margin: 3mm 0 0; color: #fff; }
 blockquote { font-style: normal; }
-.citation-forte { font-family: 'Fraunces', serif; font-weight: 700; font-size: 12pt; line-height: 1.4; color: var(--f);
-  text-align: center; margin: 6mm 4mm; padding: 4mm 0; border-top: 1px solid #F0A830; border-bottom: 1px solid #F0A830; }
+.citation-forte { font-family: 'Fraunces', serif; font-weight: 700; font-size: 12.5pt; line-height: 1.42; color: var(--f);
+  text-align: center; margin: 6mm 2mm; padding: 5mm 6mm; background: color-mix(in srgb, var(--c) 9%, #fff);
+  border-radius: 3mm; border-left: 3px solid var(--c); border-right: 3px solid var(--c); page-break-inside: avoid; }
 """
 
 
@@ -188,8 +193,14 @@ def ouvertures(h, slug, meta):
             illus = f'<img class="ouv-photo" src="{photo(sc[1], 1500, 700, sc[2])}" alt="">'
         else:
             illus = sc() if sc else ""
+        chap_num = ""
+        if not illus and meta.get("style") == "recit":
+            mnum = re.match(r"Chapitre (\d+)", label)
+            if mnum:
+                chap_num = f'<div class="chap-num">{mnum.group(1)}</div>'
         return (f'<section class="ouverture{"" if illus else " sans-illus"}">'
                 + (f'<div class="ouv-illus">{illus}</div>' if illus else "")
+                + chap_num
                 + (f'<div class="ouv-label">{label}</div>' if label else "")
                 + f'<h2>{titre}</h2></section>')
     return re.sub(r"<h2>(.*?)</h2>", remplacer, h), titres
