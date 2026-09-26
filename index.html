@@ -349,6 +349,19 @@
   .pay-methode.sel .pay-check{display:flex}
   .pay-echelon-btn.sel{border-color:#C68A0D !important;background:#FFF3DC !important;color:#7A5200}
 
+  /* ── Schéma économique (admin) ── */
+  .schema-acteur{padding:6px 14px;border-radius:20px;border:1.5px solid;font-size:12px;font-weight:700}
+  .flux-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--gris-mid)}
+  .flux-row:first-of-type{border-top:none}
+  .flux-node{flex-shrink:0;padding:8px 12px;border-radius:10px;border:1.5px solid;font-size:12px;font-weight:700;text-align:center;background:#fff;line-height:1.3}
+  .flux-arrow{flex:1;min-width:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 4px}
+  .flux-fleche{font-size:18px;color:var(--gris-text);line-height:1}
+  .flux-label{font-size:10.5px;color:var(--gris-text);text-align:center;max-width:220px;line-height:1.3}
+  @media (max-width:720px){
+    .flux-row{flex-direction:column;align-items:stretch}
+    .flux-fleche{transform:rotate(90deg)}
+  }
+
   /* Séparateur catégorie */
   .pay-cat-sep{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gris-text);padding:14px 18px 6px;display:flex;align-items:center;gap:8px}
   .pay-cat-sep::after{content:'';flex:1;height:1px;background:var(--gris-mid)}
@@ -8626,6 +8639,7 @@ const ENTREPRISE = {
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-abonnements')">Abonnements</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-parrainage')">Parrainage</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-achats-proteges')">Achats protégés</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-schema')">🗺️ Schéma économique</button>
       </div>
       <div class="admin-nav">
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
@@ -8933,6 +8947,123 @@ const ENTREPRISE = {
             <tbody id="admin-achats-proteges-disputes-tbody"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════
+         TAB SCHÉMA ÉCONOMIQUE
+    ══════════════════════════════ -->
+    <div id="admin-schema" class="hidden">
+      <div class="admin-section">
+        <div class="admin-section-titre">🗺️ Comment l'argent circule sur Le Grenier CI</div>
+        <div style="font-size:13px;color:var(--gris-text);margin:-4px 0 18px;max-width:760px">
+          Cinq acteurs, un seul principe : <strong>l'argent passe toujours par Le Grenier CI avant d'atteindre sa destination</strong> — jamais directement d'un acheteur à un vendeur pour les mécanismes protégés. Chaque ligne ci-dessous se lit : qui paie → ce qu'il paie → qui reçoit, et à quelle condition.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px">
+          <span class="schema-acteur" style="background:#EFF6FF;color:#1D4ED8;border-color:#1D4ED8">🛒 Acheteur</span>
+          <span class="schema-acteur" style="background:#FFF8ED;color:#9A6A10;border-color:#C68A0D">🏛️ Le Grenier CI</span>
+          <span class="schema-acteur" style="background:#F0FAF4;color:#0D5C35;border-color:#0D5C35">🏪 Vendeur</span>
+          <span class="schema-acteur" style="background:#F8EDFA;color:#862E9C;border-color:#862E9C">🤝 Ambassadeur</span>
+          <span class="schema-acteur" style="background:#FFF3E0;color:#9A6A10;border-color:#E58A00">📢 Annonceur</span>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">💰 Revenus directs — l'argent reste au Grenier</div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">% commission selon plan, à la publication d'une vente déclarée</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+        </div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Prix du plan (Starter/Pro/Business), mensuel</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+        </div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Prix du boost, à l'activation d'une mise en avant</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+        </div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">1 000 F, une fois — badge "Membre vérifié"</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+        </div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#E58A00;color:#9A6A10">📢 Annonceur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Budget de la campagne — bannière publicitaire</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+        </div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Packs de crédits (2 000 F/10 · 5 000 F/30 · 15 000 F/100) — pay-per-lead</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">🛡️ Achat protégé — l'argent transite avant d'être reversé</div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#1D4ED8;color:#1D4ED8">🛒 Acheteur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Prix de l'article + 3% de frais de protection (min. 300 F)</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI<br><span style="font-size:10px;font-weight:400">retient l'argent</span></div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Prix de l'article, après confirmation de réception (ou 5 j sans litige)</div></div>
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+        </div>
+        <div style="font-size:12px;color:var(--gris-text);margin-top:8px">Les 3% de frais de protection restent au Grenier dans tous les cas. En cas de litige, l'admin tranche : remboursement à l'acheteur ou versement au vendeur.</div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">📨 Pay-per-lead — les crédits se consomment à la livraison d'un contact</div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#1D4ED8;color:#1D4ED8">🛒 Acheteur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Laisse nom + téléphone + message (aucun paiement de l'acheteur)</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Débite 1 crédit du solde vendeur, livre le contact</div></div>
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+        </div>
+        <div style="font-size:12px;color:var(--gris-text);margin-top:8px">À crédits épuisés, le lead est capturé mais verrouillé (nom/tel masqués) jusqu'à recharge — jamais perdu.</div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">🤝 Réseau d'ambassadeurs — le Grenier reverse une partie de son revenu</div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Filleul (vendeur parrainé)</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Paie une commission/abonnement/boost/vérif. (revenu direct ci-dessus)</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">~10% de ce revenu, calculé automatiquement, pendant 90 jours après le parrainage</div></div>
+          <div class="flux-node" style="border-color:#862E9C;color:#862E9C">🤝 Ambassadeur</div>
+        </div>
+        <div style="font-size:12px;color:var(--gris-text);margin-top:8px">Coût pour le Grenier, pas un revenu — c'est le prix d'acquisition payé pour chaque vendeur apporté. Versement manuel (Mobile Money) après validation admin.</div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">🎁 Cashback acheteur — le Grenier reverse un petit % à l'acheteur</div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">2% de chaque achat protégé / guide numérique, crédité au numéro de tel.</div></div>
+          <div class="flux-node" style="border-color:#1D4ED8;color:#1D4ED8">🛒 Acheteur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">Rabais automatique appliqué au prochain achat, sans compte requis</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI<br><span style="font-size:10px;font-weight:400">encaisse le montant net</span></div>
+        </div>
+        <div style="font-size:12px;color:var(--gris-text);margin-top:8px">Coût pour le Grenier — un levier de fidélisation, pas un revenu. Le solde est réservé au numéro de téléphone, jamais transférable en cash.</div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">💳 Paiement en plusieurs fois (BNPL) — une modalité, pas un revenu à part</div>
+        <div style="font-size:13px;color:var(--gris-text);margin-bottom:10px;max-width:760px">S'applique par-dessus l'abonnement, le boost ou la vérification (jamais sur une vente entre particuliers ni un produit numérique) : le vendeur paie en 2 ou 3 fois au lieu d'une seule.</div>
+        <div class="flux-row">
+          <div class="flux-node" style="border-color:#0D5C35;color:#0D5C35">🏪 Vendeur</div>
+          <div class="flux-arrow"><div class="flux-fleche">→</div><div class="flux-label">1ère échéance + frais de service (+6% en 2x, +10% en 3x)</div></div>
+          <div class="flux-node" style="border-color:#C68A0D;color:#9A6A10">🏛️ Le Grenier CI</div>
+        </div>
+        <div style="font-size:12px;color:var(--gris-text);margin-top:8px">Service activé dès la 1ère échéance. 5 jours de retard sur une échéance suivante = suspension automatique (abonnement coupé, boost arrêté, badge retiré) jusqu'au règlement.</div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">📊 Données de marché — préparé, pas encore vendu</div>
+        <div style="font-size:13px;color:var(--gris-text)">Une vue d'agrégation (prix moyen/médian par catégorie et ville) existe en base, prête à devenir un produit payant pour des importateurs/grossistes. Aucune vente pour l'instant : le volume réel de transactions sur la plateforme est encore nul, donc rien de valable à empaqueter.</div>
       </div>
     </div>
 
@@ -19406,6 +19537,7 @@ const ADMIN_PERMISSIONS_LISTE = [
   { key:'admin-abonnements',  label:'Abonnements' },
   { key:'admin-parrainage',   label:'Parrainage' },
   { key:'admin-achats-proteges', label:'Achats protégés' },
+  { key:'admin-schema',          label:'Schéma économique' },
   { key:'admin-finances',     label:'Finances' },
   { key:'admin-livraisons',   label:'Livraisons' },
   { key:'admin-inscriptions', label:'Inscriptions' },
@@ -19436,7 +19568,7 @@ async function adminTab(el, tabId) {
   if (!adminAPermission(tabId)) { toast('⛔ Accès non autorisé à cette section', 'erreur'); return; }
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
   el?.classList.add('actif');
-  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-parrainage,#admin-achats-proteges,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
+  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-parrainage,#admin-achats-proteges,#admin-schema,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
   if (tabId==='admin-contenus') chargerAdminContenus();
   if (tabId==='admin-annonces') { await _adminRafraichirCache(['annonces','utilisateurs']); renderAdmin(); }
