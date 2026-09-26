@@ -8614,6 +8614,7 @@ const ENTREPRISE = {
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-promos')">Codes Promo</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-pub')">Publicités</button>
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-abonnements')">Abonnements</button>
+        <button class="admin-nav-btn" onclick="adminTab(this,'admin-parrainage')">Parrainage</button>
       </div>
       <div class="admin-nav">
         <button class="admin-nav-btn" onclick="adminTab(this,'admin-finances')">Finances</button>
@@ -8868,6 +8869,29 @@ const ENTREPRISE = {
       <div class="admin-section">
         <div class="admin-section-titre">Bannières en cours</div>
         <div id="pub-liste" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════
+         TAB PARRAINAGE (ambassadeurs)
+    ══════════════════════════════ -->
+    <div id="admin-parrainage" class="hidden">
+      <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:20px">
+        <div class="kpi"><div class="kpi-val" id="kpi-parr-a-payer">0 F</div><div class="kpi-label">Commissions à payer</div></div>
+        <div class="kpi"><div class="kpi-val" id="kpi-parr-nb">0</div><div class="kpi-label">Lignes en attente</div></div>
+      </div>
+
+      <div class="admin-section">
+        <div class="admin-section-titre">Commissions d'ambassadeurs à régler</div>
+        <div style="font-size:12px;color:var(--gris-text);margin:-6px 0 14px">Payez l'ambassadeur par Mobile Money (hors app), puis marquez la ligne comme réglée.</div>
+        <div class="table-wrap-scroll" style="background:#fff;border-radius:var(--radius);border:1px solid var(--gris-mid)">
+          <table class="table">
+            <thead>
+              <tr><th>Date</th><th>Ambassadeur</th><th>Filleul</th><th>Réf. paiement</th><th>Montant</th><th></th></tr>
+            </thead>
+            <tbody id="admin-parrainage-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -15213,18 +15237,67 @@ async function renderParrainageDash() {
 
   try {
     const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/parrainage/mes-stats');
-    if (r.error) throw new Error(r.error);
-    _parrainageCodeActuel = r.code || '—';
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Réponse invalide');
+    _parrainageCodeActuel = r.data.code || '—';
     if (codeEl) codeEl.textContent = _parrainageCodeActuel;
-    if (el1) el1.textContent = r.nb_filleuls || 0;
-    if (el2) el2.textContent = fmtFCFA(r.commissions_a_payer || 0);
-    if (el3) el3.textContent = fmtFCFA(r.commissions_payees || 0);
+    if (el1) el1.textContent = r.data.nb_filleuls || 0;
+    if (el2) el2.textContent = fmtFCFA(r.data.commissions_a_payer || 0);
+    if (el3) el3.textContent = fmtFCFA(r.data.commissions_payees || 0);
   } catch (e) {
     console.error('[parrainage] mes-stats', e);
     if (codeEl) codeEl.textContent = '—';
   }
 
   renderPromoHistorique();
+}
+
+/* ---------- ADMIN : commissions d'ambassadeurs à régler ---------- */
+async function renderAdminParrainage() {
+  const tbody = document.getElementById('admin-parrainage-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gris-text)">Chargement…</td></tr>';
+  try {
+    const r = await _xhr('GET', SUPABASE_URL + '/functions/v1/parrainage/a-payer');
+    if (r.error || !r.data) throw new Error((r.error && r.error.message) || 'Réponse invalide');
+    const rows = r.data.commissions || [];
+
+    const total = rows.reduce((s, c) => s + Number(c.montant), 0);
+    const elTotal = document.getElementById('kpi-parr-a-payer');
+    const elNb = document.getElementById('kpi-parr-nb');
+    if (elTotal) elTotal.textContent = fmtFCFA(total);
+    if (elNb) elNb.textContent = rows.length;
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gris-text)">Aucune commission en attente</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(c => {
+      const amb = c.ambassadeurs || {};
+      const filleul = c.utilisateurs || {};
+      return `<tr>
+        <td style="white-space:nowrap;font-size:12px">${new Date(c.created_at).toLocaleDateString('fr-CI')}</td>
+        <td style="font-family:monospace;font-weight:700">${amb.code || '—'}</td>
+        <td>${[filleul.prenom, filleul.nom].filter(Boolean).join(' ') || '—'}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--gris-text)">${c.paiement_ref || '—'}</td>
+        <td><strong style="color:var(--vert)">${fmtFCFA(c.montant)}</strong></td>
+        <td><button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="adminMarquerCommissionPayee(${c.id})">Marquer payé</button></td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--rouge)">Erreur : ${e.message}</td></tr>`;
+  }
+}
+
+async function adminMarquerCommissionPayee(commissionId) {
+  if (!window.confirm('Confirmer que cette commission a bien été versée à l\'ambassadeur ?')) return;
+  try {
+    const r = await _xhr('POST', SUPABASE_URL + '/functions/v1/parrainage/marquer-paye', { commission_id: commissionId });
+    if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.error) || (r.error && r.error.message) || 'Échec');
+    toast('✅ Commission marquée comme payée');
+    renderAdminParrainage();
+  } catch (e) {
+    toast('Échec : ' + e.message, 'erreur');
+  }
 }
 
 /* ---------- ADMIN : gestion codes promo ---------- */
@@ -18952,6 +19025,7 @@ const ADMIN_PERMISSIONS_LISTE = [
   { key:'admin-promos',       label:'Codes Promo' },
   { key:'admin-pub',          label:'Publicités' },
   { key:'admin-abonnements',  label:'Abonnements' },
+  { key:'admin-parrainage',   label:'Parrainage' },
   { key:'admin-finances',     label:'Finances' },
   { key:'admin-livraisons',   label:'Livraisons' },
   { key:'admin-inscriptions', label:'Inscriptions' },
@@ -18982,12 +19056,13 @@ async function adminTab(el, tabId) {
   if (!adminAPermission(tabId)) { toast('⛔ Accès non autorisé à cette section', 'erreur'); return; }
   document.querySelectorAll('.admin-nav-btn').forEach(b=>b.classList.remove('actif'));
   el?.classList.add('actif');
-  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
+  document.querySelectorAll('#admin-dash,#admin-annonces,#admin-users,#admin-paiements,#admin-promos,#admin-pub,#admin-abonnements,#admin-parrainage,#admin-finances,#admin-litiges,#admin-livraisons,#admin-inscriptions,#admin-profil,#admin-tarifs,#admin-visibilite,#admin-contenus,#admin-assistant-ia').forEach(t=>t.classList.add('hidden'));
   document.getElementById(tabId)?.classList.remove('hidden');
   if (tabId==='admin-contenus') chargerAdminContenus();
   if (tabId==='admin-annonces') { await _adminRafraichirCache(['annonces','utilisateurs']); renderAdmin(); }
   if (tabId==='admin-pub') { await _adminRafraichirCache(['bannieres']); renderAdminPub(); }
   if (tabId==='admin-abonnements') { await _adminRafraichirCache(['abonnements','plans']); renderAdminAbonnements(); }
+  if (tabId==='admin-parrainage') renderAdminParrainage();
   if (tabId==='admin-promos') { await _adminRafraichirCache(['promos','bannieres','annonces']); renderAdminPromos(); peuplerSelectsPromo(); }
   if (tabId==='admin-finances') { await _adminRafraichirCache(['paiements','abonnements','bannieres']); renderAdminFinancesComplet(); }
   if (tabId==='admin-litiges') { await _adminRafraichirCache(['litiges','utilisateurs']); renderAdminLitiges(); }
