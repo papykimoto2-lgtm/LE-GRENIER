@@ -25,13 +25,20 @@
   .prix{display:flex;align-items:baseline;gap:10px;margin-bottom:22px}
   .prix .n{font-size:34px;font-weight:800;color:var(--gold)}
   .prix .u{font-size:15px;color:var(--text-dim)}
+  h2.step{font-size:15px;font-weight:800;color:var(--gold);margin:0 0 12px;letter-spacing:.02em}
+  .numeros{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+  .numero{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:14px}
+  .numero .op{font-weight:700;font-size:15px}
+  .numero .num{font-family:ui-monospace,Menlo,monospace;font-size:16px;color:var(--gold);letter-spacing:.02em}
+  .numero button{border:none;background:rgba(255,255,255,.12);color:#fff;font-size:12px;font-weight:700;padding:8px 12px;border-radius:8px;cursor:pointer}
   form{display:flex;flex-direction:column;gap:12px;margin-bottom:14px}
   label{font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:4px;display:block}
-  input{width:100%;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:var(--text);font-size:16px}
+  input,select{width:100%;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:var(--text);font-size:16px}
+  select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%23C9C1B4' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center}
   input::placeholder{color:#8A8177}
-  input:focus{outline:2px solid var(--gold);border-color:transparent}
-  button{width:100%;padding:16px;border:none;border-radius:14px;background:var(--gold);color:#1C1712;font-size:16px;font-weight:800;cursor:pointer}
-  button:disabled{opacity:.55;cursor:default}
+  input:focus,select:focus{outline:2px solid var(--gold);border-color:transparent}
+  button.submit{width:100%;padding:16px;border:none;border-radius:14px;background:var(--gold);color:#1C1712;font-size:16px;font-weight:800;cursor:pointer}
+  button.submit:disabled{opacity:.55;cursor:default}
   .note{font-size:12px;color:#8A8177;text-align:center;margin-top:10px;line-height:1.5}
   .msg{margin-top:14px;padding:14px 16px;border-radius:12px;font-size:14px;line-height:1.5;display:none}
   .msg.err{display:block;background:rgba(229,83,61,.12);border:1px solid rgba(229,83,61,.4);color:#FFB3A6}
@@ -40,7 +47,6 @@
   .dl-btn{display:block;width:100%;text-align:center;text-decoration:none;padding:16px;border-radius:14px;background:var(--green);color:#fff;font-size:16px;font-weight:800;margin-top:12px}
   .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:8px}
   @keyframes spin{to{transform:rotate(360deg)}}
-  #vente{}
   #retour{display:none}
 </style>
 </head>
@@ -70,25 +76,37 @@
   </p>
 
   <div id="vente">
-    <div class="prix"><span class="n">1 000</span><span class="u">FCFA · téléchargement immédiat après paiement</span></div>
+    <div class="prix"><span class="n">1 000</span><span class="u">FCFA · téléchargement dès validation du paiement</span></div>
 
+    <h2 class="step">1. Envoyez 1 000 FCFA à l'un de ces numéros</h2>
+    <div class="numeros" id="numeros"><div class="msg info" style="display:block"><span class="spinner"></span>Chargement des numéros…</div></div>
+
+    <h2 class="step">2. Indiquez vos informations et l'ID de transaction reçu par SMS</h2>
     <form id="form-achat" onsubmit="return false">
       <div>
         <label for="nom">Nom complet</label>
         <input id="nom" type="text" placeholder="Votre nom" autocomplete="name" required>
       </div>
       <div>
-        <label for="tel">Numéro WhatsApp</label>
+        <label for="tel">Numéro WhatsApp (pour recevoir le lien du livre)</label>
         <input id="tel" type="tel" placeholder="Ex: 0700000000" autocomplete="tel" required>
       </div>
-      <button id="btn-payer" type="submit">Payer 1 000 FCFA — Recevoir le livre</button>
+      <div>
+        <label for="canal">Moyen utilisé</label>
+        <select id="canal" required></select>
+      </div>
+      <div>
+        <label for="txn">ID de la transaction (reçu par SMS)</label>
+        <input id="txn" type="text" placeholder="Ex: WV.2601.2314.A1B2C3" required>
+      </div>
+      <button id="btn-payer" type="submit" class="submit">J'ai payé — Envoyer ma déclaration</button>
     </form>
-    <div class="note">Paiement sécurisé via Mobile Money (Orange, MTN, Moov, Wave). Le lien de téléchargement s'affiche automatiquement dès la confirmation du paiement.</div>
+    <div class="note">Après vérification (généralement quelques minutes), vous recevrez le lien de téléchargement du livre directement sur WhatsApp.</div>
     <div id="msg-vente" class="msg"></div>
   </div>
 
   <div id="retour">
-    <div id="msg-retour" class="msg info"><span class="spinner"></span>Vérification du paiement…</div>
+    <div id="msg-retour" class="msg ok"></div>
   </div>
 
 </div>
@@ -97,6 +115,12 @@
   const SUPABASE_URL = "https://prhskjwdesblqjdtblht.supabase.co";
   const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByaHNrandkZXNibHFqZHRibGh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwODM1MDYsImV4cCI6MjEwMzY1OTUwNn0.NEXmoI6DmIukYdIabHsUlJjVSUaLlix1EZ2wNyac-Vg";
   const PRODUIT_ID = 4;
+  const OPERATEURS = [
+    { cle: "wave",   label: "Wave" },
+    { cle: "orange", label: "Orange Money" },
+    { cle: "mtn",    label: "MTN Mobile Money" },
+    { cle: "moov",   label: "Moov Money" },
+  ];
 
   function fn(path, body) {
     return fetch(SUPABASE_URL + "/functions/v1/" + path, {
@@ -112,56 +136,82 @@
     el.innerHTML = html;
   }
 
+  async function chargerNumeros() {
+    const el = document.getElementById("numeros");
+    const selCanal = document.getElementById("canal");
+    try {
+      const r = await fetch(SUPABASE_URL + "/rest/v1/configuration?cle=eq.admin_profil_json&select=valeur", {
+        headers: { apikey: ANON_KEY },
+      });
+      const rows = await r.json();
+      const profil = rows && rows[0] && rows[0].valeur ? JSON.parse(rows[0].valeur) : {};
+      const actifs = OPERATEURS.filter(o => profil[o.cle] && profil[o.cle + "Actif"]);
+      if (!actifs.length) { el.innerHTML = ""; return; }
+      el.innerHTML = actifs.map(o => `
+        <div class="numero">
+          <span class="op">${o.label}</span>
+          <span class="num" id="num-${o.cle}">${profil[o.cle]}</span>
+          <button type="button" onclick="copierNumero('${o.cle}')">Copier</button>
+        </div>
+      `).join("");
+      selCanal.innerHTML = actifs.map(o => `<option value="${o.cle}">${o.label}</option>`).join("");
+    } catch (e) {
+      el.innerHTML = '<div class="msg err" style="display:block">Impossible de charger les numéros. Rechargez la page.</div>';
+    }
+  }
+
+  function copierNumero(cle) {
+    const el = document.getElementById("num-" + cle);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent.trim()).catch(() => {});
+  }
+
+  chargerNumeros();
+
   document.getElementById("form-achat").addEventListener("submit", async () => {
     const nom = document.getElementById("nom").value.trim();
     const tel = document.getElementById("tel").value.trim();
+    const canal = document.getElementById("canal").value;
+    const txn = document.getElementById("txn").value.trim();
+
     if (nom.length < 2) { showMsg("msg-vente", "err", "Merci d'indiquer votre nom."); return; }
     if (tel.replace(/\D/g, "").length < 8) { showMsg("msg-vente", "err", "Merci d'indiquer un numéro WhatsApp valide."); return; }
+    if (!canal) { showMsg("msg-vente", "err", "Merci de choisir le moyen utilisé."); return; }
+    if (txn.length < 4) { showMsg("msg-vente", "err", "Merci d'indiquer l'ID de transaction reçu par SMS."); return; }
 
     const btn = document.getElementById("btn-payer");
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Préparation du paiement…';
-    showMsg("msg-vente", "info", "Redirection vers la page de paiement sécurisée…");
+    btn.innerHTML = '<span class="spinner"></span>Envoi en cours…';
 
-    const returnUrl = location.origin + location.pathname;
-    const { ok, data } = await fn("paiement/invite-cinetpay", { produit_id: PRODUIT_ID, nom, tel, return_url: returnUrl });
+    const { ok, data } = await fn("paiement/invite", {
+      produit_id: PRODUIT_ID, montant: 1000, canal, txn_id: txn, nom, tel, source: "qr_livre",
+    });
 
-    if (!ok || !data.payment_url) {
+    if (!ok || !data.jeton) {
       btn.disabled = false;
-      btn.textContent = "Payer 1 000 FCFA — Recevoir le livre";
+      btn.textContent = "J'ai payé — Envoyer ma déclaration";
       showMsg("msg-vente", "err", (data && data.error) || "Une erreur est survenue. Réessayez dans un instant.");
       return;
     }
-    location.href = data.payment_url;
-  });
-
-  // ── Retour après paiement : ?jeton=xxx est ajouté par CinetPay via return_url.
-  (function verifierRetour() {
-    const params = new URLSearchParams(location.search);
-    const jeton = params.get("jeton");
-    if (!jeton) return;
 
     document.getElementById("vente").style.display = "none";
     document.getElementById("retour").style.display = "block";
+    showMsg("msg-retour", "ok",
+      "✅ Déclaration reçue ! Votre paiement est en cours de vérification — vous recevrez le lien de téléchargement du livre sur WhatsApp dès sa confirmation (généralement sous quelques minutes)."
+    );
+    surveillerConfirmation(data.jeton);
+  });
 
+  // Vérifie en tâche de fond si l'admin a confirmé le paiement, et affiche
+  // directement le bouton de téléchargement si c'est le cas — sans attendre
+  // le message WhatsApp.
+  function surveillerConfirmation(jeton) {
     let tentatives = 0;
-    const maxTentatives = 20; // ~60s (poll toutes les 3s)
-
+    const maxTentatives = 40; // ~10 min (poll toutes les 15s)
     async function poll() {
       tentatives++;
       const { ok, data } = await fn("telechargement", { jeton });
-      if (ok && data.statut === "attente") {
-        if (tentatives >= maxTentatives) {
-          showMsg("msg-retour", "info",
-            "Le paiement met plus de temps que prévu à se confirmer. " +
-            "Rechargez cette page dans une minute, ou contactez-nous avec votre numéro WhatsApp si le problème persiste.");
-          return;
-        }
-        setTimeout(poll, 3000);
-        return;
-      }
       if (ok && data.url) {
-        showMsg("msg-retour", "ok", "✅ Paiement confirmé ! Votre livre est prêt.");
         const a = document.createElement("a");
         a.href = data.url;
         a.className = "dl-btn";
@@ -169,10 +219,10 @@
         document.getElementById("retour").appendChild(a);
         return;
       }
-      showMsg("msg-retour", "err", (data && data.error) || "Paiement introuvable ou refusé. Contactez-nous si vous pensez qu'il s'agit d'une erreur.");
+      if (tentatives < maxTentatives) setTimeout(poll, 15000);
     }
-    poll();
-  })();
+    setTimeout(poll, 15000);
+  }
 </script>
 </body>
 </html>
