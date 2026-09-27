@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Le jour où j'ai décidé de ne plus abandonner</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{
+    --bg:#0F0C0A; --card:#1C1712; --gold:#F2C572; --gold-dark:#D4921E;
+    --text:#FFFFFF; --text-dim:#C9C1B4; --green:#1FA35A; --red:#E5533D;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",system-ui,sans-serif;min-height:100vh}
+  .wrap{max-width:520px;margin:0 auto;padding:28px 20px 60px}
+  .hero{position:relative;border-radius:22px;overflow:hidden;margin-bottom:22px;background:var(--card)}
+  .hero img{width:100%;display:block;aspect-ratio:4/5;object-fit:cover;object-position:top center}
+  .hero .scrim{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,8,6,.95) 0%,rgba(10,8,6,.55) 45%,rgba(10,8,6,0) 100%)}
+  .hero .badge{position:absolute;top:18px;left:18px;padding:8px 16px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);border-radius:30px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+  .hero .cap{position:absolute;left:0;right:0;bottom:0;padding:20px}
+  h1{font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.15;margin:0 0 8px}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 18px}
+  .tag{padding:6px 14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:20px;font-size:13px;font-weight:600}
+  p.pitch{color:var(--text-dim);font-size:15px;line-height:1.55;margin:0 0 22px}
+  .prix{display:flex;align-items:baseline;gap:10px;margin-bottom:22px}
+  .prix .n{font-size:34px;font-weight:800;color:var(--gold)}
+  .prix .u{font-size:15px;color:var(--text-dim)}
+  form{display:flex;flex-direction:column;gap:12px;margin-bottom:14px}
+  label{font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:4px;display:block}
+  input{width:100%;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:var(--text);font-size:16px}
+  input::placeholder{color:#8A8177}
+  input:focus{outline:2px solid var(--gold);border-color:transparent}
+  button{width:100%;padding:16px;border:none;border-radius:14px;background:var(--gold);color:#1C1712;font-size:16px;font-weight:800;cursor:pointer}
+  button:disabled{opacity:.55;cursor:default}
+  .note{font-size:12px;color:#8A8177;text-align:center;margin-top:10px;line-height:1.5}
+  .msg{margin-top:14px;padding:14px 16px;border-radius:12px;font-size:14px;line-height:1.5;display:none}
+  .msg.err{display:block;background:rgba(229,83,61,.12);border:1px solid rgba(229,83,61,.4);color:#FFB3A6}
+  .msg.info{display:block;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:var(--text-dim)}
+  .msg.ok{display:block;background:rgba(31,163,90,.14);border:1px solid rgba(31,163,90,.45);color:#9CE8BB}
+  .dl-btn{display:block;width:100%;text-align:center;text-decoration:none;padding:16px;border-radius:14px;background:var(--green);color:#fff;font-size:16px;font-weight:800;margin-top:12px}
+  .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #vente{}
+  #retour{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <img src="livre-assets/auteur.jpg" alt="Cyrille KESSIE">
+    <div class="scrim"></div>
+    <div class="badge">Récit · Histoire vraie</div>
+    <div class="cap">
+      <h1>Le jour où j'ai décidé de ne plus abandonner</h1>
+    </div>
+  </div>
+
+  <div class="tags">
+    <span class="tag">Histoire vraie</span>
+    <span class="tag">Combat pour la justice</span>
+    <span class="tag">Ne jamais renoncer</span>
+    <span class="tag">165 pages</span>
+  </div>
+
+  <p class="pitch">
+    Un licenciement injuste. Des années de procédure. La décision de justice qu'il a
+    encore fallu faire exécuter — et la reconstruction, de victime à entrepreneur.
+    Un récit vrai, avec une alliée inattendue que vous ne verrez jamais venir.
+  </p>
+
+  <div id="vente">
+    <div class="prix"><span class="n">1 000</span><span class="u">FCFA · téléchargement immédiat après paiement</span></div>
+
+    <form id="form-achat" onsubmit="return false">
+      <div>
+        <label for="nom">Nom complet</label>
+        <input id="nom" type="text" placeholder="Votre nom" autocomplete="name" required>
+      </div>
+      <div>
+        <label for="tel">Numéro WhatsApp</label>
+        <input id="tel" type="tel" placeholder="Ex: 0700000000" autocomplete="tel" required>
+      </div>
+      <button id="btn-payer" type="submit">Payer 1 000 FCFA — Recevoir le livre</button>
+    </form>
+    <div class="note">Paiement sécurisé via Mobile Money (Orange, MTN, Moov, Wave). Le lien de téléchargement s'affiche automatiquement dès la confirmation du paiement.</div>
+    <div id="msg-vente" class="msg"></div>
+  </div>
+
+  <div id="retour">
+    <div id="msg-retour" class="msg info"><span class="spinner"></span>Vérification du paiement…</div>
+  </div>
+
+</div>
+
+<script>
+  const SUPABASE_URL = "https://prhskjwdesblqjdtblht.supabase.co";
+  const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByaHNrandkZXNibHFqZHRibGh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwODM1MDYsImV4cCI6MjEwMzY1OTUwNn0.NEXmoI6DmIukYdIabHsUlJjVSUaLlix1EZ2wNyac-Vg";
+  const PRODUIT_ID = 4;
+
+  function fn(path, body) {
+    return fetch(SUPABASE_URL + "/functions/v1/" + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: ANON_KEY },
+      body: JSON.stringify(body || {}),
+    }).then(r => r.json().then(d => ({ ok: r.ok, data: d })));
+  }
+
+  function showMsg(id, cls, html) {
+    const el = document.getElementById(id);
+    el.className = "msg " + cls;
+    el.innerHTML = html;
+  }
+
+  document.getElementById("form-achat").addEventListener("submit", async () => {
+    const nom = document.getElementById("nom").value.trim();
+    const tel = document.getElementById("tel").value.trim();
+    if (nom.length < 2) { showMsg("msg-vente", "err", "Merci d'indiquer votre nom."); return; }
+    if (tel.replace(/\D/g, "").length < 8) { showMsg("msg-vente", "err", "Merci d'indiquer un numéro WhatsApp valide."); return; }
+
+    const btn = document.getElementById("btn-payer");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Préparation du paiement…';
+    showMsg("msg-vente", "info", "Redirection vers la page de paiement sécurisée…");
+
+    const returnUrl = location.origin + location.pathname;
+    const { ok, data } = await fn("paiement/invite-cinetpay", { produit_id: PRODUIT_ID, nom, tel, return_url: returnUrl });
+
+    if (!ok || !data.payment_url) {
+      btn.disabled = false;
+      btn.textContent = "Payer 1 000 FCFA — Recevoir le livre";
+      showMsg("msg-vente", "err", (data && data.error) || "Une erreur est survenue. Réessayez dans un instant.");
+      return;
+    }
+    location.href = data.payment_url;
+  });
+
+  // ── Retour après paiement : ?jeton=xxx est ajouté par CinetPay via return_url.
+  (function verifierRetour() {
+    const params = new URLSearchParams(location.search);
+    const jeton = params.get("jeton");
+    if (!jeton) return;
+
+    document.getElementById("vente").style.display = "none";
+    document.getElementById("retour").style.display = "block";
+
+    let tentatives = 0;
+    const maxTentatives = 20; // ~60s (poll toutes les 3s)
+
+    async function poll() {
+      tentatives++;
+      const { ok, data } = await fn("telechargement", { jeton });
+      if (ok && data.statut === "attente") {
+        if (tentatives >= maxTentatives) {
+          showMsg("msg-retour", "info",
+            "Le paiement met plus de temps que prévu à se confirmer. " +
+            "Rechargez cette page dans une minute, ou contactez-nous avec votre numéro WhatsApp si le problème persiste.");
+          return;
+        }
+        setTimeout(poll, 3000);
+        return;
+      }
+      if (ok && data.url) {
+        showMsg("msg-retour", "ok", "✅ Paiement confirmé ! Votre livre est prêt.");
+        const a = document.createElement("a");
+        a.href = data.url;
+        a.className = "dl-btn";
+        a.textContent = "📥 Télécharger le livre";
+        document.getElementById("retour").appendChild(a);
+        return;
+      }
+      showMsg("msg-retour", "err", (data && data.error) || "Paiement introuvable ou refusé. Contactez-nous si vous pensez qu'il s'agit d'une erreur.");
+    }
+    poll();
+  })();
+</script>
+</body>
+</html>
