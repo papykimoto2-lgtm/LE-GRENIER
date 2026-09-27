@@ -22,6 +22,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //                                     direct + nom et WhatsApp du client ; renvoie un
 //                                     jeton secret qui ouvrira le téléchargement une
 //                                     fois le paiement confirmé par l'admin
+//    POST /paiement/invite-cinetpay → même achat express SANS COMPTE, mais paiement
+//                                     CinetPay hébergé (Mobile Money automatique) :
+//                                     confirmation par webhook, aucune validation
+//                                     manuelle admin nécessaire. Utilisé par les pages
+//                                     de vente directe (QR code réseaux sociaux) d'un
+//                                     produit numérique déjà au catalogue.
 //    POST /paiement/valider        → (admin) confirme ou refuse un paiement manuel
 //                                     après l'avoir vu arriver sur son téléphone ;
 //                                     la confirmation active le service acheté.
@@ -45,6 +51,11 @@ const CP_V1_BASE = CINETPAY_API_KEY.startsWith("sk_live_") ? "https://api.cinetp
 const PASSERELLE_MANUELLE = "Mobile Money direct";
 const CANAUX_MANUELS = ["wave", "orange", "mtn", "moov"];
 const TYPES_MANUELS = ["commission", "abonnement", "boost", "verification", "livraison", "formation", "pub", "produit", "credits_contact", "autre"];
+
+// Prix promotionnel dédié à un canal de vente directe (QR code réseaux
+// sociaux) pour certains produits numériques — distinct du prix catalogue
+// affiché sur Le Grenier. Clé = id du produit dans `produits_numeriques`.
+const PRIX_PROMO_QR: Record<number, number> = { 4: 1000 };
 
 // Frais de protection acheteur (paiement séquestre) : 3% du prix de
 // l'article, minimum 300 F — à la charge de l'acheteur.
@@ -212,6 +223,12 @@ async function cinetpayV1(method: string, path: string, body?: unknown): Promise
 
 function genererReference(): string {
   return "TXN" + Date.now().toString().slice(-10) + Math.floor(Math.random() * 900 + 100);
+}
+
+function nouveauJeton(): string {
+  const octets = new Uint8Array(24);
+  crypto.getRandomValues(octets);
+  return Array.from(octets, (o) => o.toString(16).padStart(2, "0")).join("");
 }
 
 async function initierPaiement(req: Request, user: any) {
@@ -497,12 +514,6 @@ async function declarerPaiementManuel(req: Request, user: any) {
   return json({ reference, echeancier: planEcheances });
 }
 
-function nouveauJeton(): string {
-  const octets = new Uint8Array(24);
-  crypto.getRandomValues(octets);
-  return Array.from(octets, (o) => o.toString(16).padStart(2, "0")).join("");
-}
-
 // Achat express sans compte : uniquement pour un produit numérique en vente,
 // au prix du catalogue. Rien n'est délivré avant la confirmation admin.
 async function declarerAchatInvite(req: Request) {
@@ -540,6 +551,116 @@ async function declarerAchatInvite(req: Request) {
   if (!insertRes.ok) return json({ error: "Échec d'enregistrement du paiement" }, 500);
   const montantFinal = await appliquerCashbackSiDemande(body, reference, tel, montant);
   return json({ reference, jeton, montant_a_payer: montantFinal });
+}
+
+// ── Achat express sans compte, mais via CinetPay hébergé (Mobile Money
+// automatique) : confirmation par webhook ("paiement-webhook"), aucune
+// validation manuelle admin. Pensé pour une page de vente directe (QR code
+// réseaux sociaux) d'un produit déjà au catalogue `produits_numeriques`.
+// Le prix appliqué est celui de PRIX_PROMO_QR si défini pour ce produit,
+// sinon le prix catalogue — jamais un montant envoyé par le client.
+async function initierAchatInviteCinetPay(req: Request) {
+  if (!CP_V1 && !(CINETPAY_API_KEY && CINETPAY_SITE_ID)) {
+    return json({ error: "Passerelle non configurée côté serveur" }, 503);
+  }
+  const body = await req.json().catch(() => ({}));
+  const produitId = Math.trunc(Number(body.produit_id) || 0);
+  if (!produitId) return json({ error: "produit_id requis" }, 400);
+  const nom = String(body.nom || "").trim().slice(0, 80);
+  if (nom.length < 2) return json({ error: "Nom requis" }, 400);
+  const tel = String(body.tel || "").replace(/[^\d+]/g, "").slice(0, 20);
+  if (tel.replace(/\D/g, "").length < 8) return json({ error: "Numéro WhatsApp requis" }, 400);
+
+  const pr = await sb(`/rest/v1/produits_numeriques?id=eq.${produitId}&actif=eq.true&select=id,titre,prix`);
+  const prRows = pr.ok ? await pr.json() : [];
+  if (!prRows.length) return json({ error: "Produit indisponible" }, 400);
+  const produit = prRows[0];
+  const montant = PRIX_PROMO_QR[produitId] ?? Number(produit.prix);
+  if (!montant || montant < 100) return json({ error: "Prix invalide" }, 400);
+
+  const jeton = nouveauJeton();
+  const reference = genererReference();
+  const description = ("Guide : " + produit.titre).slice(0, 255);
+
+  const insertRes = await sb(`/rest/v1/paiements`, {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      vendeur_id: null, annonce_titre: description, valeur: montant, commission: 0,
+      ref: reference, passerelle: "CinetPay", moyen: "mobile_money", statut: "attente",
+      plan_vendeur: null, type: "produit",
+      metadata: { produit_id: produit.id, jeton, nom_client: nom, tel_payeur: tel, invite: true, canal_qr: true },
+    }),
+  });
+  if (!insertRes.ok) return json({ error: "Échec d'enregistrement du paiement" }, 500);
+
+  const notifyUrl = `${SUPABASE_URL}/functions/v1/paiement-webhook`;
+  const baseReturn = typeof body.return_url === "string" && /^https?:\/\//.test(body.return_url)
+    ? body.return_url : notifyUrl;
+  const returnUrl = baseReturn + (baseReturn.includes("?") ? "&" : "?") + "jeton=" + encodeURIComponent(jeton);
+
+  const echec = async (message?: string) => {
+    await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
+      method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ statut: "echoue" }),
+    });
+    return json({ error: message || "Initialisation du paiement refusée par la passerelle" }, 502);
+  };
+
+  const prenom = nom.split(" ")[0]?.slice(0, 60) || "Client";
+  const restant = nom.split(" ").slice(1).join(" ").slice(0, 60);
+
+  if (CP_V1) {
+    let cp: any = null;
+    try {
+      cp = await cinetpayV1("POST", "/v1/payment", {
+        currency: "XOF",
+        merchant_transaction_id: reference,
+        amount: montant,
+        lang: "fr",
+        designation: description,
+        client_email: "client@legrenier.ci",
+        client_first_name: prenom,
+        client_last_name: restant || "Le Grenier",
+        success_url: returnUrl,
+        failed_url: returnUrl,
+        notify_url: notifyUrl,
+        channel: "PUSH",
+      });
+    } catch (e) {
+      return await echec(String((e as Error).message || e));
+    }
+    if (!cp || !cp.payment_url) return await echec(cp && (cp.description || cp.message));
+    await sb(`/rest/v1/paiements?ref=eq.${reference}`, {
+      method: "PATCH", headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ metadata: { produit_id: produit.id, jeton, nom_client: nom, tel_payeur: tel, invite: true, canal_qr: true, cp_transaction_id: cp.transaction_id || null } }),
+    });
+    return json({ payment_url: cp.payment_url, jeton, reference });
+  }
+
+  const cpRes = await fetch("https://api-checkout.cinetpay.com/v2/payment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      apikey: CINETPAY_API_KEY,
+      site_id: CINETPAY_SITE_ID,
+      transaction_id: reference,
+      amount: montant,
+      currency: "XOF",
+      description,
+      notify_url: notifyUrl,
+      return_url: returnUrl,
+      channels: "MOBILE_MONEY",
+      customer_name: prenom,
+      customer_surname: restant || "-",
+      customer_email: "client@legrenier.ci",
+      customer_phone_number: tel,
+    }),
+  });
+  const cpData = await cpRes.json().catch(() => null);
+  if (!cpRes.ok || !cpData || cpData.code !== "201" || !cpData.data?.payment_url) {
+    return await echec(cpData && cpData.message);
+  }
+  return json({ payment_url: cpData.data.payment_url, jeton, reference });
 }
 
 // Achat protégé (paiement séquestre) : l'acheteur (avec ou sans compte)
@@ -734,6 +855,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     const path = new URL(req.url).pathname;
+    if (req.method === "POST" && path.endsWith("/invite-cinetpay")) {
+      return await initierAchatInviteCinetPay(req);
+    }
     if (req.method === "POST" && path.endsWith("/invite")) {
       return await declarerAchatInvite(req);
     }

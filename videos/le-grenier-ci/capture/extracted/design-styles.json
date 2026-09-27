@@ -1,0 +1,361 @@
+{
+  "typography": [
+    {
+      "role": "display",
+      "fontFamily": "Cormorant Garamond",
+      "fontSize": "46px",
+      "fontWeight": "700",
+      "lineHeight": "51.52px",
+      "letterSpacing": "-0.92px",
+      "color": "#1A1916",
+      "sampleText": "Achetez & vendezprès de chez vous"
+    },
+    {
+      "role": "heading",
+      "fontFamily": "Cormorant Garamond",
+      "fontSize": "38px",
+      "fontWeight": "700",
+      "lineHeight": "43.7px",
+      "letterSpacing": "-0.76px",
+      "color": "#1A1916",
+      "sampleText": "Un grenier, tous les rayons"
+    },
+    {
+      "role": "body",
+      "fontFamily": "Plus Jakarta Sans",
+      "fontSize": "15px",
+      "fontWeight": "400",
+      "lineHeight": "24.75px",
+      "letterSpacing": "normal",
+      "color": "#736E64",
+      "sampleText": "Annonces entre particuliers — objets, mobilier, électronique"
+    },
+    {
+      "role": "link",
+      "fontFamily": "Plus Jakarta Sans",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "19.2px",
+      "letterSpacing": "normal",
+      "color": "#FFFFFF",
+      "sampleText": "Admin"
+    }
+  ],
+  "spacing": {
+    "observed": [
+      2,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      12,
+      13,
+      14,
+      16,
+      18,
+      20,
+      22
+    ],
+    "baseUnit": 4
+  },
+  "radius": [
+    "6px 18px",
+    "10px",
+    "12px",
+    "20px",
+    "24px",
+    "50%"
+  ],
+  "shadows": [
+    {
+      "value": "rgba(0, 0, 0, 0.04) 0px 1px 2px 0px",
+      "count": 12
+    },
+    {
+      "value": "rgba(0, 0, 0, 0.06) 0px 1px 3px 0px, rgba(0, 0, 0, 0.08) 0px 1px 2px 0px",
+      "count": 3
+    },
+    {
+      "value": "rgba(13, 92, 53, 0.25) 0px 2px 8px 0px",
+      "count": 2
+    },
+    {
+      "value": "rgba(0, 0, 0, 0.07) 0px 2px 8px 0px",
+      "count": 1
+    },
+    {
+      "value": "rgba(212, 146, 30, 0.12) 0px 2px 12px 0px",
+      "count": 1
+    }
+  ],
+  "buttons": [
+    {
+      "label": "Inscription",
+      "background": "transparent",
+      "backgroundImage": "linear-gradient(135deg, rgb(13, 92, 53), rgb(26, 122, 72))",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "9px 20px",
+      "borderRadius": "12px",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "rgba(13, 92, 53, 0.25) 0px 2px 8px 0px",
+      "fontSize": "14px",
+      "fontWeight": "500",
+      "height": "34px"
+    },
+    {
+      "label": "Produits",
+      "background": "#FFFFFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "10px 26px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "700",
+      "height": "37px"
+    },
+    {
+      "label": "Services",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "10px 26px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "700",
+      "height": "37px"
+    },
+    {
+      "label": "Marché",
+      "background": "#E6F4EC",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#0D5C35",
+      "padding": "9px 18px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "600",
+      "height": "36px"
+    },
+    {
+      "label": "S'inscrire gratuitement",
+      "background": "transparent",
+      "backgroundImage": "linear-gradient(135deg, rgb(13, 92, 53), rgb(26, 122, 72))",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "9px 18px",
+      "borderRadius": "20px",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "rgba(13, 92, 53, 0.25) 0px 2px 8px 0px",
+      "fontSize": "12px",
+      "fontWeight": "700",
+      "height": "32px"
+    },
+    {
+      "label": "Se connecter",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#0D5C35",
+      "padding": "8px 16px",
+      "borderRadius": "20px",
+      "border": "1px solid rgb(13, 92, 53)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "height": "32px"
+    }
+  ],
+  "cards": [
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "linear-gradient(135deg, rgb(230, 244, 236), rgb(200, 230, 212))",
+      "backdropFilter": "",
+      "color": "#1A1916",
+      "padding": "0px",
+      "borderRadius": "10px",
+      "border": "0px none rgb(26, 25, 22)",
+      "boxShadow": "none",
+      "fontSize": "15px",
+      "fontWeight": "400",
+      "height": "220px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#1A1916",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(26, 25, 22)",
+      "boxShadow": "none",
+      "fontSize": "40px",
+      "fontWeight": "400",
+      "height": "220px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "linear-gradient(135deg, rgb(253, 246, 232), rgb(255, 228, 160))",
+      "backdropFilter": "",
+      "color": "#1A1916",
+      "padding": "0px",
+      "borderRadius": "10px",
+      "border": "0px none rgb(26, 25, 22)",
+      "boxShadow": "none",
+      "fontSize": "15px",
+      "fontWeight": "400",
+      "height": "106px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "linear-gradient(135deg, rgb(237, 242, 255), rgb(197, 213, 255))",
+      "backdropFilter": "",
+      "color": "#1A1916",
+      "padding": "0px",
+      "borderRadius": "10px",
+      "border": "0px none rgb(26, 25, 22)",
+      "boxShadow": "none",
+      "fontSize": "15px",
+      "fontWeight": "400",
+      "height": "106px"
+    }
+  ],
+  "nav": {
+    "label": "navigation",
+    "background": "#FFFFFF",
+    "backgroundImage": "",
+    "backdropFilter": "blur(16px)",
+    "color": "#1A1916",
+    "padding": "0px 24px",
+    "borderRadius": "0px",
+    "border": "",
+    "boxShadow": "rgba(0, 0, 0, 0.07) 0px 2px 8px 0px",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "height": "196px"
+  },
+  "chips": [
+    {
+      "label": "🇨🇮 Marketplace Côte d'",
+      "background": "#E6F4EC",
+      "color": "#0D5C35",
+      "padding": "5px 14px",
+      "borderRadius": "20px",
+      "border": "1px solid rgba(13, 92, 53, 0.18)",
+      "boxShadow": "none",
+      "fontSize": "11px",
+      "fontWeight": "700",
+      "height": "29.5938px"
+    },
+    {
+      "label": "LE CŒUR DU GRENIER",
+      "background": "transparent",
+      "color": "#FFFFFF",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgba(255, 255, 255, 0.85)",
+      "boxShadow": "none",
+      "fontSize": "11px",
+      "fontWeight": "700",
+      "height": "12px"
+    },
+    {
+      "label": "Bien vendre, en sécurité",
+      "background": "transparent",
+      "color": "#FFFFFF",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgba(255, 255, 255, 0.9)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "height": "16.7969px"
+    },
+    {
+      "label": "↗",
+      "background": "#FFFFFF",
+      "color": "#FFFFFF",
+      "padding": "0px",
+      "borderRadius": "50%",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "400",
+      "height": "26px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [
+    {
+      "label": "Marché",
+      "background": "#E6F4EC",
+      "color": "#0D5C35",
+      "padding": "9px 18px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "600",
+      "height": "36px"
+    },
+    {
+      "label": "Auto & Location",
+      "background": "transparent",
+      "color": "#736E64",
+      "padding": "9px 18px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "600",
+      "height": "36px"
+    }
+  ],
+  "backgrounds": [
+    {
+      "value": "radial-gradient(circle, rgba(212, 146, 30, 0.08), rgba(0, 0, 0, 0) 70%)",
+      "area": 133800
+    },
+    {
+      "value": "linear-gradient(135deg, rgb(253, 246, 232), rgb(255, 248, 238))",
+      "area": 133800
+    },
+    {
+      "value": "linear-gradient(135deg, rgb(230, 244, 236), rgb(200, 230, 212))",
+      "area": 61160
+    },
+    {
+      "value": "linear-gradient(135deg, rgb(253, 246, 232), rgb(255, 228, 160))",
+      "area": 29468
+    },
+    {
+      "value": "linear-gradient(135deg, rgb(237, 242, 255), rgb(197, 213, 255))",
+      "area": 29468
+    }
+  ],
+  "glass": [
+    {
+      "backdropFilter": "blur(16px)",
+      "background": "rgba(255, 255, 255, 0.97)",
+      "border": "",
+      "borderRadius": "0px",
+      "boxShadow": "rgba(0, 0, 0, 0.07) 0px 2px 8px 0px",
+      "area": 376320
+    }
+  ]
+}
