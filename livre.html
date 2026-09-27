@@ -78,10 +78,11 @@
   <div id="vente">
     <div class="prix"><span class="n">1 000</span><span class="u">FCFA · téléchargement dès validation du paiement</span></div>
 
-    <h2 class="step">1. Envoyez 1 000 FCFA à l'un de ces numéros</h2>
+    <h2 class="step">1. Ouvrez votre appli Mobile Money (ou faites le *144# / code USSD) et envoyez 1 000 FCFA à l'un de ces numéros</h2>
     <div class="numeros" id="numeros"><div class="msg info" style="display:block"><span class="spinner"></span>Chargement des numéros…</div></div>
+    <p class="note" style="text-align:left;margin:-8px 0 20px">Dès l'envoi effectué, <strong>votre opérateur (Wave, Orange, MTN ou Moov) vous envoie automatiquement un SMS de confirmation</strong> contenant un ID de transaction — c'est ce SMS qu'il faut aller chercher pour l'étape 2.</p>
 
-    <h2 class="step">2. Indiquez vos informations et l'ID de transaction reçu par SMS</h2>
+    <h2 class="step">2. Revenez ici et recopiez l'ID reçu dans ce SMS</h2>
     <form id="form-achat" onsubmit="return false">
       <div>
         <label for="nom">Nom complet</label>
@@ -96,8 +97,8 @@
         <select id="canal" required></select>
       </div>
       <div>
-        <label for="txn">ID de la transaction (reçu par SMS)</label>
-        <input id="txn" type="text" placeholder="Ex: WV.2601.2314.A1B2C3" required>
+        <label for="txn">ID de la transaction (dans le SMS de confirmation de votre opérateur)</label>
+        <input id="txn" type="text" placeholder="Copiez-le tel qu'il apparaît dans le SMS" required>
       </div>
       <button id="btn-payer" type="submit" class="submit">J'ai payé — Envoyer ma déclaration</button>
     </form>
