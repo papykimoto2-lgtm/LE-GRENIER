@@ -212,8 +212,18 @@ async function cinetpayV1(method: string, path: string, body?: unknown): Promise
     method: "POST", headers: entetes,
     body: JSON.stringify({ api_key: CINETPAY_API_KEY, api_password: CINETPAY_API_PASSWORD }),
   });
-  const jeton = (await login.json().catch(() => null))?.access_token;
-  if (!jeton) throw new Error("Connexion CinetPay refusée (vérifiez la clé et le mot de passe API)");
+  const loginBody = await login.json().catch(() => null);
+  // Le champ du jeton peut être à différents emplacements selon la version
+  // de l'API ; on essaie les plus plausibles avant d'abandonner.
+  const jeton = loginBody?.access_token || loginBody?.data?.access_token
+    || loginBody?.token || loginBody?.data?.token;
+  if (!jeton) {
+    console.error("[cinetpay v1] échec oauth/login", login.status, JSON.stringify(loginBody));
+    throw new Error(
+      "Connexion CinetPay refusée — statut HTTP " + login.status + " — réponse : "
+      + JSON.stringify(loginBody).slice(0, 300)
+    );
+  }
   const r = await fetch(`${CP_V1_BASE}${path}`, {
     method, headers: { ...entetes, Authorization: `Bearer ${jeton}` },
     body: body === undefined ? undefined : JSON.stringify(body),
